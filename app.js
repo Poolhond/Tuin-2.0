@@ -2372,8 +2372,11 @@ function setDetailActionBar({ className = "", html = "" } = {}){
 function syncMoreActionRow(){
   const active = currentView();
   const row = document.getElementById("moreActionBar");
-  const toggle = document.getElementById("moreThemeToggle");
-  if (!row || !toggle) return;
+  const themeBtn = document.getElementById("moreThemeToggle");
+  const customersBtn = document.getElementById("moreNavCustomers");
+  const productsBtn = document.getElementById("moreNavProducts");
+  const settingsBtn = document.getElementById("moreNavSettings");
+  if (!row || !themeBtn || !customersBtn || !productsBtn || !settingsBtn) return;
 
   const show = active.view === "meer";
   if (!show){
@@ -2385,13 +2388,44 @@ function syncMoreActionRow(){
 
   row.classList.remove("hidden");
   row.setAttribute("aria-hidden", "false");
-  toggle.checked = normalizeTheme(state.settings?.theme) === "day";
 
-  if (!toggle.dataset.bound){
-    toggle.addEventListener("change", ()=>{
-      actions.setTheme(toggle.checked ? "day" : "night");
+  const selectedTheme = normalizeTheme(state.settings?.theme);
+  const isDay = selectedTheme === "day";
+  themeBtn.classList.toggle("is-active", true);
+  themeBtn.innerHTML = isDay
+    ? '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke-linecap="round"/></svg>'
+    : '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  themeBtn.setAttribute("aria-label", isDay ? "Schakel naar nachtmodus" : "Schakel naar dagmodus");
+  themeBtn.setAttribute("title", isDay ? "Schakel naar nachtmodus" : "Schakel naar dagmodus");
+
+  if (!themeBtn.dataset.bound){
+    themeBtn.addEventListener("click", ()=>{
+      const nextTheme = normalizeTheme(state.settings?.theme) === "day" ? "night" : "day";
+      actions.setTheme(nextTheme);
     });
-    toggle.dataset.bound = "true";
+    themeBtn.dataset.bound = "true";
+  }
+
+  const view = currentView().view;
+  customersBtn.classList.toggle("is-active", view === "customers");
+  productsBtn.classList.toggle("is-active", view === "products");
+  settingsBtn.classList.toggle("is-active", view === "settings");
+
+  const openFromMore = (target)=>{
+    pushView({ view: target });
+  };
+
+  if (!customersBtn.dataset.bound){
+    customersBtn.addEventListener("click", ()=> openFromMore("customers"));
+    customersBtn.dataset.bound = "true";
+  }
+  if (!productsBtn.dataset.bound){
+    productsBtn.addEventListener("click", ()=> openFromMore("products"));
+    productsBtn.dataset.bound = "true";
+  }
+  if (!settingsBtn.dataset.bound){
+    settingsBtn.addEventListener("click", ()=> openFromMore("settings"));
+    settingsBtn.dataset.bound = "true";
   }
 
   document.documentElement.style.setProperty("--more-actionbar-height", `${measureMoreActionBarHeight()}px`);
@@ -3096,42 +3130,9 @@ function renderSettlements(){
 // ---------- Meer tab ----------
 function renderMeer(){
   const el = $("#tab-meer");
-  const chevron = `<svg class="meer-item-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-
   el.innerHTML = `
-    <div class="stack meer-layout">
-      <div class="meer-list">
-        <button class="meer-item" data-meer="customers">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke-linecap="round"/><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/></svg>
-          <span class="meer-item-label">Klanten</span>
-          ${chevron}
-        </button>
-        <button class="meer-item" data-meer="products">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 8l-8-4-8 4 8 4 8-4Z" stroke-linejoin="round"/><path d="M4 8v8l8 4 8-4V8" stroke-linejoin="round"/><path d="M12 12v8" stroke-linecap="round"/></svg>
-          <span class="meer-item-label">Producten</span>
-          ${chevron}
-        </button>
-        <button class="meer-item" data-meer="settings">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="M4 13.2v-2.4l2.1-.8c.2-.5.4-1 .7-1.5L6 6.4l1.7-1.7 2.1.8c.5-.3 1-.5 1.5-.7L12 2.7h2.4l.8 2.1c.5.2 1 .4 1.5.7l2.1-.8L20.5 6.4l-.8 2.1c.3.5.5 1 .7 1.5l2.1.8v2.4l-2.1.8c-.2.5-.4 1-.7 1.5l.8 2.1-1.7 1.7-2.1-.8c-.5.3-1 .5-1.5.7l-.8 2.1H12l-.8-2.1c-.5-.2-1-.4-1.5-.7l-2.1.8L6 17.6l.8-2.1c-.3-.5-.5-1-.7-1.5L4 13.2Z" stroke-linejoin="round"/></svg>
-          <span class="meer-item-label">Instellingen</span>
-          ${chevron}
-        </button>
-      </div>
-    </div>
+    <div class="stack meer-layout"></div>
   `;
-
-  el.querySelectorAll("[data-meer]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      const target = btn.getAttribute("data-meer");
-      if (target === "customers"){
-        pushView({ view: "customers" });
-      } else if (target === "products"){
-        pushView({ view: "products" });
-      } else if (target === "settings"){
-        pushView({ view: "settings" });
-      }
-    });
-  });
 }
 
 // ---------- Sheet rendering ----------

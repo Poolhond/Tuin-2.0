@@ -599,46 +599,34 @@ body:not([data-view="meer"]) #moreActionBar{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  min-height:36px;
+  min-height:44px;
+  gap:16px;
 }
 
-.theme-switch{
+.more-nav-actions{
+  display:flex;
+  align-items:center;
+  gap:16px;
+}
+
+.more-action-btn{
+  width:44px;
+  height:44px;
+  min-height:44px;
+  border:0;
+  background:transparent;
+  border-radius:0;
+  padding:0;
+  color:var(--muted);
   display:inline-flex;
   align-items:center;
-  justify-content:flex-end;
-  min-height:36px;
+  justify-content:center;
   cursor:pointer;
 }
 
-.theme-switch input{
-  position:absolute;
-  opacity:0;
-  pointer-events:none;
-}
-
-.theme-switch-track{
-  width:48px;
-  height:28px;
-  border-radius:999px;
-  border:1px solid var(--border);
-  background:var(--surface2);
-  padding:2px;
-  display:flex;
-  align-items:center;
-  transition:background .2s ease;
-}
-
-.theme-switch-thumb{
-  width:22px;
-  height:22px;
-  border-radius:50%;
-  background:var(--text);
-  transform:translateX(0);
-  transition:transform .2s ease;
-}
-
-.theme-switch input:checked + .theme-switch-track .theme-switch-thumb{
-  transform:translateX(20px);
+.more-action-btn.is-active,
+.more-theme-btn.is-active{
+  color:var(--accent);
 }
 .tab{
   border:1px solid transparent;
@@ -2286,50 +2274,9 @@ h2{
 }
 
 /* ====== REFACTOR: Meer page ====== */
-.meer-list{
-  display:flex;
-  flex-direction:column;
-}
 .meer-layout{
   min-height: calc(100dvh - var(--topbar-height) - var(--bottom-tabbar-height) - var(--status-tabbar-height) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
   padding-bottom: calc(var(--more-actionbar-height) + 8px);
-  justify-content:flex-end;
-}
-.meer-item{
-  display:flex;
-  align-items:center;
-  gap:14px;
-  padding:14px 6px;
-  border-bottom:1px solid var(--border);
-  cursor:pointer;
-  -webkit-tap-highlight-color:transparent;
-  background:transparent;
-  border-left:0;
-  border-right:0;
-  border-top:0;
-  width:100%;
-  text-align:left;
-  color:var(--text);
-  font-size:16px;
-  font-weight:600;
-}
-.meer-item:last-child{
-  border-bottom:0;
-}
-.meer-item .icon{
-  width:22px;
-  height:22px;
-  color:var(--muted);
-  flex:0 0 auto;
-}
-.meer-item-label{
-  flex:1;
-}
-.meer-item-chevron{
-  width:18px;
-  height:18px;
-  color:var(--muted);
-  flex:0 0 auto;
 }
 
 /* Settlement new-afrekening button on Geld tab */
