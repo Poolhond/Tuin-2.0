@@ -4515,7 +4515,7 @@ function renderSettlementSheet(id){
   `;
 
   $('#sheetActions').innerHTML = '';
-  $('#sheetBody').style.paddingBottom = 'calc(var(--bottom-tabbar-height) + var(--status-tabbar-height) + env(safe-area-inset-bottom) + 24px)';
+  $('#sheetBody').style.paddingBottom = 'calc(var(--bottom-tabbar-height) + var(--status-tabbar-height) + env(safe-area-inset-bottom) + 40px)';
   $('#sheetBody').innerHTML = `
     <div class="stack settlement-detail settlement-flow ${visual.accentClass}">
       <div class="section stack section-tight">
@@ -4541,16 +4541,19 @@ function renderSettlementSheet(id){
       </div>
 
       <div class="section stack section-tight">
-        <div class="section-title-row"><h2>Gekoppelde logs</h2>${isEdit ? `<button class="btn" id="btnRecalc">Herbereken uit logs</button>` : ""}</div>
-        <div class="flat-list" id="sLogs">
+        <div class="flat-list settlement-linked-logs-list" id="sLogs">
           ${availableLogs.slice(0,30).map(l=>{
             const checked = (s.logIds||[]).includes(l.id);
+            const { greenItemQty, otherItems } = splitLogItems(l);
+            const otherProductsQty = round2(otherItems.reduce((total, item) => total + (Number(item.qty) || 0), 0));
             const rowMeta = `
-              <div class="item-sub settlement-log-cols mono tabular">
-                <span class="log-col-date">${esc(formatDatePretty(l.date))}</span>
-                <span class="log-col-time">${formatDurationCompact(Math.floor(sumWorkMs(l)/60000))}</span>
-                <span class="log-col-price">${formatMoneyEUR(sumItemsAmount(l))}</span>
-                <span class="log-col-products">${countExtraProducts(l)}</span>
+              <div class="settlement-linked-log-row mono tabular">
+                <span class="settlement-linked-log-date">${esc(formatDatePretty(l.date))}</span>
+                <div class="settlement-linked-log-right">
+                  <span>${formatDurationCompact(Math.floor(sumWorkMs(l)/60000))}</span>
+                  ${greenItemQty > 0 ? `<span class="settlement-linked-log-chip"><span class="settlement-linked-log-icon" aria-hidden="true">🌿</span>${esc(String(formatQuickQty(greenItemQty)))}</span>` : ''}
+                  ${otherProductsQty > 0 ? `<span class="settlement-linked-log-chip"><span class="settlement-linked-log-icon" aria-hidden="true">📦</span>${esc(String(formatQuickQty(otherProductsQty)))}</span>` : ''}
+                </div>
               </div>`;
             if (isEdit){
               return `<label class="flat-row"><div class="row space"><div class="item-main">${rowMeta}</div><div class="item-right"><input type="checkbox" data-logpick="${l.id}" ${checked ? "checked" : ""}/></div></div></label>`;
@@ -4559,6 +4562,7 @@ function renderSettlementSheet(id){
             return `<button class="flat-row item-row-button" type="button" role="button" data-open-linked-log="${l.id}"><div class="item-main">${rowMeta}</div></button>`;
           }).join('') || `<div class="small">Geen gekoppelde logs.</div>`}
         </div>
+        ${isEdit ? `<div class="settlement-linked-logs-actions"><button class="btn" id="btnRecalc">Herbereken uit logs</button></div>` : ""}
       </div>
 
       <div class="section stack section-tight">

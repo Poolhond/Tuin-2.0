@@ -1024,6 +1024,49 @@ body:not([data-view="meer"]) #moreActionBar{
 
 .flat-row:last-child{ border-bottom:0; }
 
+.settlement-linked-logs-list .flat-row,
+.settlement-linked-logs-list .item-row-button{
+  padding-top:9px;
+  padding-bottom:9px;
+}
+
+.settlement-linked-log-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  width:100%;
+}
+
+.settlement-linked-log-date{
+  min-width:0;
+  white-space:nowrap;
+}
+
+.settlement-linked-log-right{
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  margin-left:auto;
+  white-space:nowrap;
+}
+
+.settlement-linked-log-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+}
+
+.settlement-linked-log-icon{
+  font-size:12px;
+  line-height:1;
+}
+
+.settlement-linked-logs-actions{
+  margin-top:10px;
+}
+
 /* ====== Compact settlement summaries (view mode) ====== */
 .summary-rows{
   display:flex;
