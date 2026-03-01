@@ -543,6 +543,39 @@ body:not([data-view="meer"]) #moreActionBar{
   justify-content:flex-end;
 }
 
+.client-detail-actionbar .detail-actionbar-inner{
+  justify-content:space-between;
+}
+
+.client-detail-actionbar-left,
+.client-detail-actionbar-right{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+}
+
+.client-detail-actionbar-right{
+  justify-content:flex-end;
+}
+
+.detail-delete-toggle{
+  min-height:36px;
+  border:1px solid color-mix(in srgb, var(--danger) 42%, transparent);
+  background:transparent;
+  color:var(--danger);
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 12px;
+  font-size:13px;
+}
+
+.detail-delete-toggle .icon{
+  width:16px;
+  height:16px;
+}
+
 .detail-edit-toggle{
   width:44px;
   height:44px;
