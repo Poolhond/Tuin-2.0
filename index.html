@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Tuinlog</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#0b0f14" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+  <div class="viewport">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="iconbtn ghost" id="btnBack" aria-label="Terug" title="Terug">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="titlewrap">
+          <div class="topbar-headline">
+            <div class="apptitle" id="topbarTitle">Logboek</div>
+            <div class="topbar-metric mono hidden" id="topbarMetric"></div>
+          </div>
+          <div class="topsubtitle hidden" id="topbarSubtitle"></div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div id="topbarRightInfo" class="topbar-right-info mono hidden"></div>
+        <button class="iconbtn ghost" id="btnNewLog" aria-label="Nieuwe werklog" title="Nieuwe werklog">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="main content-area" id="mainPages">
+      <section class="page active" id="rootPage">
+        <div class="page-inner">
+          <section id="tab-logs"></section>
+          <section id="tab-settlements" class="hidden"></section>
+          <section id="tab-meer" class="hidden"></section>
+        </div>
+      </section>
+      <section class="page hidden" id="detailPage">
+        <div class="page-inner">
+          <div class="detail-head">
+            <div id="sheetTitle" class="hidden"></div>
+            <div class="sheet-actions" id="sheetActions"></div>
+          </div>
+          <div class="sheet-body" id="sheetBody"></div>
+        </div>
+      </section>
+    </main>
+
+    <div class="status-tabbar-host hidden" id="statusTabbarHost"></div>
+    <div id="moreActionBar" class="more-actionbar hidden" aria-hidden="true">
+      <div class="more-actionbar-inner">
+        <div></div>
+        <label class="theme-switch" for="moreThemeToggle" aria-label="Dag/Nacht modus">
+          <input type="checkbox" id="moreThemeToggle" aria-label="Dag/Nacht modus" />
+          <span class="theme-switch-track" aria-hidden="true">
+            <span class="theme-switch-thumb"></span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <nav class="tabs bottom-tabbar" id="bottomTabbar" role="tablist" aria-label="Hoofdmenu">
+      <button class="tab active" id="nav-logs" role="tab" aria-selected="true" aria-label="Logboek" title="Logboek">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="tab" id="nav-settlements" role="tab" aria-selected="false" aria-label="Geld" title="Geld">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="9" width="16" height="10" rx="2"/><path d="M7 9V6h7l3 3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14h4" stroke-linecap="round"/><path d="M15 14h2" stroke-linecap="round"/><path d="M8 19v-2h8v2" stroke-linecap="round"/></svg>
+      </button>
+      <button class="tab" id="nav-meer" role="tab" aria-selected="false" aria-label="Meer" title="Meer">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+      </button>
+    </nav>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
