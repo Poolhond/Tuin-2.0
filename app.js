@@ -4348,7 +4348,6 @@ function renderSettlementSheet(id){
   $('#sheetBody').innerHTML = `
     <div class="stack settlement-detail settlement-flow ${visual.accentClass}">
       <div class="section stack section-tight">
-        <h2>Logboek totaal</h2>
         <div class="summary-row"><span class="label">Totale werkuren</span><span class="num mono tabular">${formatDurationCompact(Math.floor(logbookTotals.totalWorkMs / 60000))}</span></div>
         <div class="summary-row"><span class="label">Totale groen eenheden</span><span class="num mono tabular">${esc(String(formatQuickQty(logbookTotals.totalGreenUnits)))}</span></div>
         ${logbookTotals.totalExtraProducts > 0 ? `<div class="summary-row"><span class="label">Totale extra producten</span><span class="num mono tabular">${esc(String(formatQuickQty(logbookTotals.totalExtraProducts)))}</span></div>` : ''}

@@ -987,6 +987,11 @@ body:not([data-view="meer"]) #moreActionBar{
 .settlement-detail .compact-row{
   grid-template-columns:84px minmax(0,1fr);
 }
+
+.settlement-flow{
+  border-top:0;
+}
+
 .settlement-flow .section-tight{
   gap:10px;
 }
