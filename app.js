@@ -2165,6 +2165,16 @@ function renderTopbar(){
       $("#topbarTitle").textContent = cname(settlement.customerId);
       subtitleEl.textContent = formatDatePretty(settlement.date);
       subtitleEl.classList.remove("hidden");
+      const invoiceNo = String(settlement.invoiceNumber || "").trim();
+      if (rightInfoEl){
+        if (invoiceNo){
+          rightInfoEl.textContent = invoiceNo.toUpperCase();
+          rightInfoEl.classList.remove("hidden");
+        } else {
+          rightInfoEl.textContent = "";
+          rightInfoEl.classList.add("hidden");
+        }
+      }
       linkedCustomerId = settlement.customerId || "";
     } else {
       $("#topbarTitle").textContent = viewTitle(active);
@@ -4435,6 +4445,7 @@ function renderSettlementSheet(id){
   }
 
   const pay = settlementPaymentState(s);
+  const paymentFlags = getSettlementPaymentFlags(s);
   const visual = getSettlementVisualState(s);
   const showInvoiceNumberSection = Boolean(pay.hasInvoice) && ["calculated", "paid"].includes(s.status);
   const canEditInvoiceNumber = s.status === "calculated" && pay.hasInvoice === true && s.status !== "paid";
@@ -4493,17 +4504,13 @@ function renderSettlementSheet(id){
     ${renderAllocationControls({ key, bucket: 'cash', qty: cashQty })}
   `;
 
-  const renderAllocationStaticRow = ({ label, invoiceValue, cashValue, rowClass = '' })=>`
-    <div class="allocation-matrix-label ${rowClass}">${esc(label)}</div>
+  const renderAllocationStaticRow = ({ invoiceValue, cashValue, invoiceClass = '', cashClass = '', rowClass = '' })=>`
+    <div class="allocation-matrix-label ${rowClass}" aria-hidden="true"></div>
     <div class="allocation-controls allocation-controls-static ${rowClass}" data-bucket="invoice">
-      <span class="allocation-btn-placeholder" aria-hidden="true"></span>
-      <div class="allocation-value mono tabular">${invoiceValue}</div>
-      <span class="allocation-btn-placeholder" aria-hidden="true"></span>
+      <div class="allocation-value mono tabular ${invoiceClass}">${invoiceValue}</div>
     </div>
     <div class="allocation-controls allocation-controls-static ${rowClass}" data-bucket="cash">
-      <span class="allocation-btn-placeholder" aria-hidden="true"></span>
-      <div class="allocation-value mono tabular">${cashValue}</div>
-      <span class="allocation-btn-placeholder" aria-hidden="true"></span>
+      <div class="allocation-value mono tabular ${cashClass}">${cashValue}</div>
     </div>
   `;
 
@@ -4524,10 +4531,11 @@ function renderSettlementSheet(id){
           <div class="allocation-col-head">Cash</div>
           ${allocationRows.map(row => renderAllocationRow(row)).join('')}
           ${renderAllocationStaticRow({
-            label: 'TOTAL',
             invoiceValue: moneyOrBlank(pay.invoiceTotal),
             cashValue: moneyOrBlank(pay.cashTotal),
-            rowClass: `allocation-total-row ${pay.isPaid ? 'is-paid' : 'is-open'}`
+            invoiceClass: paymentFlags.invoicePaid ? 'is-paid' : 'is-open',
+            cashClass: paymentFlags.cashPaid ? 'is-paid' : 'is-open',
+            rowClass: 'allocation-total-row'
           })}
         </div>
       </div>
@@ -4556,7 +4564,6 @@ function renderSettlementSheet(id){
       <div class="section stack section-tight">
         <h2>Administratieve gegevens</h2>
         <div class="summary-row"><span class="label">Datum</span><span class="num">${esc(formatDatePretty(s.date))}</span></div>
-        ${showInvoiceNumberSection ? `<div class="summary-row"><span class="label">Factuurnummer</span><span class="num mono">${esc(invoiceNumberDisplay)}</span></div>` : ''}
         <div class="summary-row"><span class="label">Status</span><span class="num">${esc(statusLabelNL(s.status))}</span></div>
         <div class="summary-row"><span class="label">Notitie</span><span class="num">${esc(s.note || '—')}</span></div>
       </div>
