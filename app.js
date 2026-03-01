@@ -1779,6 +1779,10 @@ const ui = {
   transition: null,
   logDetailSegmentEditId: null,
   logDateEditSnapshot: {},
+  customerDetailEditingId: null,
+  customerDetailDrafts: {},
+  productDetailEditingId: null,
+  productDetailDrafts: {},
   activeLogQuickAdd: {
     open: false,
     productId: null,
@@ -2019,6 +2023,18 @@ function cancelLogDateEditIfNeeded(){
   delete ui.logDateEditSnapshot[logId];
 }
 
+function cancelDetailEditIfNeeded(){
+  const active = currentView();
+  if (active.view === "customerDetail" && ui.customerDetailEditingId === active.id){
+    ui.customerDetailEditingId = null;
+    delete ui.customerDetailDrafts[active.id];
+  }
+  if (active.view === "productDetail" && ui.productDetailEditingId === active.id){
+    ui.productDetailEditingId = null;
+    delete ui.productDetailDrafts[active.id];
+  }
+}
+
 function preferredWorkProduct(){
   return state.products.find(p => (p.name||"").trim().toLowerCase() === "werk") || state.products[0] || null;
 }
@@ -2193,6 +2209,7 @@ function pushView(viewState){
 function popView(){
   if (ui.navStack.length <= 1) return;
   cancelLogDateEditIfNeeded();
+  cancelDetailEditIfNeeded();
   ui.transition = "pop";
   ui.navStack.pop();
   render();
@@ -2201,6 +2218,7 @@ function popView(){
 function popViewInstant(){
   if (ui.navStack.length <= 1) return;
   cancelLogDateEditIfNeeded();
+  cancelDetailEditIfNeeded();
   ui.transition = null;
   ui.navStack.pop();
   render();
@@ -2325,6 +2343,32 @@ function setStatusTabbar(htmlString){
   setBottomBarHeights({ statusVisible: true });
 }
 
+function measureDetailActionBarHeight(){
+  const host = document.getElementById("detailActionbarHost");
+  if (!host || host.classList.contains("hidden") || !host.firstElementChild) return 0;
+  return Math.round(host.firstElementChild.getBoundingClientRect().height) || 0;
+}
+
+function clearDetailActionBar(){
+  const host = document.getElementById("detailActionbarHost");
+  if (!host) return;
+  host.innerHTML = "";
+  host.classList.add("hidden");
+  document.documentElement.style.setProperty("--detail-actionbar-height", "0px");
+}
+
+function setDetailActionBar({ className = "", html = "" } = {}){
+  const host = document.getElementById("detailActionbarHost");
+  if (!host) return;
+  host.classList.remove("hidden");
+  host.innerHTML = `
+    <div class="detail-actionbar ${className}" role="group" aria-label="Detail acties">
+      <div class="detail-actionbar-inner">${html}</div>
+    </div>
+  `;
+  document.documentElement.style.setProperty("--detail-actionbar-height", `${measureDetailActionBarHeight()}px`);
+}
+
 function syncMoreActionRow(){
   const active = currentView();
   const row = document.getElementById("moreActionBar");
@@ -2357,6 +2401,10 @@ function syncViewUiState(){
   const active = currentView();
   document.body.dataset.view = active.view || "logs";
   syncMoreActionRow();
+
+  if (active.view !== "customerDetail" && active.view !== "productDetail"){
+    clearDetailActionBar();
+  }
 
   const host = document.getElementById("statusTabbarHost");
   if (!host) return;
@@ -3096,6 +3144,7 @@ function renderSheet(){
   body.innerHTML = "";
   body.style.paddingBottom = "18px";
   clearStatusTabbar();
+  clearDetailActionBar();
   setBottomBarHeights({ statusVisible: false });
 
   if (active.view === "customerDetail") renderCustomerSheet(active.id);
@@ -3372,6 +3421,20 @@ function renderNewLogSheet(){
 function renderCustomerSheet(id){
   const c = getCustomer(id);
   if (!c){ closeSheet(); return; }
+  const isEditing = ui.customerDetailEditingId === c.id;
+  if (isEditing && !ui.customerDetailDrafts[c.id]){
+    ui.customerDetailDrafts[c.id] = {
+      nickname: c.nickname || "",
+      name: c.name || "",
+      address: c.address || ""
+    };
+  }
+  const draft = ui.customerDetailDrafts[c.id] || {
+    nickname: c.nickname || "",
+    name: c.name || "",
+    address: c.address || ""
+  };
+
   $("#sheetTitle").textContent = "Klant";
 
   const logs = state.logs.filter(l => l.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
@@ -3381,25 +3444,36 @@ function renderCustomerSheet(id){
     <button class="btn danger" id="delCustomer">Verwijder</button>
   `;
 
+  setDetailActionBar({
+    className: "client-detail-actionbar",
+    html: `
+      <button class="detail-edit-toggle" id="toggleClientEdit" type="button" aria-label="${isEditing ? "Klant opslaan" : "Klant bewerken"}" title="${isEditing ? "Klant opslaan" : "Klant bewerken"}">
+        ${isEditing
+          ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+          : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke-linejoin="round"/></svg>`}
+      </button>
+    `
+  });
+  $("#sheetBody").style.paddingBottom = "calc(var(--detail-actionbar-height) + 18px)";
+
   $("#sheetBody").innerHTML = `
-    <div class="stack">
+    <div class="stack client-detail-view">
       <div class="card stack">
-        <div class="item-title">Bewerken</div>
+        <div class="item-title">Gegevens</div>
         <div class="row">
           <div style="flex:1; min-width:220px;">
             <label>Bijnaam</label>
-            <input id="cNick" value="${esc(c.nickname||"")}" />
+            ${isEditing ? `<input id="cNick" value="${esc(draft.nickname)}" />` : `<div class="item-sub">${esc(c.nickname || "-")}</div>`}
           </div>
           <div style="flex:1; min-width:220px;">
             <label>Naam</label>
-            <input id="cName" value="${esc(c.name||"")}" />
+            ${isEditing ? `<input id="cName" value="${esc(draft.name)}" />` : `<div class="item-sub">${esc(c.name || "-")}</div>`}
           </div>
         </div>
         <div>
           <label>Adres</label>
-          <input id="cAddr" value="${esc(c.address||"")}" />
+          ${isEditing ? `<input id="cAddr" value="${esc(draft.address)}" />` : `<div class="item-sub">${esc(c.address || "-")}</div>`}
         </div>
-        <button class="btn primary" id="saveCustomer">Opslaan</button>
       </div>
 
       <div class="card stack">
@@ -3442,18 +3516,46 @@ function renderCustomerSheet(id){
     </div>
   `;
 
-  $("#saveCustomer").onclick = ()=>{
+  const syncDraft = ()=>{
+    if (!ui.customerDetailDrafts[c.id]) return;
+    ui.customerDetailDrafts[c.id].nickname = ($("#cNick")?.value || "").trim();
+    ui.customerDetailDrafts[c.id].name = ($("#cName")?.value || "").trim();
+    ui.customerDetailDrafts[c.id].address = ($("#cAddr")?.value || "").trim();
+  };
+
+  if (isEditing){
+    ["#cNick", "#cName", "#cAddr"].forEach((selector)=>{
+      $(selector)?.addEventListener("input", syncDraft);
+    });
+  }
+
+  $("#toggleClientEdit")?.addEventListener("click", ()=>{
+    if (!isEditing){
+      ui.customerDetailEditingId = c.id;
+      ui.customerDetailDrafts[c.id] = {
+        nickname: c.nickname || "",
+        name: c.name || "",
+        address: c.address || ""
+      };
+      render();
+      return;
+    }
+
+    syncDraft();
+    const currentDraft = ui.customerDetailDrafts[c.id] || {};
     const result = actions.updateCustomer(c.id, {
-      nickname: ($("#cNick").value||"").trim(),
-      name: ($("#cName").value||"").trim(),
-      address: ($("#cAddr").value||"").trim()
+      nickname: (currentDraft.nickname || "").trim(),
+      name: (currentDraft.name || "").trim(),
+      address: (currentDraft.address || "").trim()
     });
     if (result?.error === "duplicate_nickname"){
       alert("Bijnaam bestaat al. Kies een unieke bijnaam.");
       return;
     }
-    alert("Opgeslagen.");
-  };
+    ui.customerDetailEditingId = null;
+    delete ui.customerDetailDrafts[c.id];
+    render();
+  });
 
   $("#delCustomer").onclick = ()=>{
     const hasLogs = state.logs.some(l => l.customerId === c.id);
@@ -3475,44 +3577,72 @@ function renderCustomerSheet(id){
 function renderProductSheet(id){
   const p = getProduct(id);
   if (!p){ closeSheet(); return; }
+  const isEditing = ui.productDetailEditingId === p.id;
+  if (isEditing && !ui.productDetailDrafts[p.id]){
+    ui.productDetailDrafts[p.id] = {
+      name: p.name || "",
+      unit: p.unit || "keer",
+      unitPrice: String(p.unitPrice ?? 0),
+      vatRate: String(p.vatRate ?? 0.21),
+      defaultBucket: p.defaultBucket || "invoice"
+    };
+  }
+  const draft = ui.productDetailDrafts[p.id] || {
+    name: p.name || "",
+    unit: p.unit || "keer",
+    unitPrice: String(p.unitPrice ?? 0),
+    vatRate: String(p.vatRate ?? 0.21),
+    defaultBucket: p.defaultBucket || "invoice"
+  };
+
   $("#sheetTitle").textContent = "Product";
   $("#sheetActions").innerHTML = `<button class="btn danger" id="delProduct">Verwijder</button>`;
+
+  setDetailActionBar({
+    className: "product-detail-actionbar",
+    html: `
+      <button class="detail-edit-toggle" id="toggleProductEdit" type="button" aria-label="${isEditing ? "Product opslaan" : "Product bewerken"}" title="${isEditing ? "Product opslaan" : "Product bewerken"}">
+        ${isEditing
+          ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+          : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke-linejoin="round"/></svg>`}
+      </button>
+    `
+  });
+  $("#sheetBody").style.paddingBottom = "calc(var(--detail-actionbar-height) + 18px)";
 
   const usedInLogs = state.logs.filter(l => (l.items||[]).some(it => it.productId === p.id)).slice(0,10);
   const usedInSet = state.settlements.filter(s => (s.lines||[]).some(li => li.productId === p.id)).slice(0,10);
 
   $("#sheetBody").innerHTML = `
-    <div class="stack">
+    <div class="stack product-detail-view">
       <div class="card stack">
-        <div class="item-title">Bewerken</div>
+        <div class="item-title">Gegevens</div>
         <div class="row">
           <div style="flex:2; min-width:220px;">
             <label>Naam</label>
-            <input id="pName" value="${esc(p.name||"")}" />
+            ${isEditing ? `<input id="pName" value="${esc(draft.name)}" />` : `<div class="item-sub">${esc(p.name || "-")}</div>`}
           </div>
           <div style="flex:1; min-width:140px;">
             <label>Eenheid</label>
-            <input id="pUnit" value="${esc(p.unit||"keer")}" />
+            ${isEditing ? `<input id="pUnit" value="${esc(draft.unit)}" />` : `<div class="item-sub">${esc(p.unit || "-")}</div>`}
           </div>
         </div>
         <div class="row">
           <div style="flex:1; min-width:160px;">
             <label>Prijs per eenheid</label>
-            <input id="pPrice" inputmode="decimal" value="${esc(String(p.unitPrice ?? 0))}" />
+            ${isEditing ? `<input id="pPrice" inputmode="decimal" value="${esc(draft.unitPrice)}" />` : `<div class="item-sub mono">${esc(String(p.unitPrice ?? 0))}</div>`}
           </div>
           <div style="flex:1; min-width:160px;">
             <label>BTW (bv 0.21)</label>
-            <input id="pVat" inputmode="decimal" value="${esc(String(p.vatRate ?? 0.21))}" />
+            ${isEditing ? `<input id="pVat" inputmode="decimal" value="${esc(draft.vatRate)}" />` : `<div class="item-sub mono">${esc(String(p.vatRate ?? 0.21))}</div>`}
           </div>
           <div style="flex:1; min-width:160px;">
             <label>Default</label>
-            <select id="pBucket">
-              <option value="invoice" ${p.defaultBucket==="invoice"?"selected":""}>factuur</option>
-              <option value="cash" ${p.defaultBucket==="cash"?"selected":""}>cash</option>
-            </select>
+            ${isEditing
+              ? `<select id="pBucket"><option value="invoice" ${draft.defaultBucket==="invoice"?"selected":""}>factuur</option><option value="cash" ${draft.defaultBucket==="cash"?"selected":""}>cash</option></select>`
+              : `<div class="item-sub">${esc(p.defaultBucket === "cash" ? "cash" : "factuur")}</div>`}
           </div>
         </div>
-        <button class="btn primary" id="saveProduct">Opslaan</button>
       </div>
 
       <div class="card stack">
@@ -3547,16 +3677,49 @@ function renderProductSheet(id){
     </div>
   `;
 
-  $("#saveProduct").onclick = ()=>{
-    actions.updateProduct(p.id, {
-      name: ($("#pName").value||"").trim(),
-      unit: ($("#pUnit").value||"").trim() || "keer",
-      unitPrice: Number(String($("#pPrice").value).replace(",", ".") || "0"),
-      vatRate: Number(String($("#pVat").value).replace(",", ".") || "0.21"),
-      defaultBucket: $("#pBucket").value
-    });
-    alert("Opgeslagen.");
+  const syncDraft = ()=>{
+    if (!ui.productDetailDrafts[p.id]) return;
+    ui.productDetailDrafts[p.id].name = ($("#pName")?.value || "").trim();
+    ui.productDetailDrafts[p.id].unit = ($("#pUnit")?.value || "").trim();
+    ui.productDetailDrafts[p.id].unitPrice = ($("#pPrice")?.value || "").trim();
+    ui.productDetailDrafts[p.id].vatRate = ($("#pVat")?.value || "").trim();
+    ui.productDetailDrafts[p.id].defaultBucket = $("#pBucket")?.value || "invoice";
   };
+
+  if (isEditing){
+    ["#pName", "#pUnit", "#pPrice", "#pVat", "#pBucket"].forEach((selector)=>{
+      $(selector)?.addEventListener("input", syncDraft);
+      $(selector)?.addEventListener("change", syncDraft);
+    });
+  }
+
+  $("#toggleProductEdit")?.addEventListener("click", ()=>{
+    if (!isEditing){
+      ui.productDetailEditingId = p.id;
+      ui.productDetailDrafts[p.id] = {
+        name: p.name || "",
+        unit: p.unit || "keer",
+        unitPrice: String(p.unitPrice ?? 0),
+        vatRate: String(p.vatRate ?? 0.21),
+        defaultBucket: p.defaultBucket || "invoice"
+      };
+      render();
+      return;
+    }
+
+    syncDraft();
+    const currentDraft = ui.productDetailDrafts[p.id] || {};
+    actions.updateProduct(p.id, {
+      name: (currentDraft.name || "").trim(),
+      unit: (currentDraft.unit || "").trim() || "keer",
+      unitPrice: Number(String(currentDraft.unitPrice || "0").replace(",", ".") || "0"),
+      vatRate: Number(String(currentDraft.vatRate || "0.21").replace(",", ".") || "0.21"),
+      defaultBucket: currentDraft.defaultBucket || "invoice"
+    });
+    ui.productDetailEditingId = null;
+    delete ui.productDetailDrafts[p.id];
+    render();
+  });
 
   $("#delProduct").onclick = ()=>{
     const used = state.logs.some(l => (l.items||[]).some(it => it.productId === p.id))

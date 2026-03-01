@@ -14,6 +14,7 @@
   --tabbar-height: 90px;
   --bottom-tabbar-height: 90px;
   --status-tabbar-height: 0px;
+  --detail-actionbar-height: 0px;
   --more-actionbar-height: 0px;
   --topbar-height: 56px;
 
@@ -173,7 +174,7 @@ body{
   overflow:auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  padding: calc(var(--topbar-height) + env(safe-area-inset-top) + 8px) var(--pad) calc(var(--bottom-tabbar-height) + var(--status-tabbar-height) + env(safe-area-inset-bottom)) var(--pad);
+  padding: calc(var(--topbar-height) + env(safe-area-inset-top) + 8px) var(--pad) calc(var(--bottom-tabbar-height) + var(--status-tabbar-height) + var(--detail-actionbar-height) + env(safe-area-inset-bottom)) var(--pad);
   max-width: 760px;
   margin: 0 auto;
 }
@@ -379,6 +380,15 @@ label{ display:block; font-size:12px; color:var(--muted); margin: 0 0 6px 0; }
   border:0 !important;
 }
 
+.detail-actionbar-host.hidden,
+#detailActionbarHost.hidden{
+  display:none !important;
+  height:0 !important;
+  padding:0 !important;
+  margin:0 !important;
+  border:0 !important;
+}
+
 .tabs,
 .status-tabbar{
   position:fixed; left:0; right:0; bottom:0; z-index:20;
@@ -505,6 +515,82 @@ body:not([data-view="meer"]) #moreActionBar{
   backdrop-filter: blur(14px);
   border-top:1px solid var(--border);
   padding: 8px 10px;
+}
+
+.detail-actionbar{
+  position:fixed;
+  left:0;
+  right:0;
+  z-index:21;
+  bottom: var(--bottom-tabbar-height);
+  background: var(--topbar-bg);
+  backdrop-filter: blur(14px);
+  border-top:1px solid var(--border);
+  padding: 8px 10px;
+}
+
+.detail-actionbar-inner{
+  width:min(760px, 100%);
+  margin:0 auto;
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+}
+
+.client-detail-actionbar .detail-actionbar-inner,
+.product-detail-actionbar .detail-actionbar-inner{
+  justify-content:flex-end;
+}
+
+.detail-edit-toggle{
+  width:44px;
+  height:44px;
+  min-height:44px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:transparent;
+  color:var(--fg);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+}
+
+.detail-edit-toggle .icon{
+  width:20px;
+  height:20px;
+}
+
+.client-detail-view label,
+.product-detail-view label{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.client-detail-view input,
+.client-detail-view select,
+.client-detail-view textarea,
+.product-detail-view input,
+.product-detail-view select,
+.product-detail-view textarea{
+  width:100%;
+  min-height:44px;
+  border:0;
+  border-bottom:1px solid var(--border);
+  border-radius:0;
+  background:transparent;
+  padding:8px 2px;
+}
+
+.client-detail-view input:focus,
+.client-detail-view select:focus,
+.client-detail-view textarea:focus,
+.product-detail-view input:focus,
+.product-detail-view select:focus,
+.product-detail-view textarea:focus{
+  outline:none;
+  border-bottom-color:var(--fg);
 }
 
 .more-actionbar-inner{
