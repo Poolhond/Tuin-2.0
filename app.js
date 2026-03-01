@@ -39,6 +39,30 @@ function fmtMoney0(n){
   return "€" + String(Math.round(v));
 }
 function pad2(n){ return String(n).padStart(2,"0"); }
+function parseLocalYMD(ymd){
+  const [y, m, d] = String(ymd || "").split("-").map(n => parseInt(n, 10));
+  if (!y || !m || !d) return null;
+  const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
+  return Number.isFinite(dt.getTime()) ? dt : null;
+}
+function formatLocalYMD(dateObj){
+  const dt = dateObj instanceof Date ? dateObj : new Date(dateObj);
+  if (!Number.isFinite(dt.getTime())) return "";
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const d = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+function dayStartLocal(dateLike){
+  const dt = dateLike instanceof Date ? dateLike : new Date(dateLike);
+  if (!Number.isFinite(dt.getTime())) return null;
+  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), 0, 0, 0, 0);
+}
+function shiftMsByDays(msOrIsoOrDate, dayDelta){
+  const dt = msOrIsoOrDate instanceof Date ? msOrIsoOrDate : new Date(msOrIsoOrDate);
+  if (!Number.isFinite(dt.getTime())) return null;
+  return new Date(dt.getTime() + dayDelta * 86400000);
+}
 function fmtClock(ms){
   const d = new Date(ms);
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
@@ -93,9 +117,12 @@ function roundToNearestHalf(n){
 }
 function formatDatePretty(isoDate){
   if (!isoDate) return "";
-  const [y, m, d] = String(isoDate).split("-").map(Number);
-  if (!y || !m || !d) return String(isoDate);
-  const dt = new Date(y, m - 1, d);
+  const ymd = /^\d{4}-\d{2}-\d{2}$/.test(String(isoDate))
+    ? String(isoDate)
+    : formatLocalYMD(new Date(isoDate));
+  if (!ymd) return String(isoDate);
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
   if (!Number.isFinite(dt.getTime())) return String(isoDate);
   const dayNames = ["zo", "ma", "di", "wo", "do", "vr", "za"];
   const monthNames = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
@@ -104,8 +131,11 @@ function formatDatePretty(isoDate){
 }
 function formatDateNoWeekday(isoDate){
   if (!isoDate) return "";
-  const [y, m, d] = String(isoDate).split("-").map(Number);
-  if (!y || !m || !d) return String(isoDate);
+  const ymd = /^\d{4}-\d{2}-\d{2}$/.test(String(isoDate))
+    ? String(isoDate)
+    : formatLocalYMD(new Date(isoDate));
+  if (!ymd) return String(isoDate);
+  const [y, m, d] = ymd.split("-").map(Number);
   const monthNames = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
   const yy = String(y).slice(-2);
   return `${d} ${monthNames[m - 1]} ${yy}`;
@@ -129,8 +159,38 @@ function fmtTimeInput(ms){
 }
 function parseLogTimeToMs(isoDate, value){
   if (!value) return null;
-  const parsed = new Date(`${isoDate}T${value}:00`).getTime();
+  const baseDate = formatLocalYMD(new Date(isoDate));
+  if (!baseDate) return null;
+  const parsed = new Date(`${baseDate}T${value}:00`).getTime();
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function setLogDay(log, newYMD){
+  if (!log || !newYMD) return false;
+  const oldBase = dayStartLocal(log.date);
+  const newBase = parseLocalYMD(newYMD);
+  if (!oldBase || !newBase) return false;
+
+  const dayDelta = Math.round((newBase.getTime() - oldBase.getTime()) / 86400000);
+  if (!dayDelta) return false;
+
+  const shiftedLogDate = shiftMsByDays(log.date, dayDelta);
+  log.date = shiftedLogDate ? formatLocalYMD(shiftedLogDate) : formatLocalYMD(newBase);
+
+  if (Array.isArray(log.segments)){
+    for (const segment of log.segments){
+      if (segment.start != null){
+        const shiftedStart = shiftMsByDays(segment.start, dayDelta);
+        if (shiftedStart) segment.start = shiftedStart.getTime();
+      }
+      if (segment.end != null){
+        const shiftedEnd = shiftMsByDays(segment.end, dayDelta);
+        if (shiftedEnd) segment.end = shiftedEnd.getTime();
+      }
+    }
+  }
+
+  return true;
 }
 
 function normalizeTheme(theme){
@@ -3596,12 +3656,12 @@ function renderLogSheet(id){
   function renderLogHeader(currentLog, editing){
     const prettyDate = formatLogDatePretty(currentLog.date || "");
     const startTime = getStartTime(currentLog);
-    const dateInputValue = String(currentLog.date || "").slice(0, 10);
+    const dateInputValue = formatLocalYMD(new Date(currentLog.date));
     const dateHeader = editing
       ? `
         <div class="log-detail-date-edit" role="group" aria-label="Datum bewerken">
           <svg class="icon log-detail-date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18" stroke-linecap="round"></path></svg>
-          <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(dateInputValue)}" max="${todayISO()}" />
+          <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(dateInputValue)}" max="${formatLocalYMD(new Date())}" />
         </div>
       `
       : `<div class="log-detail-header-main">${esc(prettyDate || currentLog.date || "—")}</div>`;
@@ -3695,14 +3755,10 @@ function renderLogSheet(id){
   $("#logDateInput")?.addEventListener("change", (event)=>{
     const nextDate = event.target?.value;
     if (!nextDate) return;
-    if (nextDate > todayISO()) return;
-
-    const parsed = new Date(nextDate);
-    const parsedIso = Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
-    if (!parsedIso) return;
+    if (nextDate > formatLocalYMD(new Date())) return;
 
     actions.editLog(log.id, (draft)=>{
-      draft.date = parsedIso;
+      setLogDay(draft, nextDate);
     });
   });
 
