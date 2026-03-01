@@ -1935,6 +1935,12 @@ const actions = {
     ensureSettlementInvoiceDefaults(settlement);
     commit();
   },
+  updateSettlementField(settlementId, field, value){
+    const settlement = state.settlements.find(x => x.id === settlementId);
+    if (!settlement) return;
+    settlement[field] = value;
+    commit();
+  },
   addProduct(product){ state.products.unshift(product); commit(); return product; },
   updateSettings(hourlyRate, vatRate, theme = state.settings.theme){
     state.settings.hourlyRate = round2(hourlyRate);
@@ -4247,7 +4253,6 @@ function renderSettlementSheet(id){
   syncSettlementStatus(s);
 
   const isEdit = isSettlementEditing(s.id);
-  const invoiceLocked = Boolean(s.invoiceLocked || isSettlementCalculated(s));
   const invoiceNumberDisplay = String(s.invoiceNumber || "").trim();
   const customerOptions = state.customers.map(c => `<option value="${c.id}" ${c.id===s.customerId?"selected":""}>${esc(c.nickname||c.name||"Klant")}</option>`).join('');
   const availableLogs = state.logs
@@ -4267,7 +4272,9 @@ function renderSettlementSheet(id){
 
   const pay = settlementPaymentState(s);
   const visual = getSettlementVisualState(s);
-  const showInvoiceNumberSection = isSettlementCalculated(s) && Number(pay.invoiceTotal || 0) > 0;
+  const showInvoiceNumberSection = Boolean(pay.hasInvoice) && ["calculated", "paid"].includes(s.status);
+  const canEditInvoiceNumber = s.status === "calculated" && pay.hasInvoice === true && s.status !== "paid";
+  const invoiceNumberReadOnly = s.status === "paid";
   const logbookTotals = settlementLogbookTotals(s);
 
   // Bouw allocation-rijen vanuit s.allocations (bron van waarheid)
@@ -4395,7 +4402,7 @@ function renderSettlementSheet(id){
       <div class="section stack">
         <h2>Acties</h2>
         <div class="compact-row"><label>Klant</label><div><select id="sCustomer">${customerOptions}</select></div></div>
-        ${showInvoiceNumberSection ? `<div class="compact-row"><label>Factuurnr</label><div>${invoiceLocked ? `<span class="small mono">${esc(invoiceNumberDisplay)}</span>` : `<input id="invoiceNumberInput" value="${esc(invoiceNumberDisplay)}" />`}</div></div>` : ''}
+        ${showInvoiceNumberSection ? `<div class="compact-row"><label>Factuurnr</label><div><input id="invoiceNumberInput" value="${esc(invoiceNumberDisplay)}" ${invoiceNumberReadOnly ? "readonly" : ""} /></div></div>` : ''}
         <textarea id="sNote" rows="3">${esc(s.note||"")}</textarea>
         <button class="btn danger" id="delSettlement">Verwijder</button>
       </div>` : ""}
@@ -4471,11 +4478,9 @@ function renderSettlementSheet(id){
     });
 
     $('#invoiceNumberInput')?.addEventListener('change', ()=>{
-      if (invoiceLocked) return;
-      actions.editSettlement(s.id, (draft)=>{
-        const raw = String($('#invoiceNumberInput').value || '').trim();
-        draft.invoiceNumber = raw;
-      });
+      if (!canEditInvoiceNumber) return;
+      const raw = String($('#invoiceNumberInput').value || '').trim();
+      actions.updateSettlementField(s.id, 'invoiceNumber', raw);
       renderSheet();
     });
     $('#sheetBody').querySelectorAll('[data-logpick]').forEach(cb=>{
