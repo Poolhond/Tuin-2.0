@@ -3451,18 +3451,26 @@ function renderCustomerSheet(id){
   const logs = state.logs.filter(l => l.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   const settlements = state.settlements.filter(s => s.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 
-  $("#sheetActions").innerHTML = `
-    <button class="btn danger" id="delCustomer">Verwijder</button>
-  `;
+  $("#sheetActions").innerHTML = "";
 
   setDetailActionBar({
     className: "client-detail-actionbar",
     html: `
-      <button class="detail-edit-toggle" id="toggleClientEdit" type="button" aria-label="${isEditing ? "Klant opslaan" : "Klant bewerken"}" title="${isEditing ? "Klant opslaan" : "Klant bewerken"}">
-        ${isEditing
-          ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-          : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke-linejoin="round"/></svg>`}
-      </button>
+      <div class="client-detail-actionbar-left">
+        ${isEditing ? `
+          <button class="detail-delete-toggle" id="delCustomer" type="button" aria-label="Klant verwijderen" title="Klant verwijderen">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18" stroke-linecap="round"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 10v7M14 10v7" stroke-linecap="round"/></svg>
+            <span>Verwijder</span>
+          </button>
+        ` : ""}
+      </div>
+      <div class="client-detail-actionbar-right">
+        <button class="detail-edit-toggle" id="toggleClientEdit" type="button" aria-label="${isEditing ? "Klant opslaan" : "Klant bewerken"}" title="${isEditing ? "Klant opslaan" : "Klant bewerken"}">
+          ${isEditing
+            ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+            : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9" stroke-linecap="round"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke-linejoin="round"/></svg>`}
+        </button>
+      </div>
     `
   });
   $("#sheetBody").style.paddingBottom = "calc(var(--detail-actionbar-height) + 18px)";
@@ -3471,11 +3479,13 @@ function renderCustomerSheet(id){
     <div class="stack client-detail-view">
       <div class="card stack">
         <div class="item-title">Gegevens</div>
-        <div class="row">
-          <div style="flex:1; min-width:220px;">
+        ${isEditing ? `
+          <div>
             <label>Bijnaam</label>
-            ${isEditing ? `<input id="cNick" value="${esc(draft.nickname)}" />` : `<div class="item-sub">${esc(c.nickname || "-")}</div>`}
+            <input id="cNick" value="${esc(draft.nickname)}" />
           </div>
+        ` : ""}
+        <div class="row">
           <div style="flex:1; min-width:220px;">
             <label>Naam</label>
             ${isEditing ? `<input id="cName" value="${esc(draft.name)}" />` : `<div class="item-sub">${esc(c.name || "-")}</div>`}
@@ -3568,14 +3578,14 @@ function renderCustomerSheet(id){
     render();
   });
 
-  $("#delCustomer").onclick = ()=>{
+  $("#delCustomer")?.addEventListener("click", ()=>{
     const hasLogs = state.logs.some(l => l.customerId === c.id);
     const hasSet = state.settlements.some(s => s.customerId === c.id);
     if (hasLogs || hasSet){ alert("Kan niet verwijderen: klant heeft logs/afrekeningen."); return; }
     if (!confirmDelete(`Klant: ${c.nickname||c.name||""}`)) return;
     actions.deleteCustomer(c.id);
     closeSheet();
-  };
+  });
 
   $("#sheetBody").querySelectorAll("[data-open-log]").forEach(x=>{
     x.addEventListener("click", ()=> openSheet("log", x.getAttribute("data-open-log")));
