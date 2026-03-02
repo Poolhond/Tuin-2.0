@@ -2991,23 +2991,25 @@ function renderSettlements(){
   const invoiceIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"></rect><path d="M2.5 10h19" stroke-linecap="round"></path><path d="M7 14.5h4" stroke-linecap="round"></path></svg>`;
   const cashIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="8.5" cy="12" r="3.5"></circle><circle cx="15.5" cy="12" r="3.5"></circle><path d="M12 8.5v7" stroke-linecap="round"></path></svg>`;
 
-  const totalOutstanding = round2(state.settlements.reduce((sum, settlement)=>{
+  const totalNotCalculatedExVat = round2(state.settlements.reduce((sum, settlement)=>{
+    if (isSettlementCalculated(settlement)) return sum;
     const pay = settlementPaymentState(settlement);
-    const flags = getSettlementPaymentFlags(settlement);
-    const invoiceOutstanding = (!flags.invoicePaid && pay.invoiceTotal > 0) ? Number(pay.invoiceTotal || 0) : 0;
-    const cashOutstanding = (!flags.cashPaid && pay.cashTotal > 0) ? Number(pay.cashTotal || 0) : 0;
-    return sum + invoiceOutstanding + cashOutstanding;
+    return sum + Number(pay.invoiceTotals?.subtotal || 0) + Number(pay.cashTotals?.subtotal || 0);
   }, 0));
   const totalInvoiceOutstanding = round2(state.settlements.reduce((sum, settlement)=>{
+    if (!isSettlementCalculated(settlement)) return sum;
+    const visual = getSettlementVisualState(settlement);
+    if (visual.state === "paid") return sum;
     const pay = settlementPaymentState(settlement);
-    const flags = getSettlementPaymentFlags(settlement);
-    if (flags.invoicePaid || (Number(pay.invoiceTotal) || 0) <= 0) return sum;
+    if ((Number(pay.invoiceTotal) || 0) <= 0) return sum;
     return sum + Number(pay.invoiceTotal || 0);
   }, 0));
   const totalCashOutstanding = round2(state.settlements.reduce((sum, settlement)=>{
+    if (!isSettlementCalculated(settlement)) return sum;
+    const visual = getSettlementVisualState(settlement);
+    if (visual.state === "paid") return sum;
     const pay = settlementPaymentState(settlement);
-    const flags = getSettlementPaymentFlags(settlement);
-    if (flags.cashPaid || (Number(pay.cashTotal) || 0) <= 0) return sum;
+    if ((Number(pay.cashTotal) || 0) <= 0) return sum;
     return sum + Number(pay.cashTotal || 0);
   }, 0));
 
@@ -3108,13 +3110,15 @@ function renderSettlements(){
   el.innerHTML = `
     <div class="stack">
       <div class="geld-header"><span class="geld-header-title">Afrekeningen</span></div>
-      <div class="settlement-outstanding-total mono tabular">Openstaand: ${formatMoneyEUR0(totalOutstanding)}</div>
-      <div class="settlement-outstanding-breakdown mono tabular">
-        <div class="settlement-outstanding-col">
-          <span class="settlement-outstanding-content ${totalInvoiceOutstanding > 0 ? "" : "is-hidden"}">${invoiceIcon}<span>${totalInvoiceOutstanding > 0 ? formatMoneyEUR0(totalInvoiceOutstanding) : ""}</span></span>
-        </div>
-        <div class="settlement-outstanding-col">
-          <span class="settlement-outstanding-content ${totalCashOutstanding > 0 ? "" : "is-hidden"}">${cashIcon}<span>${totalCashOutstanding > 0 ? formatMoneyEUR0(totalCashOutstanding) : ""}</span></span>
+      <div class="settlement-header-row mono tabular">
+        <div class="settlement-header-left">${formatMoneyEUR0(totalNotCalculatedExVat)}</div>
+        <div class="settlement-outstanding-breakdown">
+          <span class="settlement-outstanding-col ${totalInvoiceOutstanding > 0 ? "is-open" : ""}">
+            <span class="settlement-outstanding-content ${totalInvoiceOutstanding > 0 ? "" : "is-hidden"}">${invoiceIcon}<span>${totalInvoiceOutstanding > 0 ? formatMoneyEUR0(totalInvoiceOutstanding) : ""}</span></span>
+          </span>
+          <span class="settlement-outstanding-col ${totalCashOutstanding > 0 ? "is-open" : ""}">
+            <span class="settlement-outstanding-content ${totalCashOutstanding > 0 ? "" : "is-hidden"}">${cashIcon}<span>${totalCashOutstanding > 0 ? formatMoneyEUR0(totalCashOutstanding) : ""}</span></span>
+          </span>
         </div>
       </div>
       <div class="flat-list">${list || `<div class="meta-text" style="padding:8px 4px;">Nog geen afrekeningen.</div>`}</div>
