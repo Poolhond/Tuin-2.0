@@ -2060,13 +2060,20 @@ h2{
   gap:4px;
 }
 
-.settlement-outstanding-total{
-  color:var(--accent);
-  font-size:20px;
-  font-weight:800;
-  line-height:1.2;
+
+.settlement-header-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
   padding:0 4px 8px;
-  text-align:right;
+}
+
+.settlement-header-left{
+  color:var(--text-muted);
+  font-size:15px;
+  font-weight:400;
+  line-height:1.2;
 }
 
 .settlement-outstanding-breakdown{
@@ -2075,14 +2082,17 @@ h2{
   justify-content:end;
   column-gap:14px;
   color:var(--text);
-  font-size:16px;
+  font-size:15px;
   font-weight:700;
-  padding:0 4px 8px;
 }
 
 .settlement-outstanding-col{
   display:flex;
   justify-content:flex-end;
+}
+
+.settlement-outstanding-col.is-open{
+  color:var(--status-calculated-border);
 }
 
 .settlement-outstanding-content{
