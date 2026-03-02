@@ -3042,6 +3042,9 @@ function renderSettlements(){
       return 0;
     })
     .map(s=>{
+      const customerName = cname(s.customerId);
+      const invoiceNumber = String(s.invoiceNumber || "").trim();
+      const titleText = invoiceNumber ? `${invoiceNumber} ${customerName}` : customerName;
       const pay = settlementPaymentState(s);
       const visual = getSettlementVisualState(s);
       const calculated = isSettlementCalculated(s);
@@ -3079,22 +3082,15 @@ function renderSettlements(){
             <div class="settlement-row-grid">
               <div class="item-main">
                 <div class="item-title-row settlement-title-row">
-                  <div class="item-title settlement-name" title="${esc(cname(s.customerId))}">${esc(cname(s.customerId))}</div>
+                  <div class="item-title settlement-name" title="${esc(titleText)}">${esc(titleText)}</div>
                 </div>
               </div>
 
-              <div class="settleRowRight">
-                <div class="invoiceInline">
-                  ${String(s.invoiceNumber||"").trim()
-                    ? `<span class="invoiceNo mono">${esc(String(s.invoiceNumber).trim().toUpperCase())}</span>`
-                    : ``
-                  }
-                  <button class="amount-inline invoiceAmt ${flags.invoicePaid ? "is-paid" : "is-open"} ${showInvoice ? "" : "is-empty"}"
-                          ${invoiceToggleAttrs}>
-                    <span class="amount-inline-content mono tabular"><span class="amount-val">${showInvoice ? formatMoneyEUR0(invoiceAmt) : ""}</span></span>
-                  </button>
-                </div>
-
+              <div class="settlement-amount-group">
+                <button class="amount-inline invoiceAmt ${flags.invoicePaid ? "is-paid" : "is-open"} ${showInvoice ? "" : "is-empty"}"
+                        ${invoiceToggleAttrs}>
+                  <span class="amount-inline-content mono tabular"><span class="amount-val">${showInvoice ? formatMoneyEUR0(invoiceAmt) : ""}</span></span>
+                </button>
                 <button class="amount-inline cashAmt ${flags.cashPaid ? "is-paid" : "is-open"} ${showCash ? "" : "is-empty"}"
                         ${cashToggleAttrs}>
                   <span class="amount-inline-content mono tabular"><span class="amount-val">${showCash ? formatMoneyEUR0(cashAmt) : ""}</span></span>
