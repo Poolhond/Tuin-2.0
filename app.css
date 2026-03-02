@@ -1942,9 +1942,8 @@ h2{
 }
 
 .settlement-row-grid{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto;
-  column-gap:10px;
+  display:flex;
+  gap:10px;
   width:100%;
   align-items:center;
 }
@@ -1980,34 +1979,62 @@ h2{
   gap:0;
 }
 
-.settleRowRight{
-  display:grid;
-  grid-template-columns:auto auto;
-  column-gap:12px;
+.settlement-amount-group{
+  flex:none;
+  width:188px;
+  display:flex;
   align-items:center;
-  justify-content:end;
-}
-
-.invoiceInline{
-  min-width:96px;
-  display:inline-flex;
   justify-content:flex-end;
-  gap:8px;
-  align-items:baseline;
-  white-space:nowrap;
+  column-gap:10px;
 }
 
-.invoiceNo{
-  opacity:.75;
-  font-size:.9em;
+.settlement-amount-group .amount-inline{
+  flex:none;
+  width:88px;
+  justify-content:flex-end;
 }
 
-.invoiceAmt{
-  font-weight:600;
+.settlement-amount-group .amount-inline .amount-inline-content{
+  width:100%;
+  justify-content:flex-end;
 }
 
-.cashAmt{
-  min-width:84px;
+.settlement-amount-group .cashAmt{
+  margin-left:0;
+}
+
+.settlement-amount-group .invoiceAmt{
+  margin-left:0;
+}
+
+.settlement-amount-group .amount-val{
+  width:100%;
+  text-align:right;
+}
+
+.settlement-amount-group .amount-inline:disabled{
+  cursor:default;
+}
+
+.settlement-amount-group .amount-inline.is-empty .amount-inline-content{
+  visibility:hidden;
+}
+
+.settlement-amount-group .amount-inline.is-open{
+  color: var(--status-calculated-border);
+}
+
+.settlement-amount-group .amount-inline.is-paid{
+  color: var(--status-paid-border);
+}
+
+.settlement-amount-group .amount-inline:active:not(:disabled){
+  transform:scale(0.98);
+}
+
+.settlement-amount-group .invoiceAmt,
+.settlement-amount-group .cashAmt{
+  align-items:center;
   white-space:nowrap;
   text-align:right;
 }
@@ -2021,29 +2048,15 @@ h2{
   flex:none;
 }
 
-.amount-inline.is-open{
-  color: var(--status-calculated-border);
-}
-
-.amount-inline.is-paid{
-  color: var(--status-paid-border);
-}
-
 .settlement-detail-item--green{
   color:inherit;
 }
 
-.amount-inline.is-empty .amount-inline-content{
-  visibility:hidden;
-}
-
-.amount-inline:active:not(:disabled){
-  transform:scale(0.98);
-}
-
-.amount-inline:disabled{
-  cursor:default;
-}
+.amount-inline.is-open{ color: var(--status-calculated-border); }
+.amount-inline.is-paid{ color: var(--status-paid-border); }
+.amount-inline.is-empty .amount-inline-content{ visibility:hidden; }
+.amount-inline:active:not(:disabled){ transform:scale(0.98); }
+.amount-inline:disabled{ cursor:default; }
 
 .settlement-meta-row{
   color:var(--muted);
