@@ -1298,6 +1298,15 @@ function latestLinkedLogDate(settlement, sourceState = state){
 function syncSettlementDatesFromLogs(settlement, sourceState = state){
   if (!settlement) return;
   const fallbackDate = todayISO();
+
+  const manual = String(settlement.dateOverride || "").trim();
+  if (manual){
+    settlement.date = manual;
+    if (!settlement.invoiceLocked) settlement.invoiceDate = manual;
+    if (!settlement.invoiceDate) settlement.invoiceDate = manual;
+    return;
+  }
+
   const maxLogDate = latestLinkedLogDate(settlement, sourceState);
   if (maxLogDate){
     settlement.date = maxLogDate;
@@ -4536,6 +4545,7 @@ function renderSettlementSheet(id){
     <div class="stack settlement-detail settlement-flow ${visual.accentClass}">
       ${(!isEdit && (s.note || '').trim()) ? `<div class="section section-tight settlement-note-top"><div class="settlement-note-text">${esc(s.note.trim())}</div></div>` : ``}
       <div class="section stack section-tight">
+        ${!isEdit ? `<div class="summary-row"><span class="label">Datum</span><span class="num">${esc(formatDatePretty(s.date))}${s.dateOverride ? `<span class="subtle-tag mono">aangepast</span>` : ""}</span></div>` : ""}
         <div class="summary-row"><span class="label">Totale werkuren</span><span class="num mono tabular">${formatDurationCompact(Math.floor(logbookTotals.totalWorkMs / 60000))}</span></div>
         <div class="summary-row"><span class="label">Totale groen eenheden</span><span class="num mono tabular">${esc(String(formatQuickQty(logbookTotals.totalGreenUnits)))}</span></div>
         ${logbookTotals.totalExtraProducts > 0 ? `<div class="summary-row"><span class="label">Totale extra producten</span><span class="num mono tabular">${esc(String(formatQuickQty(logbookTotals.totalExtraProducts)))}</span></div>` : ''}
@@ -4579,13 +4589,14 @@ function renderSettlementSheet(id){
             return `<button class="flat-row item-row-button" type="button" role="button" data-open-linked-log="${l.id}"><div class="item-main">${rowMeta}</div></button>`;
           }).join('') || `<div class="small">Geen gekoppelde logs.</div>`}
         </div>
-        ${isEdit ? `<div class="settlement-linked-logs-actions"><button class="btn" id="btnRecalc">Herbereken uit logs</button></div>` : ""}
+
       </div>
 
       ${isEdit ? `
       <div class="section stack">
         <h2>Acties</h2>
         <div class="compact-row"><label>Klant</label><div><select id="sCustomer">${customerOptions}</select></div></div>
+        <div class="compact-row"><label>Afrekendatum</label><div class="row-inline"><input id="settlementDateOverride" type="date" value="${esc(String(s.dateOverride || s.date || ""))}" />${s.dateOverride ? `<button class="iconbtn iconbtn-sm" id="btnResetSettlementDate" type="button" title="Reset naar automatisch" aria-label="Reset naar automatisch"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round"/><path d="M3 3v6h6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}</div></div>
         ${showInvoiceNumberSection ? `<div class="compact-row"><label>Factuurnr</label><div><input id="invoiceNumberInput" value="${esc(invoiceNumberDisplay)}" ${invoiceNumberReadOnly ? "readonly" : ""} /></div></div>` : ''}
         <textarea id="sNote" rows="3">${esc(s.note||"")}</textarea>
         <button class="btn danger" id="delSettlement">Verwijder</button>
@@ -4597,6 +4608,14 @@ function renderSettlementSheet(id){
     <div class="settlement-status-bar">
       ${renderSettlementStatusIcons(s)}
     </div>
+    ${isEdit ? `
+      <button class="iconbtn" id="btnSettlementRecalc" type="button" aria-label="Herbereken uit logs" title="Herbereken uit logs">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke-linecap="round"/>
+          <path d="M21 3v6h-6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    ` : ""}
     <button class="iconbtn" id="btnSettlementEdit" type="button" aria-label="${isEdit ? "Gereed" : "Bewerk"}" title="${isEdit ? "Gereed" : "Bewerk"}">
       ${isEdit
         ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
@@ -4655,6 +4674,24 @@ function renderSettlementSheet(id){
       });
       renderSheet();
     });
+    $('#settlementDateOverride')?.addEventListener('change', ()=>{
+      const v = String($('#settlementDateOverride').value || "").trim();
+      if (!v) return;
+      actions.editSettlement(s.id, (draft)=>{
+        draft.dateOverride = v;
+        draft.date = v;
+        if (!draft.invoiceLocked) draft.invoiceDate = v;
+      });
+      renderSheet();
+    });
+    $('#btnResetSettlementDate')?.addEventListener('click', ()=>{
+      actions.editSettlement(s.id, (draft)=>{
+        delete draft.dateOverride;
+        draft.dateOverride = null;
+        syncSettlementDatesFromLogs(draft, state);
+      });
+      renderSheet();
+    });
     $('#sNote')?.addEventListener('change', ()=>{
       actions.editSettlement(s.id, (draft)=>{
         draft.note = ($('#sNote').value || '').trim();
@@ -4688,7 +4725,7 @@ function renderSettlementSheet(id){
       });
     });
 
-    $('#btnRecalc')?.addEventListener('click', ()=>{
+    $('#btnSettlementRecalc')?.addEventListener('click', ()=>{
       // Herbereken = herbouw allocations vanuit logs zonder te finaliseren
       actions.editSettlement(s.id, (draft)=>{
         if (isSettlementCalculated(draft)) return;

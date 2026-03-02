@@ -2414,3 +2414,19 @@ h2{
   width:16px;
   height:16px;
 }
+
+.row-inline{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.row-inline input[type="date"]{
+  flex:1;
+}
+
+.subtle-tag{
+  opacity:.65;
+  font-size:12px;
+  margin-left:8px;
+}
