@@ -185,6 +185,10 @@ body{
   padding-bottom:10px;
 }
 
+[data-view="settlementDetail"] .detail-head{
+  padding-bottom:4px;
+}
+
 .card{
   background: transparent;
   border:0;
@@ -1089,11 +1093,21 @@ body:not([data-view="meer"]) #moreActionBar{
   display:inline-flex;
   align-items:center;
   gap:4px;
+  color:inherit;
 }
 
 .settlement-linked-log-icon{
-  font-size:12px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
   line-height:1;
+}
+
+.settlement-linked-log-icon svg{
+  width:15px;
+  height:15px;
+  stroke:currentColor;
+  vertical-align:middle;
 }
 
 .settlement-linked-logs-actions{
@@ -1132,6 +1146,11 @@ body:not([data-view="meer"]) #moreActionBar{
 .settlement-detail .section{
   padding-left:0;
   padding-right:0;
+}
+
+.settlement-detail .section:first-child{
+  margin-top:0;
+  padding-top:8px;
 }
 
 .settlement-detail .compact-row{
@@ -1206,12 +1225,7 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .allocation-controls-static{
-  grid-template-columns:minmax(0,1fr);
-}
-
-.allocation-controls-static .allocation-btn-placeholder{
-  display:none;
-  pointer-events:none;
+  grid-template-columns:34px minmax(0,1fr) 34px;
 }
 
 .allocation-value{
@@ -1248,7 +1262,7 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .allocation-total-row .allocation-value{
-  text-align:right;
+  text-align:center;
 }
 
 .allocation-total-row .allocation-value.is-open{
@@ -1259,6 +1273,16 @@ body:not([data-view="meer"]) #moreActionBar{
   color:var(--status-paid-border);
 }
 
+.settlement-note-top{
+  padding-top:6px;
+  padding-bottom:8px;
+}
+
+.settlement-note-text{
+  font-size:13px;
+  line-height:1.4;
+  opacity:.88;
+}
 
 .settlement-detail.card-accent--open,
 .settlement-detail.card-accent--calculated,
@@ -1807,6 +1831,10 @@ body:not([data-view="meer"]) #moreActionBar{
 
 .sheet-body{
   padding: 0 0 18px 0;
+}
+
+[data-view="settlementDetail"] .sheet-body{
+  padding-top:0;
 }
 
 
