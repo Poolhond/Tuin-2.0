@@ -4465,6 +4465,8 @@ function renderSettlementSheet(id){
   // Bouw allocation-rijen vanuit s.allocations (bron van waarheid)
   const workIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="7"/><path d="M12 8.6v3.8l2.7 1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const greenIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 15c2.2-6.2 8.4-8.7 14-9-1.1 5.7-3 11.8-9 14-4 1.4-7-1.3-5-5Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 14.5c2 .2 4.6-.4 7.5-2.4" stroke-linecap="round"/></svg>`;
+  const leafIconSmall = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 15c2.2-6.2 8.4-8.7 14-9-1.1 5.7-3 11.8-9 14-4 1.4-7-1.3-5-5Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 14.5c2 .2 4.6-.4 7.5-2.4" stroke-linecap="round"/></svg>`;
+  const boxIconSmall = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 8 8-4 8 4-8 4-8-4Z" stroke-linejoin="round"/><path d="M4 8v8l8 4 8-4V8" stroke-linejoin="round"/><path d="M12 12v8" stroke-linecap="round"/></svg>`;
   const greenProduct = findGreenProduct();
   const allocationRows = [];
   const allocs = s.allocations || {};
@@ -4517,10 +4519,14 @@ function renderSettlementSheet(id){
   const renderAllocationStaticRow = ({ invoiceValue, cashValue, invoiceClass = '', cashClass = '', rowClass = '' })=>`
     <div class="allocation-matrix-label ${rowClass}" aria-hidden="true"></div>
     <div class="allocation-controls allocation-controls-static ${rowClass}" data-bucket="invoice">
+      <span class="allocation-btn-placeholder"></span>
       <div class="allocation-value mono tabular ${invoiceClass}">${invoiceValue}</div>
+      <span class="allocation-btn-placeholder"></span>
     </div>
     <div class="allocation-controls allocation-controls-static ${rowClass}" data-bucket="cash">
+      <span class="allocation-btn-placeholder"></span>
       <div class="allocation-value mono tabular ${cashClass}">${cashValue}</div>
+      <span class="allocation-btn-placeholder"></span>
     </div>
   `;
 
@@ -4528,6 +4534,7 @@ function renderSettlementSheet(id){
   $('#sheetBody').style.paddingBottom = 'calc(var(--bottom-tabbar-height) + var(--status-tabbar-height) + env(safe-area-inset-bottom) + 40px)';
   $('#sheetBody').innerHTML = `
     <div class="stack settlement-detail settlement-flow ${visual.accentClass}">
+      ${(!isEdit && (s.note || '').trim()) ? `<div class="section section-tight settlement-note-top"><div class="settlement-note-text">${esc(s.note.trim())}</div></div>` : ``}
       <div class="section stack section-tight">
         <div class="summary-row"><span class="label">Totale werkuren</span><span class="num mono tabular">${formatDurationCompact(Math.floor(logbookTotals.totalWorkMs / 60000))}</span></div>
         <div class="summary-row"><span class="label">Totale groen eenheden</span><span class="num mono tabular">${esc(String(formatQuickQty(logbookTotals.totalGreenUnits)))}</span></div>
@@ -4561,8 +4568,8 @@ function renderSettlementSheet(id){
                 <span class="settlement-linked-log-date">${esc(formatDatePretty(l.date))}</span>
                 <div class="settlement-linked-log-right">
                   <span>${formatDurationCompact(Math.floor(sumWorkMs(l)/60000))}</span>
-                  ${greenItemQty > 0 ? `<span class="settlement-linked-log-chip"><span class="settlement-linked-log-icon" aria-hidden="true">🌿</span>${esc(String(formatQuickQty(greenItemQty)))}</span>` : ''}
-                  ${otherProductsQty > 0 ? `<span class="settlement-linked-log-chip"><span class="settlement-linked-log-icon" aria-hidden="true">📦</span>${esc(String(formatQuickQty(otherProductsQty)))}</span>` : ''}
+                  ${greenItemQty > 0 ? `<span class="settlement-linked-log-chip"><span class="settlement-linked-log-icon" aria-hidden="true">${leafIconSmall}</span>${esc(String(formatQuickQty(greenItemQty)))}</span>` : ''}
+                  ${otherProductsQty > 0 ? `<span class="settlement-linked-log-chip"><span class="settlement-linked-log-icon" aria-hidden="true">${boxIconSmall}</span>${esc(String(formatQuickQty(otherProductsQty)))}</span>` : ''}
                 </div>
               </div>`;
             if (isEdit){
@@ -4573,13 +4580,6 @@ function renderSettlementSheet(id){
           }).join('') || `<div class="small">Geen gekoppelde logs.</div>`}
         </div>
         ${isEdit ? `<div class="settlement-linked-logs-actions"><button class="btn" id="btnRecalc">Herbereken uit logs</button></div>` : ""}
-      </div>
-
-      <div class="section stack section-tight">
-        <h2>Administratieve gegevens</h2>
-        <div class="summary-row"><span class="label">Datum</span><span class="num">${esc(formatDatePretty(s.date))}</span></div>
-        <div class="summary-row"><span class="label">Status</span><span class="num">${esc(statusLabelNL(s.status))}</span></div>
-        <div class="summary-row"><span class="label">Notitie</span><span class="num">${esc(s.note || '—')}</span></div>
       </div>
 
       ${isEdit ? `
