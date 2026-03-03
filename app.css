@@ -2,6 +2,7 @@
   --bg:#0b0f14;
   --surface:#111825;
   --surface2:#0f1520;
+  --bg-elevated:#14171b;
   --text:#e9eef6;
   --muted:rgba(233,238,246,.68);
   --border:rgba(233,238,246,.10);
@@ -34,6 +35,7 @@ body[data-theme="day"]{
   --bg:#f4f7fb;
   --surface:#ffffff;
   --surface2:#eef3fa;
+  --bg-elevated:#ffffff;
   --text:#182131;
   --muted:rgba(24,33,49,.68);
   --border:rgba(24,33,49,.14);
@@ -2453,7 +2455,8 @@ h2{
   position: fixed;
   inset: 0;
   z-index: 70;
-  background: rgba(0,0,0,.34);
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: flex-end;
 }
@@ -2461,7 +2464,9 @@ h2{
 .log-filter-sheet{
   width: 100%;
   border-radius: 20px 20px 0 0;
-  background: var(--panel);
+  background: var(--bg-elevated, #14171b);
+  opacity: 1;
+  backdrop-filter: none;
   border-top: 1px solid var(--border);
   padding: 8px 14px calc(16px + env(safe-area-inset-bottom));
 }
