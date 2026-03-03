@@ -320,11 +320,8 @@ function defaultState(){
     ui: {},
     logbook: {
       statusFilter: "open",
-      showFilters: false,
-      customerId: "all",
       period: "all",
-      groupBy: "date",
-      sortDir: "desc"
+      isFilterSheetOpen: false
     },
     settlementList: {
       ...SETTLEMENT_LIST_DEFAULTS
@@ -380,18 +377,15 @@ function ensureUIPreferences(st){
   st.logbook = st.logbook || {};
   st.settlementList = st.settlementList || {};
 
-  if (!["open", "paid", "all"].includes(st.logbook.statusFilter)){
-    st.logbook.statusFilter = ["open", "paid", "all"].includes(st.ui.logFilter) ? st.ui.logFilter : "open";
+  if (!["open", "calculated", "paid", "all"].includes(st.logbook.statusFilter)){
+    st.logbook.statusFilter = ["open", "calculated", "paid", "all"].includes(st.ui.logFilter) ? st.ui.logFilter : "open";
   }
-  if (!("showFilters" in st.logbook)) st.logbook.showFilters = Boolean(st.ui.showLogFilters);
-  if (!("customerId" in st.logbook)) st.logbook.customerId = st.ui.logCustomerId || "all";
+  if (!("isFilterSheetOpen" in st.logbook)) st.logbook.isFilterSheetOpen = false;
   if (!("period" in st.logbook)){
-    const legacyMap = { "7d": "week", "30d": "30d", "90d": "month", "all": "all" };
+    const legacyMap = { "7d": "30d", "30d": "30d", "90d": "quarter", "all": "all" };
     st.logbook.period = legacyMap[st.ui.logPeriod] || "all";
   }
-  if (!["all", "week", "month", "30d"].includes(st.logbook.period)) st.logbook.period = "all";
-  if (!["date", "customer", "workTime", "productTotal", "status"].includes(st.logbook.groupBy)) st.logbook.groupBy = "date";
-  if (!["desc", "asc"].includes(st.logbook.sortDir)) st.logbook.sortDir = "desc";
+  if (!["all", "30d", "month", "quarter"].includes(st.logbook.period)) st.logbook.period = "all";
 
   const normalizedStatusFilter = Array.isArray(st.settlementList.statusFilter)
     ? [...new Set(st.settlementList.statusFilter.filter(status => ["draft", "calculated", "paid"].includes(status)))]
@@ -2191,6 +2185,15 @@ function renderTopbar(){
   } else {
     $("#topbarTitle").textContent = viewTitle(active);
   }
+
+  if (ui.navStack.length === 1 && active.view === "logs"){
+    const pillLabel = getFilterPillLabel(state.logbook || {});
+    if (rightInfoEl){
+      rightInfoEl.innerHTML = `<button class="log-filter-pill" id="btnLogbookFilterPill" aria-label="Logboekfilters">${esc(pillLabel)}</button>`;
+      rightInfoEl.classList.remove("hidden");
+    }
+  }
+
   topbar.dataset.customerId = linkedCustomerId;
 
   const showBack = ui.navStack.length > 1;
@@ -2211,6 +2214,11 @@ function renderTopbar(){
   btnNew.classList.toggle("hidden", showBack);
   btnNew.setAttribute("aria-label", isSettlementsRoot ? "Filter & sorteer" : "Nieuwe werklog");
   btnNew.setAttribute("title", isSettlementsRoot ? "Filter & sorteer" : "Nieuwe werklog");
+
+  $("#btnLogbookFilterPill")?.addEventListener("click", ()=>{
+    actions.setLogbook({ isFilterSheetOpen: true });
+    render();
+  });
 }
 
 function setTab(key){
@@ -2520,133 +2528,68 @@ function render(){
   ui.transition = null;
 }
 
-function getLogbookPeriodStart(period){
+function getLogTimestamp(log){
+  const createdAt = Number(log?.createdAt);
+  if (Number.isFinite(createdAt)) return createdAt;
+  const dateValue = new Date(`${log?.date || ""}T00:00:00`).getTime();
+  return Number.isFinite(dateValue) ? dateValue : 0;
+}
+
+function getPeriodStart(period){
   const current = new Date();
-  if (period === "week"){
-    const d = new Date(current);
-    const offset = (d.getDay() + 6) % 7;
-    d.setHours(0,0,0,0);
-    d.setDate(d.getDate() - offset);
-    return d.getTime();
-  }
-  if (period === "month"){
-    return new Date(current.getFullYear(), current.getMonth(), 1).getTime();
-  }
-  if (period === "30d"){
-    return now() - (30 * 86400000);
+  if (period === "30d") return now() - (30 * 86400000);
+  if (period === "month") return new Date(current.getFullYear(), current.getMonth(), 1).getTime();
+  if (period === "quarter"){
+    const quarterMonth = Math.floor(current.getMonth() / 3) * 3;
+    return new Date(current.getFullYear(), quarterMonth, 1).getTime();
   }
   return null;
 }
 
-function logStatusBucket(status){
-  if (status === "paid") return "paid";
+function getStatusKey(logId){
+  const status = getWorkLogStatus(logId);
   if (status === "calculated") return "calculated";
+  if (status === "paid") return "paid";
   return "open";
 }
 
-function logStatusLabel(status){
-  const bucket = logStatusBucket(status);
-  if (bucket === "paid") return "Betaald";
-  if (bucket === "calculated") return "Berekend";
-  return "Open";
-}
-
-function compareByDirection(a, b, dir){
-  return dir === "asc" ? (a > b ? 1 : a < b ? -1 : 0) : (a < b ? 1 : a > b ? -1 : 0);
+function getFilterPillLabel(logbook){
+  const status = logbook?.statusFilter || "open";
+  const period = logbook?.period || "all";
+  const statusLabel = { open: "Open", calculated: "Berekend", paid: "Betaald", all: "Alles" }[status] || "Open";
+  const periodLabel = { all: "", "30d": "30d", month: "Maand", quarter: "Q" }[period] || "";
+  if (status === "all" && period === "all") return "Alles";
+  if (!periodLabel) return statusLabel;
+  return `${statusLabel} · ${periodLabel}`;
 }
 
 function applyFiltersAndSort(logs){
   const cfg = state.logbook || {};
   const statusFilter = cfg.statusFilter || "open";
-  const customerId = cfg.customerId || "all";
   const period = cfg.period || "all";
-  const groupBy = cfg.groupBy || "date";
-  const sortDir = cfg.sortDir || "desc";
-  const minTimestamp = getLogbookPeriodStart(period);
+  const minTimestamp = getPeriodStart(period);
 
   const filtered = logs.filter(log => {
-    const status = getWorkLogStatus(log.id);
-    const isPaid = status === "paid";
-    if (statusFilter === "open" && isPaid) return false;
-    if (statusFilter === "paid" && !isPaid) return false;
-    if (customerId !== "all" && log.customerId !== customerId) return false;
+    const status = getStatusKey(log.id);
+    if (statusFilter !== "all" && status !== statusFilter) return false;
 
     if (minTimestamp != null){
-      const ts = log.createdAt || new Date(`${log.date}T00:00:00`).getTime();
+      const ts = getLogTimestamp(log);
       if (Number.isFinite(ts) && ts < minTimestamp) return false;
     }
     return true;
   });
 
-  const decorated = filtered.map(log => ({
-    log,
-    status: getWorkLogStatus(log.id),
-    customer: cname(log.customerId),
-    dateValue: log.createdAt || new Date(`${log.date}T00:00:00`).getTime() || 0,
-    workTimeValue: sumWorkMs(log),
-    productValue: sumItemsAmount(log)
-  }));
-
-  decorated.sort((a,b) => {
-    if (groupBy === "customer"){
-      const byCustomer = compareByDirection(a.customer.localeCompare(b.customer, "nl"), 0, sortDir);
-      if (byCustomer !== 0) return byCustomer;
-      return compareByDirection(a.dateValue, b.dateValue, "desc");
-    }
-    if (groupBy === "workTime"){
-      const byWork = compareByDirection(a.workTimeValue, b.workTimeValue, sortDir);
-      if (byWork !== 0) return byWork;
-      return compareByDirection(a.dateValue, b.dateValue, "desc");
-    }
-    if (groupBy === "productTotal"){
-      const byProduct = compareByDirection(a.productValue, b.productValue, sortDir);
-      if (byProduct !== 0) return byProduct;
-      return compareByDirection(a.dateValue, b.dateValue, "desc");
-    }
-    if (groupBy === "status"){
-      const order = { open: 0, calculated: 1, paid: 2 };
-      const byStatus = compareByDirection(order[logStatusBucket(a.status)] ?? 0, order[logStatusBucket(b.status)] ?? 0, sortDir);
-      if (byStatus !== 0) return byStatus;
-      return compareByDirection(a.dateValue, b.dateValue, "desc");
-    }
-    return compareByDirection(a.dateValue, b.dateValue, sortDir);
-  });
-
-  if (groupBy === "workTime" || groupBy === "productTotal"){
-    return [{ header: "", logs: decorated.map(x => x.log) }];
-  }
-
-  const grouped = new Map();
-  for (const item of decorated){
-    let key = "all";
-    let header = "";
-    if (groupBy === "date"){
-      key = item.log.date;
-      header = formatLogDatePretty(item.log.date);
-    } else if (groupBy === "customer"){
-      key = item.log.customerId || "unknown";
-      header = item.customer;
-    } else if (groupBy === "status"){
-      key = logStatusBucket(item.status);
-      header = logStatusLabel(item.status);
-    }
-
-    if (!grouped.has(key)) grouped.set(key, { header, logs: [] });
-    grouped.get(key).logs.push(item.log);
-  }
-  return [...grouped.values()];
+  filtered.sort((a, b) => getLogTimestamp(b) - getLogTimestamp(a));
+  return [{ header: "", logs: filtered }];
 }
 
 function renderLogs(){
   const el = $("#tab-logs");
   const active = state.activeLogId ? state.logs.find(l => l.id === state.activeLogId) : null;
   const logbook = state.logbook || {};
-  const statusFilter = logbook.statusFilter || "open";
-  const showFilters = Boolean(logbook.showFilters);
-  const customerId = logbook.customerId || "all";
   const period = logbook.period || "all";
-  const groupBy = logbook.groupBy || "date";
-  const sortDir = logbook.sortDir || "desc";
+  const isFilterSheetOpen = Boolean(logbook.isFilterSheetOpen);
 
   // Timer-first: idle or active state
   let timerBlock = "";
@@ -2715,21 +2658,11 @@ function renderLogs(){
     `).join("")
     : `<div class="meta-text" style="padding:8px 4px;">Geen logs voor deze filter.</div>`;
 
-  const customerOptions = [`<option value="all">Alle klanten</option>`, ...state.customers
-    .slice()
-    .sort((a,b)=>(a.nickname||a.name||"").localeCompare(b.nickname||b.name||""))
-    .map(c => `<option value="${esc(c.id)}" ${customerId === c.id ? "selected" : ""}>${esc(c.nickname||c.name||"Klant")}</option>`)
-  ].join("");
+  const statusFilter = logbook.statusFilter || "open";
+  const showRestore = statusFilter !== "open" || period !== "all";
 
-  const groupOptions = [
-    { value: "date", label: "Datum" },
-    { value: "customer", label: "Klant" },
-    { value: "workTime", label: "Werktijd" },
-    { value: "productTotal", label: "Producten €" },
-    { value: "status", label: "Status" }
-  ].map(opt => `<option value="${opt.value}" ${groupBy === opt.value ? "selected" : ""}>${opt.label}</option>`).join("");
-
-  el.innerHTML = `<div class="stack stack-tight stack-logs">${timerBlock}<div class="logs-section-header"><div class="log-toolbar"><div class="category-wrap"><div class="category-pill"><select id="logGroupBy" aria-label="Categorie">${groupOptions}</select><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 10l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div><button class="icon-toggle icon-toggle-neutral" id="btnLogSortDir" aria-label="Sorteerrichting" title="Sorteerrichting" style="width:34px;height:34px;min-height:34px;">${sortDir === "desc" ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 5v14M8 9l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>` : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 5v14M8 15l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>`}</button><button class="btn btn-filters ${showFilters ? "is-active" : ""}" id="btnToggleLogFilters" aria-expanded="${showFilters}" style="min-height:34px;padding:5px 8px;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:16px;height:16px;"><path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round"/></svg></button></div></div>${showFilters ? `<div class="log-filter-row"><div class="log-chip"><label>Status</label><div class="segmented" role="group" aria-label="Status filter"><button class="seg-btn ${statusFilter === "open" ? "is-active" : ""}" data-log-status="open">Open</button><button class="seg-btn ${statusFilter === "paid" ? "is-active" : ""}" data-log-status="paid">Betaald</button><button class="seg-btn ${statusFilter === "all" ? "is-active" : ""}" data-log-status="all">Alles</button></div></div><div class="log-chip"><label for="logCustomerFilter">Klant</label><select id="logCustomerFilter">${customerOptions}</select></div><div class="log-chip"><label for="logPeriodFilter">Periode</label><select id="logPeriodFilter"><option value="all" ${period === "all" ? "selected" : ""}>Alles</option><option value="week" ${period === "week" ? "selected" : ""}>Deze week</option><option value="month" ${period === "month" ? "selected" : ""}>Deze maand</option><option value="30d" ${period === "30d" ? "selected" : ""}>Laatste 30 dagen</option></select></div><div class="log-chip log-chip-reset"><button class="btn" id="btnResetLogFilters">Reset filters</button></div></div>` : ""}<div class="flat-list">${list}</div></div>`;
+  el.innerHTML = `<div class="stack stack-tight stack-logs">${timerBlock}<div class="flat-list">${list}</div></div>
+  ${isFilterSheetOpen ? `<div class="log-filter-sheet-backdrop" id="logFilterSheetBackdrop"><div class="log-filter-sheet" id="logFilterSheet"><button class="log-filter-sheet-handle" id="logFilterSheetHandle" aria-label="Sluit filters"></button><div class="log-filter-sheet-title">Filters</div><div class="log-filter-sheet-section"><div class="log-filter-sheet-label">Status</div><div class="log-filter-options"><button class="log-filter-option ${statusFilter === "open" ? "is-active" : ""}" data-log-sheet-status="open">Open</button><button class="log-filter-option ${statusFilter === "calculated" ? "is-active" : ""}" data-log-sheet-status="calculated">Berekend</button><button class="log-filter-option ${statusFilter === "paid" ? "is-active" : ""}" data-log-sheet-status="paid">Betaald</button><button class="log-filter-option ${statusFilter === "all" ? "is-active" : ""}" data-log-sheet-status="all">Alles</button></div></div><div class="log-filter-sheet-section"><div class="log-filter-sheet-label">Periode</div><div class="log-filter-options"><button class="log-filter-option ${period === "all" ? "is-active" : ""}" data-log-sheet-period="all">Alles</button><button class="log-filter-option ${period === "30d" ? "is-active" : ""}" data-log-sheet-period="30d">30d</button><button class="log-filter-option ${period === "month" ? "is-active" : ""}" data-log-sheet-period="month">Maand</button><button class="log-filter-option ${period === "quarter" ? "is-active" : ""}" data-log-sheet-period="quarter">Kwartaal</button></div></div>${showRestore ? `<button class="btn ghost" id="btnRestoreLogFilters">Herstel</button>` : ""}</div></div>` : ""}`;
 
   // Timer-first actions
   if (active){
@@ -2771,42 +2704,43 @@ function renderLogs(){
   el.querySelectorAll("[data-open-log]").forEach(x=>{
     x.addEventListener("click", ()=> openSheet("log", x.getAttribute("data-open-log")));
   });
-  $("#btnToggleLogFilters")?.addEventListener("click", ()=>{
-
-    actions.setLogbook({ showFilters: !state.logbook.showFilters });
-    renderLogs();
-  });
-  $("#logGroupBy")?.addEventListener("change", ()=>{
-
-    actions.setLogbook({ groupBy: $("#logGroupBy").value || "date" });
-    renderLogs();
-  });
-  $("#btnLogSortDir")?.addEventListener("click", ()=>{
-
-    actions.setLogbook({ sortDir: state.logbook.sortDir === "asc" ? "desc" : "asc" });
-    renderLogs();
-  });
-  el.querySelectorAll("[data-log-status]").forEach(btn=>{
+  el.querySelectorAll("[data-log-sheet-status]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
-
-      actions.setLogbook({ statusFilter: btn.getAttribute("data-log-status") || "open" });
-      renderLogs();
+      actions.setLogbook({ statusFilter: btn.getAttribute("data-log-sheet-status") || "open", isFilterSheetOpen: false });
+      render();
     });
   });
-  $("#logCustomerFilter")?.addEventListener("change", ()=>{
-
-    actions.setLogbook({ customerId: $("#logCustomerFilter").value || "all" });
-    renderLogs();
+  el.querySelectorAll("[data-log-sheet-period]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      actions.setLogbook({ period: btn.getAttribute("data-log-sheet-period") || "all", isFilterSheetOpen: false });
+      render();
+    });
   });
-  $("#logPeriodFilter")?.addEventListener("change", ()=>{
-
-    actions.setLogbook({ period: $("#logPeriodFilter").value || "all" });
-    renderLogs();
+  $("#btnRestoreLogFilters")?.addEventListener("click", ()=>{
+    actions.setLogbook({ statusFilter: "open", period: "all", isFilterSheetOpen: false });
+    render();
   });
-  $("#btnResetLogFilters")?.addEventListener("click", ()=>{
 
-    actions.setLogbook({ statusFilter: "open", customerId: "all", period: "all" });
-    renderLogs();
+  $("#logFilterSheetBackdrop")?.addEventListener("click", (event)=>{
+    if (!event.target.classList.contains("log-filter-sheet-backdrop")) return;
+    actions.setLogbook({ isFilterSheetOpen: false });
+    render();
+  });
+
+  const sheet = $("#logFilterSheet");
+  let swipeStartY = null;
+  sheet?.addEventListener("pointerdown", (event)=>{
+    if (!event.target.closest("#logFilterSheetHandle")) return;
+    swipeStartY = event.clientY;
+  });
+  sheet?.addEventListener("pointerup", (event)=>{
+    if (swipeStartY == null) return;
+    const delta = event.clientY - swipeStartY;
+    swipeStartY = null;
+    if (delta > 36){
+      actions.setLogbook({ isFilterSheetOpen: false });
+      render();
+    }
   });
 }
 

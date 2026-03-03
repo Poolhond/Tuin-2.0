@@ -2437,3 +2437,79 @@ h2{
   font-size:12px;
   margin-left:8px;
 }
+
+.log-filter-pill{
+  border:1px solid var(--border);
+  background: rgba(233,238,246,.07);
+  color: var(--text);
+  border-radius: 999px;
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.log-filter-sheet-backdrop{
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(0,0,0,.34);
+  display: flex;
+  align-items: flex-end;
+}
+
+.log-filter-sheet{
+  width: 100%;
+  border-radius: 20px 20px 0 0;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding: 8px 14px calc(16px + env(safe-area-inset-bottom));
+}
+
+.log-filter-sheet-handle{
+  display: block;
+  width: 44px;
+  height: 5px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--line);
+  margin: 2px auto 12px;
+}
+
+.log-filter-sheet-title{
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.log-filter-sheet-section{
+  margin-bottom: 12px;
+}
+
+.log-filter-sheet-label{
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.log-filter-options{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.log-filter-option{
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 10px;
+  min-height: 34px;
+  font-size: 13px;
+}
+
+.log-filter-option.is-active{
+  background: rgba(233,238,246,.12);
+  border-color: rgba(233,238,246,.28);
+}
