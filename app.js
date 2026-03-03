@@ -3069,12 +3069,8 @@ function renderSettlements(){
       const cashAmt = round2(pay.cashTotal);
       const showInvoice = calculated && invoiceAmt > 0;
       const showCash = calculated && cashAmt > 0;
-      const invoiceToggleAttrs = showInvoice
-        ? `data-toggle-paid="invoice" data-settlement-id="${s.id}" aria-label="Factuur ${flags.invoicePaid ? "betaald" : "open"}"`
-        : `disabled aria-hidden="true" tabindex="-1"`;
-      const cashToggleAttrs = showCash
-        ? `data-toggle-paid="cash" data-settlement-id="${s.id}" aria-label="Cash ${flags.cashPaid ? "betaald" : "open"}"`
-        : `disabled aria-hidden="true" tabindex="-1"`;
+      const invoiceToggleAttrs = `data-toggle-paid="invoice" data-settlement-id="${s.id}" aria-label="Factuur ${flags.invoicePaid ? "betaald" : "open"}" role="button" tabindex="0"`;
+      const cashToggleAttrs = `data-toggle-paid="cash" data-settlement-id="${s.id}" aria-label="Cash ${flags.cashPaid ? "betaald" : "open"}" role="button" tabindex="0"`;
       const detailItems = [
         esc(formatDateNoWeekday(s.date)),
         `${(s.logIds||[]).length} logs`,
@@ -3097,15 +3093,9 @@ function renderSettlements(){
                 </div>
               </div>
 
-              <div class="settlement-amount-group">
-                <button class="amount-inline invoiceAmt ${flags.invoicePaid ? "is-paid" : "is-open"} ${showInvoice ? "" : "is-empty"}"
-                        ${invoiceToggleAttrs}>
-                  <span class="amount-inline-content mono tabular"><span class="amount-val">${showInvoice ? formatMoneyEUR0(invoiceAmt) : ""}</span></span>
-                </button>
-                <button class="amount-inline cashAmt ${flags.cashPaid ? "is-paid" : "is-open"} ${showCash ? "" : "is-empty"}"
-                        ${cashToggleAttrs}>
-                  <span class="amount-inline-content mono tabular"><span class="amount-val">${showCash ? formatMoneyEUR0(cashAmt) : ""}</span></span>
-                </button>
+              <div class="amtGroup settlement-amount-group">
+                <div class="amt invoice mono tabular ${flags.invoicePaid ? "is-paid" : "is-open"}" ${invoiceToggleAttrs}>${showInvoice ? formatMoneyEUR0(invoiceAmt) : ""}</div>
+                <div class="amt cash mono tabular ${flags.cashPaid ? "is-paid" : "is-open"}" ${cashToggleAttrs}>${showCash ? formatMoneyEUR0(cashAmt) : ""}</div>
               </div>
             </div>
             <div class="meta-text settlement-meta-row">${detailItems.join(" · ")}</div>
@@ -3145,6 +3135,9 @@ function renderSettlements(){
       const kind = btn.getAttribute("data-toggle-paid");
       const s = state.settlements.find(x => x.id === id);
       if (!s) return;
+      const payment = settlementPaymentState(s);
+      if (kind === "invoice" && !(payment.invoiceTotal > 0)) return;
+      if (kind === "cash" && !(payment.cashTotal > 0)) return;
 
       if (kind === "invoice") s.invoicePaid = !Boolean(s.invoicePaid);
       if (kind === "cash") s.cashPaid = !Boolean(s.cashPaid);
@@ -3152,6 +3145,12 @@ function renderSettlements(){
       syncSettlementStatus(s);
       saveState(state);
       renderSettlements();
+    });
+
+    btn.addEventListener("keydown", (e)=>{
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      btn.click();
     });
   });
 }
