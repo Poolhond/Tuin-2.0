@@ -1989,25 +1989,26 @@ h2{
 
 .amt{
   box-sizing:border-box;
-  width:92px;
+  width:78px;
   text-align:right;
   flex:0 0 auto;
-  padding:6px 8px;
-  border-radius:10px;
+  padding:4px 6px;
+  border-radius:8px;
   background:transparent;
   border:1px solid transparent;
   white-space:nowrap;
   cursor:pointer;
+  font-weight:500;
 }
 
 .amt:not(:empty){
-  background:rgba(255,255,255,0.06);
-  border-color:rgba(255,255,255,0.10);
+  background:rgba(255,255,255,0.05);
+  border-color:rgba(255,255,255,0.08);
 }
 
 .amt:not(:empty):active{
-  background:rgba(255,255,255,0.10);
-  border-color:rgba(255,255,255,0.16);
+  background:rgba(255,255,255,0.09);
+  border-color:rgba(255,255,255,0.14);
 }
 
 .amt:empty{
