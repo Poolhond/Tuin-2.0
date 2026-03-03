@@ -2646,7 +2646,6 @@ function renderLogs(){
   const customerId = logbook.customerId || "all";
   const period = logbook.period || "all";
   const groupBy = logbook.groupBy || "date";
-  const sortDir = logbook.sortDir || "desc";
 
   // Timer-first: idle or active state
   let timerBlock = "";
@@ -2729,9 +2728,9 @@ function renderLogs(){
     { value: "status", label: "Status" }
   ].map(opt => `<option value="${opt.value}" ${groupBy === opt.value ? "selected" : ""}>${opt.label}</option>`).join("");
 
-  const topbarControls = `<div class="log-toolbar" style="display:flex;align-items:center;gap:10px;font-family:inherit;"><div class="category-pill" style="min-height:30px;padding:0 9px;"><select id="logGroupBy" aria-label="Categorie" style="font-size:12px;font-weight:700;">${groupOptions}</select><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 10l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div><button id="btnLogSortDir" aria-label="Sorteerrichting" title="Sorteerrichting" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;background:transparent;color:var(--muted);">${sortDir === "desc" ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 5v14M8 9l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>` : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 5v14M8 15l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>`}</button><button id="btnToggleLogFilters" aria-label="Filters" title="Filters" aria-expanded="${showFilters}" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;background:transparent;color:${showFilters ? "var(--text)" : "var(--muted)"};"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:16px;height:16px;"><path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round"/></svg></button></div>`;
+  const topbarControls = `<div class="log-toolbar" style="display:flex;align-items:center;justify-content:flex-end;gap:10px;width:100%;font-family:inherit;"><button id="btnToggleLogFilters" aria-label="Filters" title="Filters" aria-expanded="${showFilters}" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;background:transparent;color:${showFilters ? "var(--text)" : "var(--muted)"};"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:16px;height:16px;"><path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round"/></svg></button></div>`;
 
-  el.innerHTML = `<div class="stack stack-tight stack-logs">${timerBlock}${showFilters ? `<div class="log-filter-row"><div class="log-chip"><label>Status</label><div class="segmented" role="group" aria-label="Status filter"><button class="seg-btn ${statusFilter === "open" ? "is-active" : ""}" data-log-status="open">Open</button><button class="seg-btn ${statusFilter === "paid" ? "is-active" : ""}" data-log-status="paid">Betaald</button><button class="seg-btn ${statusFilter === "all" ? "is-active" : ""}" data-log-status="all">Alles</button></div></div><div class="log-chip"><label for="logCustomerFilter">Klant</label><select id="logCustomerFilter">${customerOptions}</select></div><div class="log-chip"><label for="logPeriodFilter">Periode</label><select id="logPeriodFilter"><option value="all" ${period === "all" ? "selected" : ""}>Alles</option><option value="week" ${period === "week" ? "selected" : ""}>Deze week</option><option value="month" ${period === "month" ? "selected" : ""}>Deze maand</option><option value="30d" ${period === "30d" ? "selected" : ""}>Laatste 30 dagen</option></select></div><div class="log-chip log-chip-reset"><button class="btn" id="btnResetLogFilters">Reset filters</button></div></div>` : ""}<div class="flat-list">${list}</div></div>`;
+  el.innerHTML = `<div class="stack stack-tight stack-logs">${timerBlock}${showFilters ? `<div class="log-filter-row"><div class="log-chip"><div class="category-pill" style="min-height:30px;padding:0 9px;"><select id="logGroupBy" aria-label="Groepeer op" style="font-size:12px;font-weight:700;">${groupOptions}</select><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 10l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div><div class="log-chip"><label>Status</label><div class="segmented" role="group" aria-label="Status filter"><button class="seg-btn ${statusFilter === "open" ? "is-active" : ""}" data-log-status="open">Open</button><button class="seg-btn ${statusFilter === "paid" ? "is-active" : ""}" data-log-status="paid">Betaald</button><button class="seg-btn ${statusFilter === "all" ? "is-active" : ""}" data-log-status="all">Alles</button></div></div><div class="log-chip"><label for="logCustomerFilter">Klant</label><select id="logCustomerFilter">${customerOptions}</select></div><div class="log-chip"><label for="logPeriodFilter">Periode</label><select id="logPeriodFilter"><option value="all" ${period === "all" ? "selected" : ""}>Alles</option><option value="week" ${period === "week" ? "selected" : ""}>Deze week</option><option value="month" ${period === "month" ? "selected" : ""}>Deze maand</option><option value="30d" ${period === "30d" ? "selected" : ""}>Laatste 30 dagen</option></select></div><div class="log-chip log-chip-reset"><button class="btn" id="btnResetLogFilters">Reset filters</button></div></div>` : ""}<div class="flat-list">${list}</div></div>`;
 
   requestAnimationFrame(()=>{
     const topbarInfo = $("#topbarRightInfo");
@@ -2793,11 +2792,6 @@ function renderLogs(){
   $("#logGroupBy")?.addEventListener("change", ()=>{
 
     actions.setLogbook({ groupBy: $("#logGroupBy").value || "date" });
-    renderLogs();
-  });
-  $("#btnLogSortDir")?.addEventListener("click", ()=>{
-
-    actions.setLogbook({ sortDir: state.logbook.sortDir === "asc" ? "desc" : "asc" });
     renderLogs();
   });
   el.querySelectorAll("[data-log-status]").forEach(btn=>{
