@@ -1979,64 +1979,47 @@ h2{
   gap:0;
 }
 
-.settlement-amount-group{
-  flex:none;
-  width:188px;
+.amtGroup{
+  margin-left:auto;
   display:flex;
   align-items:center;
-  justify-content:flex-end;
-  column-gap:10px;
+  gap:10px;
+  flex:0 0 auto;
 }
 
-.settlement-amount-group .amount-inline{
-  flex:none;
-  width:88px;
-  justify-content:flex-end;
-}
-
-.settlement-amount-group .amount-inline .amount-inline-content{
-  width:100%;
-  justify-content:flex-end;
-}
-
-.settlement-amount-group .cashAmt{
-  margin-left:0;
-}
-
-.settlement-amount-group .invoiceAmt{
-  margin-left:0;
-}
-
-.settlement-amount-group .amount-val{
-  width:100%;
+.amt{
+  box-sizing:border-box;
+  width:92px;
   text-align:right;
+  flex:0 0 auto;
+  padding:6px 8px;
+  border-radius:10px;
+  background:transparent;
+  border:1px solid transparent;
+  white-space:nowrap;
+  cursor:pointer;
 }
 
-.settlement-amount-group .amount-inline:disabled{
-  cursor:default;
+.amt:not(:empty){
+  background:rgba(255,255,255,0.06);
+  border-color:rgba(255,255,255,0.10);
 }
 
-.settlement-amount-group .amount-inline.is-empty .amount-inline-content{
-  visibility:hidden;
+.amt:not(:empty):active{
+  background:rgba(255,255,255,0.10);
+  border-color:rgba(255,255,255,0.16);
 }
 
-.settlement-amount-group .amount-inline.is-open{
+.amt:empty{
+  pointer-events:auto;
+}
+
+.settlement-amount-group .amt.is-open{
   color: var(--status-calculated-border);
 }
 
-.settlement-amount-group .amount-inline.is-paid{
+.settlement-amount-group .amt.is-paid{
   color: var(--status-paid-border);
-}
-
-.settlement-amount-group .amount-inline:active:not(:disabled){
-  transform:scale(0.98);
-}
-
-.settlement-amount-group .invoiceAmt,
-.settlement-amount-group .cashAmt{
-  align-items:center;
-  white-space:nowrap;
-  text-align:right;
 }
 
 .amount-inline .icon,
