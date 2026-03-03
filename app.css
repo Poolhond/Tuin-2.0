@@ -1980,16 +1980,15 @@ h2{
 }
 
 .settlement-amount-group{
-  flex:none;
-  width:188px;
+  flex:0 0 auto;
   display:flex;
   align-items:center;
-  justify-content:flex-end;
-  column-gap:10px;
+  gap:12px;
+  margin-left:auto;
 }
 
 .settlement-amount-group .amount-inline{
-  flex:none;
+  flex:0 0 auto;
   width:88px;
   justify-content:flex-end;
 }
@@ -2018,6 +2017,10 @@ h2{
 
 .settlement-amount-group .amount-inline.is-empty .amount-inline-content{
   visibility:hidden;
+}
+
+.settlement-amount-group .amount-val:empty::after{
+  content:"";
 }
 
 .settlement-amount-group .amount-inline.is-open{
