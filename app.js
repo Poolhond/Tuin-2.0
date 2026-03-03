@@ -1113,7 +1113,7 @@ function bindStepButton(btn, onTap, onHold){
     pressTimer = setTimeout(()=>{
       if (!isPressing) return;
       didLongPress = true;
-      onHold();
+      onHold(e);
     }, 450);
   };
 
@@ -1123,7 +1123,7 @@ function bindStepButton(btn, onTap, onHold){
     if (!isPressing) return;
     const wasLongPress = didLongPress;
     clearPress();
-    if (!wasLongPress) onTap();
+    if (!wasLongPress) onTap(e);
   };
 
   btn.classList.add("no-select");
@@ -2736,9 +2736,20 @@ function renderLogs(){
     $("#btnPause")?.addEventListener("click", ()=>{
       actions.pauseLog(active.id);
     });
-    $("#btnAddGreen")?.addEventListener("click", ()=>{
-      actions.addGreenToLog(active.id);
-    });
+    const greenBtn = $("#btnAddGreen");
+    if (greenBtn){
+      // Hard prevent accidental selection/open
+      greenBtn.addEventListener("contextmenu", (e)=> e.preventDefault());
+      greenBtn.style.webkitTouchCallout = "none";
+      greenBtn.style.webkitUserSelect = "none";
+      greenBtn.style.userSelect = "none";
+
+      bindStepButton(
+        greenBtn,
+        (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +1); },
+        (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +0.5); }
+      );
+    }
     $("#btnStop")?.addEventListener("click", ()=>{
       actions.stopLog(active.id);
     });
