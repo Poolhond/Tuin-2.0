@@ -377,8 +377,12 @@ function ensureUIPreferences(st){
   st.logbook = st.logbook || {};
   st.settlementList = st.settlementList || {};
 
-  if (!["open", "calculated", "paid", "all"].includes(st.logbook.statusFilter)){
-    st.logbook.statusFilter = ["open", "calculated", "paid", "all"].includes(st.ui.logFilter) ? st.ui.logFilter : "open";
+  const legacyLogStatus = st.logbook.statusFilter === "calculated" ? "open" : st.logbook.statusFilter;
+  const legacyUIStatus = st.ui.logFilter === "calculated" ? "open" : st.ui.logFilter;
+  if (!["open", "paid", "all"].includes(legacyLogStatus)){
+    st.logbook.statusFilter = ["open", "paid", "all"].includes(legacyUIStatus) ? legacyUIStatus : "open";
+  } else {
+    st.logbook.statusFilter = legacyLogStatus;
   }
   if (!("isFilterSheetOpen" in st.logbook)) st.logbook.isFilterSheetOpen = false;
   if (!("period" in st.logbook)){
@@ -2556,8 +2560,8 @@ function getStatusKey(logId){
 function getFilterPillLabel(logbook){
   const status = logbook?.statusFilter || "open";
   const period = logbook?.period || "all";
-  const statusLabel = { open: "Open", calculated: "Berekend", paid: "Betaald", all: "Alles" }[status] || "Open";
-  const periodLabel = { all: "", "30d": "30d", month: "Maand", quarter: "Q" }[period] || "";
+  const statusLabel = { open: "Open", paid: "Betaald", all: "Alles" }[status] || "Open";
+  const periodLabel = { all: "", "30d": "30d", month: "Maand", quarter: "Kwartaal" }[period] || "";
   if (status === "all" && period === "all") return "Alles";
   if (!periodLabel) return statusLabel;
   return `${statusLabel} · ${periodLabel}`;
@@ -2571,7 +2575,12 @@ function applyFiltersAndSort(logs){
 
   const filtered = logs.filter(log => {
     const status = getStatusKey(log.id);
-    if (statusFilter !== "all" && status !== statusFilter) return false;
+    if (statusFilter === "open"){
+      // Logboek abstraheert "open" als niet-betaald: open + calculated.
+      if (status !== "open" && status !== "calculated") return false;
+    } else if (statusFilter === "paid"){
+      if (status !== "paid") return false;
+    }
 
     if (minTimestamp != null){
       const ts = getLogTimestamp(log);
@@ -2662,7 +2671,7 @@ function renderLogs(){
   const showRestore = statusFilter !== "open" || period !== "all";
 
   el.innerHTML = `<div class="stack stack-tight stack-logs">${timerBlock}<div class="flat-list">${list}</div></div>
-  ${isFilterSheetOpen ? `<div class="log-filter-sheet-backdrop" id="logFilterSheetBackdrop"><div class="log-filter-sheet" id="logFilterSheet"><button class="log-filter-sheet-handle" id="logFilterSheetHandle" aria-label="Sluit filters"></button><div class="log-filter-sheet-title">Filters</div><div class="log-filter-sheet-section"><div class="log-filter-sheet-label">Status</div><div class="log-filter-options"><button class="log-filter-option ${statusFilter === "open" ? "is-active" : ""}" data-log-sheet-status="open">Open</button><button class="log-filter-option ${statusFilter === "calculated" ? "is-active" : ""}" data-log-sheet-status="calculated">Berekend</button><button class="log-filter-option ${statusFilter === "paid" ? "is-active" : ""}" data-log-sheet-status="paid">Betaald</button><button class="log-filter-option ${statusFilter === "all" ? "is-active" : ""}" data-log-sheet-status="all">Alles</button></div></div><div class="log-filter-sheet-section"><div class="log-filter-sheet-label">Periode</div><div class="log-filter-options"><button class="log-filter-option ${period === "all" ? "is-active" : ""}" data-log-sheet-period="all">Alles</button><button class="log-filter-option ${period === "30d" ? "is-active" : ""}" data-log-sheet-period="30d">30d</button><button class="log-filter-option ${period === "month" ? "is-active" : ""}" data-log-sheet-period="month">Maand</button><button class="log-filter-option ${period === "quarter" ? "is-active" : ""}" data-log-sheet-period="quarter">Kwartaal</button></div></div>${showRestore ? `<button class="btn ghost" id="btnRestoreLogFilters">Herstel</button>` : ""}</div></div>` : ""}`;
+  ${isFilterSheetOpen ? `<div class="log-filter-sheet-backdrop" id="logFilterSheetBackdrop"><div class="log-filter-sheet" id="logFilterSheet"><button class="log-filter-sheet-handle" id="logFilterSheetHandle" aria-label="Sluit filters"></button><div class="log-filter-sheet-title">Filters</div><div class="log-filter-sheet-section"><div class="log-filter-sheet-label">Status</div><div class="log-filter-options"><button class="log-filter-option ${statusFilter === "open" ? "is-active" : ""}" data-log-sheet-status="open">Open</button><button class="log-filter-option ${statusFilter === "paid" ? "is-active" : ""}" data-log-sheet-status="paid">Betaald</button><button class="log-filter-option ${statusFilter === "all" ? "is-active" : ""}" data-log-sheet-status="all">Alles</button></div></div><div class="log-filter-sheet-section"><div class="log-filter-sheet-label">Periode</div><div class="log-filter-options"><button class="log-filter-option ${period === "all" ? "is-active" : ""}" data-log-sheet-period="all">Alles</button><button class="log-filter-option ${period === "30d" ? "is-active" : ""}" data-log-sheet-period="30d">30d</button><button class="log-filter-option ${period === "month" ? "is-active" : ""}" data-log-sheet-period="month">Maand</button><button class="log-filter-option ${period === "quarter" ? "is-active" : ""}" data-log-sheet-period="quarter">Kwartaal</button></div></div>${showRestore ? `<button class="btn ghost" id="btnRestoreLogFilters">Herstel</button>` : ""}</div></div>` : ""}`;
 
   // Timer-first actions
   if (active){
