@@ -2220,7 +2220,7 @@ function renderTopbar(){
   btnNew.setAttribute("title", isSettlementsRoot ? "Filter & sorteer" : "Nieuwe werklog");
 
   $("#btnLogbookFilterPill")?.addEventListener("click", ()=>{
-    actions.setLogbook({ isFilterSheetOpen: true });
+    actions.setLogbook({ isFilterSheetOpen: !(state.logbook?.isFilterSheetOpen) });
     render();
   });
 }
@@ -2670,8 +2670,32 @@ function renderLogs(){
   const statusFilter = logbook.statusFilter || "open";
   const showRestore = statusFilter !== "open" || period !== "all";
 
-  el.innerHTML = `<div class="stack stack-tight stack-logs">${timerBlock}<div class="flat-list">${list}</div></div>
-  ${isFilterSheetOpen ? `<div class="log-filter-sheet-backdrop" id="logFilterSheetBackdrop"><div class="log-filter-sheet" id="logFilterSheet"><button class="log-filter-sheet-handle" id="logFilterSheetHandle" aria-label="Sluit filters"></button><div class="log-filter-sheet-title">Filters</div><div class="log-filter-sheet-section"><div class="log-filter-sheet-label">Status</div><div class="log-filter-options"><button class="log-filter-option ${statusFilter === "open" ? "is-active" : ""}" data-log-sheet-status="open">Open</button><button class="log-filter-option ${statusFilter === "paid" ? "is-active" : ""}" data-log-sheet-status="paid">Betaald</button><button class="log-filter-option ${statusFilter === "all" ? "is-active" : ""}" data-log-sheet-status="all">Alles</button></div></div><div class="log-filter-sheet-section"><div class="log-filter-sheet-label">Periode</div><div class="log-filter-options"><button class="log-filter-option ${period === "all" ? "is-active" : ""}" data-log-sheet-period="all">Alles</button><button class="log-filter-option ${period === "30d" ? "is-active" : ""}" data-log-sheet-period="30d">30d</button><button class="log-filter-option ${period === "month" ? "is-active" : ""}" data-log-sheet-period="month">Maand</button><button class="log-filter-option ${period === "quarter" ? "is-active" : ""}" data-log-sheet-period="quarter">Kwartaal</button></div></div>${showRestore ? `<button class="btn ghost" id="btnRestoreLogFilters">Herstel</button>` : ""}</div></div>` : ""}`;
+  el.innerHTML = `
+    <div class="log-filter-panel-wrap ${isFilterSheetOpen ? "is-open" : ""}">
+      <div class="log-filter-sheet" id="logFilterSheet">
+        <div class="log-filter-sheet-title">Filters</div>
+        <div class="log-filter-sheet-section">
+          <div class="log-filter-sheet-label">Status</div>
+          <div class="log-filter-options">
+            <button class="log-filter-option ${statusFilter === "open" ? "is-active" : ""}" data-log-sheet-status="open">Open</button>
+            <button class="log-filter-option ${statusFilter === "paid" ? "is-active" : ""}" data-log-sheet-status="paid">Betaald</button>
+            <button class="log-filter-option ${statusFilter === "all" ? "is-active" : ""}" data-log-sheet-status="all">Alles</button>
+          </div>
+        </div>
+        <div class="log-filter-sheet-section">
+          <div class="log-filter-sheet-label">Periode</div>
+          <div class="log-filter-options">
+            <button class="log-filter-option ${period === "all" ? "is-active" : ""}" data-log-sheet-period="all">Alles</button>
+            <button class="log-filter-option ${period === "30d" ? "is-active" : ""}" data-log-sheet-period="30d">30d</button>
+            <button class="log-filter-option ${period === "month" ? "is-active" : ""}" data-log-sheet-period="month">Maand</button>
+            <button class="log-filter-option ${period === "quarter" ? "is-active" : ""}" data-log-sheet-period="quarter">Kwartaal</button>
+          </div>
+        </div>
+        ${showRestore ? `<button class="btn ghost" id="btnRestoreLogFilters">Herstel</button>` : ""}
+      </div>
+    </div>
+    <div class="stack stack-tight stack-logs">${timerBlock}<div class="flat-list">${list}</div></div>
+  `;
 
   // Timer-first actions
   if (active){
@@ -2730,27 +2754,6 @@ function renderLogs(){
     render();
   });
 
-  $("#logFilterSheetBackdrop")?.addEventListener("click", (event)=>{
-    if (!event.target.classList.contains("log-filter-sheet-backdrop")) return;
-    actions.setLogbook({ isFilterSheetOpen: false });
-    render();
-  });
-
-  const sheet = $("#logFilterSheet");
-  let swipeStartY = null;
-  sheet?.addEventListener("pointerdown", (event)=>{
-    if (!event.target.closest("#logFilterSheetHandle")) return;
-    swipeStartY = event.clientY;
-  });
-  sheet?.addEventListener("pointerup", (event)=>{
-    if (swipeStartY == null) return;
-    const delta = event.clientY - swipeStartY;
-    swipeStartY = null;
-    if (delta > 36){
-      actions.setLogbook({ isFilterSheetOpen: false });
-      render();
-    }
-  });
 }
 
 function _attachSettingsHandlers(){
