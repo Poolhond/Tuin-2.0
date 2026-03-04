@@ -2955,16 +2955,16 @@ function renderSettlements(){
   }, 0));
   const totalInvoiceOutstanding = round2(state.settlements.reduce((sum, settlement)=>{
     if (!isSettlementCalculated(settlement)) return sum;
-    const visual = getSettlementVisualState(settlement);
-    if (visual.state === "paid") return sum;
+    const flags = getSettlementPaymentFlags(settlement);
+    if (flags.invoicePaid) return sum;
     const pay = settlementPaymentState(settlement);
     if ((Number(pay.invoiceTotal) || 0) <= 0) return sum;
     return sum + Number(pay.invoiceTotal || 0);
   }, 0));
   const totalCashOutstanding = round2(state.settlements.reduce((sum, settlement)=>{
     if (!isSettlementCalculated(settlement)) return sum;
-    const visual = getSettlementVisualState(settlement);
-    if (visual.state === "paid") return sum;
+    const flags = getSettlementPaymentFlags(settlement);
+    if (flags.cashPaid) return sum;
     const pay = settlementPaymentState(settlement);
     if ((Number(pay.cashTotal) || 0) <= 0) return sum;
     return sum + Number(pay.cashTotal || 0);
