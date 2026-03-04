@@ -26,6 +26,26 @@ const SETTLEMENT_LIST_DEFAULTS = {
 const uid = () => Math.random().toString(16).slice(2) + "-" + Math.random().toString(16).slice(2);
 const now = () => Date.now();
 const todayISO = () => new Date().toISOString().slice(0,10);
+function getQuarterInfo(ymd){
+  const dateValue = String(ymd || "").trim() || todayISO();
+  const dt = parseLocalYMD(dateValue) || parseLocalYMD(todayISO()) || new Date();
+  const year = dt.getFullYear();
+  const month = dt.getMonth();
+  const q = Math.floor(month / 3) + 1;
+  const startMonth = (q - 1) * 3;
+  const start = new Date(year, startMonth, 1);
+  const end = new Date(year, startMonth + 3, 0);
+  return {
+    year,
+    q,
+    periodKey: `${year}-Q${q}`,
+    startISO: formatLocalYMD(start),
+    endISO: formatLocalYMD(end)
+  };
+}
+function todayQuarterInfo(){
+  return getQuarterInfo(todayISO());
+}
 const esc = (s) => String(s ?? "")
   .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
   .replaceAll('"',"&quot;").replaceAll("'","&#039;");
@@ -483,6 +503,7 @@ function loadState(){
 
   for (const c of st.customers){
     if (!("demo" in c)) c.demo = false;
+    normalizeCustomerSubscriptionFields(c);
   }
   ensureUniqueCustomerNicknames(st);
   for (const p of st.products){
@@ -496,6 +517,20 @@ function loadState(){
     if (!s.status) s.status = "draft";
     if (!s.lines) s.lines = [];
     if (!s.logIds) s.logIds = [];
+    if (!s.kind) s.kind = "job";
+    if (s.kind !== "subscription"){
+      s.kind = "job";
+      if ("periodKey" in s) delete s.periodKey;
+      if ("periodStart" in s) delete s.periodStart;
+      if ("periodEnd" in s) delete s.periodEnd;
+    } else {
+      const qi = getQuarterInfo(s.periodStart || s.date || todayISO());
+      s.periodKey = s.periodKey || qi.periodKey;
+      s.periodStart = s.periodStart || qi.startISO;
+      s.periodEnd = s.periodEnd || qi.endISO;
+      if (!s.date) s.date = s.periodStart;
+      if (!s.invoiceDate) s.invoiceDate = s.periodStart;
+    }
     if (!("markedCalculated" in s)) s.markedCalculated = s.status === "calculated";
     if (!("isCalculated" in s)) s.isCalculated = Boolean(s.markedCalculated || s.status === "calculated" || s.status === "paid" || s.calculatedAt);
     if (!("calculatedAt" in s)) s.calculatedAt = s.isCalculated ? (s.createdAt || now()) : null;
@@ -560,6 +595,23 @@ function ensureUniqueCustomerNicknames(st){
     customer.nickname = candidate;
     used.add(normalizeNickname(candidate));
   }
+}
+
+function normalizeCustomerSubscriptionFields(customer){
+  if (!customer || typeof customer !== "object") return;
+  const mode = customer.billingMode === "quarterly" ? "quarterly" : "job";
+  customer.billingMode = mode;
+  if (mode !== "quarterly"){
+    if ("subscriptionQuarterly" in customer) delete customer.subscriptionQuarterly;
+    return;
+  }
+  const subscription = customer.subscriptionQuarterly && typeof customer.subscriptionQuarterly === "object"
+    ? customer.subscriptionQuarterly
+    : {};
+  customer.subscriptionQuarterly = {
+    invoiceIncl: Math.max(0, round2(Number(subscription.invoiceIncl) || 0)),
+    cash: Math.max(0, round2(Number(subscription.cash) || 0))
+  };
 }
 
 function ri(min, max){ return Math.floor(Math.random() * (max - min + 1)) + min; }
@@ -1284,6 +1336,117 @@ function getNextInvoiceNumber(settlements = state.settlements || []){
   }, 0);
   return `F${highest + 1}`;
 }
+function ensureSubscriptionSettlementForCustomerQuarter(customerId, periodKey){
+  const customer = getCustomer(customerId);
+  if (!customer || customer.billingMode !== "quarterly") return null;
+
+  const refInfo = getQuarterInfo(periodKey && /^\d{4}-Q[1-4]$/.test(String(periodKey))
+    ? `${String(periodKey).slice(0,4)}-${String((Number(String(periodKey).slice(-1)) - 1) * 3 + 1).padStart(2, "0")}-01`
+    : todayISO());
+  const key = periodKey || refInfo.periodKey;
+  const existing = (state.settlements || []).find(s => s.customerId === customerId && s.kind === "subscription" && s.periodKey === key);
+  if (existing) return existing;
+
+  const sub = customer.subscriptionQuarterly || {};
+  const invoiceIncl = Math.max(0, round2(Number(sub.invoiceIncl) || 0));
+  const cash = Math.max(0, round2(Number(sub.cash) || 0));
+  const vatRate = Number(state.settings?.vatRate ?? 0.21);
+  const quarterInfo = key === refInfo.periodKey ? refInfo : getQuarterInfo(`${String(key).slice(0,4)}-${String((Number(String(key).slice(-1)) - 1) * 3 + 1).padStart(2, "0")}-01`);
+
+  const settlement = {
+    id: uid(),
+    kind: "subscription",
+    customerId,
+    periodKey: key,
+    periodStart: quarterInfo.startISO,
+    periodEnd: quarterInfo.endISO,
+    date: quarterInfo.startISO,
+    createdAt: now(),
+    logIds: [],
+    lines: [],
+    allocations: {},
+    status: "draft",
+    markedCalculated: true,
+    isCalculated: true,
+    calculatedAt: now(),
+    invoiceAmount: 0,
+    cashAmount: 0,
+    invoicePaid: true,
+    cashPaid: true,
+    invoiceNumber: null,
+    invoiceDate: quarterInfo.startISO,
+    invoiceLocked: true
+  };
+
+  if (invoiceIncl > 0){
+    const invoiceExcl = round2(invoiceIncl / (1 + vatRate));
+    settlement.allocations["sub:invoice"] = {
+      baseQty: 1,
+      invoiceQty: 1,
+      cashQty: 0,
+      unitPrice: invoiceExcl,
+      productId: null,
+      name: "Abonnement kwartaal",
+      unit: "stuk",
+      vatRate
+    };
+  }
+  if (cash > 0){
+    settlement.allocations["sub:cash"] = {
+      baseQty: 1,
+      invoiceQty: 0,
+      cashQty: 1,
+      unitPrice: round2(cash),
+      productId: null,
+      name: "Abonnement kwartaal",
+      unit: "stuk",
+      vatRate: 0
+    };
+  }
+
+  const totals = getTotalsFromAllocations(settlement);
+  if (totals.invoiceTotal > 0){
+    lockInvoice(settlement);
+    settlement.invoiceNumber = getNextInvoiceNumber(state.settlements || []);
+  } else {
+    settlement.invoiceNumber = null;
+  }
+  syncSettlementStatus(settlement);
+  syncSettlementAmounts(settlement);
+  state.settlements.unshift(settlement);
+  return settlement;
+}
+
+function ensureQuarterlySubscriptionsForCurrentQuarter(){
+  const qi = todayQuarterInfo();
+  let created = false;
+  for (const customer of (state.customers || [])){
+    if (customer.billingMode !== "quarterly") continue;
+    const before = (state.settlements || []).length;
+    ensureSubscriptionSettlementForCustomerQuarter(customer.id, qi.periodKey);
+    if ((state.settlements || []).length > before) created = true;
+  }
+  return created;
+}
+
+function autoLinkLogToSubscriptionQuarter(log){
+  if (!log?.customerId) return;
+  const customer = getCustomer(log.customerId);
+  if (!customer || customer.billingMode !== "quarterly") return;
+  const qi = getQuarterInfo(log.date || todayISO());
+  const target = ensureSubscriptionSettlementForCustomerQuarter(customer.id, qi.periodKey);
+  if (!target) return;
+
+  for (const settlement of (state.settlements || [])){
+    if (settlement.customerId !== customer.id) continue;
+    if (settlement.kind !== "subscription") continue;
+    if (settlement.periodKey === qi.periodKey) continue;
+    settlement.logIds = (settlement.logIds || []).filter(id => id !== log.id);
+  }
+
+  target.logIds = Array.from(new Set([...(target.logIds || []), log.id]));
+}
+
 
 function latestLinkedLogDate(settlement, sourceState = state){
   const linkedDates = (settlement?.logIds || [])
@@ -1296,6 +1459,16 @@ function latestLinkedLogDate(settlement, sourceState = state){
 function syncSettlementDatesFromLogs(settlement, sourceState = state){
   if (!settlement) return;
   const fallbackDate = todayISO();
+
+  if (settlement.kind === "subscription"){
+    const qi = getQuarterInfo(settlement.periodStart || settlement.date || fallbackDate);
+    settlement.periodKey = settlement.periodKey || qi.periodKey;
+    settlement.periodStart = settlement.periodStart || qi.startISO;
+    settlement.periodEnd = settlement.periodEnd || qi.endISO;
+    settlement.date = settlement.periodStart;
+    settlement.invoiceDate = settlement.periodStart;
+    return;
+  }
 
   const manual = String(settlement.dateOverride || "").trim();
   if (manual){
@@ -1346,6 +1519,10 @@ function isSettlementCalculated(settlement){
     settlement?.calculatedAt
   );
 }
+function isSettlementFrozenForLinking(settlement){
+  return isSettlementCalculated(settlement) && settlement?.kind !== "subscription";
+}
+
 function getSettlementAmounts(settlement){
   const totals = getSettlementTotals(settlement || {});
   return {
@@ -1804,6 +1981,9 @@ if (!state.ui?.demoDefaultLoaded){
   if (changed) saveState(state);
 }
 
+const createdSubscriptionSettlementsOnBoot = ensureQuarterlySubscriptionsForCurrentQuarter();
+if (createdSubscriptionSettlementsOnBoot) saveState(state);
+
 // Guardrail: keep state mutations inside actions + commit.
 function commit(){
   state = validateAndRepairState(state);
@@ -1840,6 +2020,7 @@ const actions = {
     log.closedAt = now();
     state.activeLogId = null;
     ui.activeLogQuickAdd.open = false;
+    autoLinkLogToSubscriptionQuarter(log);
     commit();
   },
   addGreenToLog(logId){
@@ -1850,7 +2031,18 @@ const actions = {
   editLog(logId, updater){
     const log = state.logs.find(l => l.id === logId);
     if (!log || typeof updater !== "function") return;
+    const oldDate = log.date;
+    const oldCustomerId = log.customerId;
     updater(log);
+    if (log.date !== oldDate || log.customerId !== oldCustomerId){
+      if (oldCustomerId && oldCustomerId !== log.customerId){
+        for (const settlement of (state.settlements || [])){
+          if (settlement.customerId !== oldCustomerId || settlement.kind !== "subscription") continue;
+          settlement.logIds = (settlement.logIds || []).filter(id => id !== log.id);
+        }
+      }
+      autoLinkLogToSubscriptionQuarter(log);
+    }
     commit();
   },
   deleteLog(logId){
@@ -1867,7 +2059,7 @@ const actions = {
   createSettlement(customerId = state.customers[0]?.id || ""){
     const invoiceDate = todayISO();
     const s = {
-      id: uid(), customerId, date: invoiceDate, createdAt: now(), logIds: [], lines: [],
+      id: uid(), kind: "job", customerId, date: invoiceDate, createdAt: now(), logIds: [], lines: [],
       status: "draft", markedCalculated: false, isCalculated: false, calculatedAt: null,
       invoiceAmount: 0, cashAmount: 0, invoicePaid: false, cashPaid: false,
       invoiceNumber: null,
@@ -1881,7 +2073,7 @@ const actions = {
   linkLogToSettlement(logId, settlementId){
     // Ontkoppel de log uit alle afrekeningen (inclusief calculated: geen wijziging voor die)
     for (const s of state.settlements){
-      if (isSettlementCalculated(s)) continue; // geen wijziging aan calculated settlements
+      if (isSettlementFrozenForLinking(s)) continue; // geen wijziging aan frozen settlements
       s.logIds = (s.logIds || []).filter(x => x !== logId);
       if (s.logIds.length === 0) s.allocations = {};
       else buildAllocationsFromLogs(s);
@@ -1891,7 +2083,7 @@ const actions = {
       const log = state.logs.find(l => l.id === logId);
       if (!log) return;
       const s = {
-        id: uid(), customerId: log.customerId, date: log.date || todayISO(),
+        id: uid(), kind: "job", customerId: log.customerId, date: log.date || todayISO(),
         createdAt: now(), logIds: [logId], lines: [], allocations: {},
         status: "draft", markedCalculated: false, isCalculated: false, calculatedAt: null,
         invoiceAmount: 0, cashAmount: 0, invoicePaid: false, cashPaid: false,
@@ -1905,7 +2097,7 @@ const actions = {
     }
     const s = state.settlements.find(x => x.id === settlementId);
     if (!s) return commit();
-    if (isSettlementCalculated(s)) return commit(); // geen link aan calculated
+    if (isSettlementFrozenForLinking(s)) return commit(); // geen link aan frozen
     s.logIds = Array.from(new Set([...(s.logIds || []), logId]));
     buildAllocationsFromLogs(s);
     syncSettlementAmounts(s);
@@ -1973,7 +2165,7 @@ const actions = {
     commit();
   },
   setLogbook(partial){ state.logbook = { ...(state.logbook || {}), ...partial }; commit(); },
-  addCustomer(customer){ state.customers.unshift(customer); commit(); return customer; },
+  addCustomer(customer){ normalizeCustomerSubscriptionFields(customer); state.customers.unshift(customer); commit(); return customer; },
   updateCustomer(customerId, patch){
     if ("nickname" in patch){
       const duplicate = findCustomerByNickname(state, patch.nickname, customerId);
@@ -1982,6 +2174,10 @@ const actions = {
     const c = state.customers.find(x => x.id === customerId);
     if (!c) return { ok: false, error: "not_found" };
     Object.assign(c, patch);
+    normalizeCustomerSubscriptionFields(c);
+    if (c.billingMode === "quarterly"){
+      ensureSubscriptionSettlementForCustomerQuarter(c.id, todayQuarterInfo().periodKey);
+    }
     commit();
     return { ok: true };
   },
@@ -3402,13 +3598,23 @@ function renderCustomerSheet(id){
     ui.customerDetailDrafts[c.id] = {
       nickname: c.nickname || "",
       name: c.name || "",
-      address: c.address || ""
+      address: c.address || "",
+      billingMode: c.billingMode === "quarterly" ? "quarterly" : "job",
+      subscriptionQuarterly: {
+        invoiceIncl: c.subscriptionQuarterly?.invoiceIncl ?? 0,
+        cash: c.subscriptionQuarterly?.cash ?? 0
+      }
     };
   }
   const draft = ui.customerDetailDrafts[c.id] || {
     nickname: c.nickname || "",
     name: c.name || "",
-    address: c.address || ""
+    address: c.address || "",
+    billingMode: c.billingMode === "quarterly" ? "quarterly" : "job",
+    subscriptionQuarterly: {
+      invoiceIncl: c.subscriptionQuarterly?.invoiceIncl ?? 0,
+      cash: c.subscriptionQuarterly?.cash ?? 0
+    }
   };
 
   $("#sheetTitle").textContent = "Klant";
@@ -3460,6 +3666,26 @@ function renderCustomerSheet(id){
           <label>Adres</label>
           ${isEditing ? `<input id="cAddr" value="${esc(draft.address)}" />` : `<div class="item-sub">${esc(c.address || "-")}</div>`}
         </div>
+        ${isEditing ? `
+          <div class="stack" style="gap:8px; margin-top:6px;">
+            <label class="row" style="align-items:center; gap:8px;">
+              <input id="cQuarterlyEnabled" type="checkbox" ${draft.billingMode === "quarterly" ? "checked" : ""} />
+              <span>Abonnement per kwartaal</span>
+            </label>
+            ${draft.billingMode === "quarterly" ? `
+              <div class="row" style="gap:10px;">
+                <div style="flex:1; min-width:160px;">
+                  <label>Factuur (incl btw)</label>
+                  <input id="cQuarterlyInvoiceIncl" inputmode="decimal" value="${esc(String(draft.subscriptionQuarterly?.invoiceIncl ?? 0))}" />
+                </div>
+                <div style="flex:1; min-width:120px;">
+                  <label>Cash</label>
+                  <input id="cQuarterlyCash" inputmode="decimal" value="${esc(String(draft.subscriptionQuarterly?.cash ?? 0))}" />
+                </div>
+              </div>
+            ` : ""}
+          </div>
+        ` : ""}
       </div>
 
       <div class="card stack">
@@ -3485,9 +3711,8 @@ function renderCustomerSheet(id){
         <div class="list">
           ${settlements.slice(0,20).map(s=>{
             const cls = settlementColorClass(s);
-            const totInv = bucketTotals(s.lines,"invoice");
-            const totCash = bucketTotals(s.lines,"cash");
-            const grand = round2(totInv.total + totCash.subtotal);
+            const totals = settlementTotals(s);
+            const grand = round2((totals.invoiceTotal || 0) + (totals.cashTotal || 0));
             return `
               <div class="item ${cls}" data-open-settlement="${s.id}">
                 <div class="item-main">
@@ -3507,13 +3732,24 @@ function renderCustomerSheet(id){
     ui.customerDetailDrafts[c.id].nickname = ($("#cNick")?.value || "").trim();
     ui.customerDetailDrafts[c.id].name = ($("#cName")?.value || "").trim();
     ui.customerDetailDrafts[c.id].address = ($("#cAddr")?.value || "").trim();
+    ui.customerDetailDrafts[c.id].billingMode = $("#cQuarterlyEnabled")?.checked ? "quarterly" : "job";
+    ui.customerDetailDrafts[c.id].subscriptionQuarterly = ui.customerDetailDrafts[c.id].subscriptionQuarterly || { invoiceIncl: 0, cash: 0 };
+    const inv = Number(String($("#cQuarterlyInvoiceIncl")?.value || "0").replace(",", "."));
+    const cash = Number(String($("#cQuarterlyCash")?.value || "0").replace(",", "."));
+    ui.customerDetailDrafts[c.id].subscriptionQuarterly.invoiceIncl = Number.isFinite(inv) ? Math.max(0, round2(inv)) : 0;
+    ui.customerDetailDrafts[c.id].subscriptionQuarterly.cash = Number.isFinite(cash) ? Math.max(0, round2(cash)) : 0;
   };
 
   if (isEditing){
-    ["#cNick", "#cName", "#cAddr"].forEach((selector)=>{
+    ["#cNick", "#cName", "#cAddr", "#cQuarterlyInvoiceIncl", "#cQuarterlyCash"].forEach((selector)=>{
       $(selector)?.addEventListener("input", syncDraft);
     });
   }
+
+  $("#cQuarterlyEnabled")?.addEventListener("change", ()=>{
+    syncDraft();
+    render();
+  });
 
   $("#toggleClientEdit")?.addEventListener("click", ()=>{
     if (!isEditing){
@@ -3521,7 +3757,12 @@ function renderCustomerSheet(id){
       ui.customerDetailDrafts[c.id] = {
         nickname: c.nickname || "",
         name: c.name || "",
-        address: c.address || ""
+        address: c.address || "",
+        billingMode: c.billingMode === "quarterly" ? "quarterly" : "job",
+        subscriptionQuarterly: {
+          invoiceIncl: c.subscriptionQuarterly?.invoiceIncl ?? 0,
+          cash: c.subscriptionQuarterly?.cash ?? 0
+        }
       };
       render();
       return;
@@ -3529,10 +3770,18 @@ function renderCustomerSheet(id){
 
     syncDraft();
     const currentDraft = ui.customerDetailDrafts[c.id] || {};
+    const billingMode = currentDraft.billingMode === "quarterly" ? "quarterly" : "job";
     const result = actions.updateCustomer(c.id, {
       nickname: (currentDraft.nickname || "").trim(),
       name: (currentDraft.name || "").trim(),
-      address: (currentDraft.address || "").trim()
+      address: (currentDraft.address || "").trim(),
+      billingMode,
+      subscriptionQuarterly: billingMode === "quarterly"
+        ? {
+          invoiceIncl: Math.max(0, round2(Number(currentDraft.subscriptionQuarterly?.invoiceIncl) || 0)),
+          cash: Math.max(0, round2(Number(currentDraft.subscriptionQuarterly?.cash) || 0))
+        }
+        : null
     });
     if (result?.error === "duplicate_nickname"){
       alert("Bijnaam bestaat al. Kies een unieke bijnaam.");
@@ -4423,8 +4672,8 @@ function renderSettlementSheet(id){
   const paymentFlags = getSettlementPaymentFlags(s);
   const visual = getSettlementVisualState(s);
   const showInvoiceNumberSection = Boolean(pay.hasInvoice) && ["calculated", "paid"].includes(s.status);
-  const canEditInvoiceNumber = s.status === "calculated" && pay.hasInvoice === true && s.status !== "paid";
-  const invoiceNumberReadOnly = s.status === "paid";
+  const canEditInvoiceNumber = pay.hasInvoice === true && (s.status === "calculated" || (s.status === "paid" && s.kind === "subscription"));
+  const invoiceNumberReadOnly = (s.status === "paid" && s.kind !== "subscription");
   const logbookTotals = settlementLogbookTotals(s);
 
   // Bouw allocation-rijen vanuit s.allocations (bron van waarheid)
@@ -4464,6 +4713,13 @@ function renderSettlementSheet(id){
 
   // Render helpers voor de matrix
   const renderAllocationControls = ({ key, bucket, qty })=>{
+    if (s.kind === "subscription"){
+      return `<div class="allocation-controls" data-bucket="${bucket}">
+        <span class="allocation-btn-placeholder"></span>
+        <div class="allocation-value mono tabular">${esc(String(formatQuickQty(qty)))}</div>
+        <span class="allocation-btn-placeholder"></span>
+      </div>`;
+    }
     // Richting: invoice-min = toCash, invoice-plus = toInvoice
     //           cash-min = toInvoice, cash-plus = toCash
     const dirMinus = bucket === 'invoice' ? 'toCash' : 'toInvoice';
@@ -4565,7 +4821,7 @@ function renderSettlementSheet(id){
     <div class="settlement-status-bar">
       ${renderSettlementStatusIcons(s)}
     </div>
-    ${isEdit ? `
+    ${isEdit && s.kind !== "subscription" ? `
       <button class="iconbtn" id="btnSettlementRecalc" type="button" aria-label="Herbereken uit logs" title="Herbereken uit logs">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke-linecap="round"/>
@@ -4671,7 +4927,7 @@ function renderSettlementSheet(id){
           return;
         }
         actions.editSettlement(s.id, (draft)=>{
-          if (isSettlementCalculated(draft)) return; // geen wijziging als calculated
+          if (isSettlementFrozenForLinking(draft)) return; // geen wijziging als frozen
           if (cb.checked) draft.logIds = Array.from(new Set([...(draft.logIds||[]), logId]));
           else draft.logIds = (draft.logIds||[]).filter(x => x !== logId);
           // Herbouw allocations vanuit logs (bron van waarheid)
