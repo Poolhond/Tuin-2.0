@@ -2950,8 +2950,8 @@ function renderSettlements(){
 
   const totalNotCalculatedExVat = round2(state.settlements.reduce((sum, settlement)=>{
     if (isSettlementCalculated(settlement)) return sum;
-    const pay = settlementPaymentState(settlement);
-    return sum + Number(pay.invoiceTotals?.subtotal || 0) + Number(pay.cashTotals?.subtotal || 0);
+    const totals = getSettlementTotals(settlement);
+    return sum + Number(totals.invoiceTotal || 0) + Number(totals.cashTotal || 0);
   }, 0));
   const totalInvoiceOutstanding = round2(state.settlements.reduce((sum, settlement)=>{
     if (!isSettlementCalculated(settlement)) return sum;
@@ -4497,6 +4497,7 @@ function renderSettlementSheet(id){
 
   $('#sheetActions').innerHTML = '';
   $('#sheetBody').style.paddingBottom = 'calc(var(--bottom-tabbar-height) + var(--status-tabbar-height) + env(safe-area-inset-bottom) + 40px)';
+  const calculated = isSettlementCalculated(s);
   $('#sheetBody').innerHTML = `
     <div class="stack settlement-detail settlement-flow ${visual.accentClass}">
       ${(!isEdit && (s.note || '').trim()) ? `<div class="section section-tight settlement-note-top"><div class="settlement-note-text">${esc(s.note.trim())}</div></div>` : ``}
@@ -4516,8 +4517,8 @@ function renderSettlementSheet(id){
           ${renderAllocationStaticRow({
             invoiceValue: moneyOrBlank(pay.invoiceTotal),
             cashValue: moneyOrBlank(pay.cashTotal),
-            invoiceClass: paymentFlags.invoicePaid ? 'is-paid' : 'is-open',
-            cashClass: paymentFlags.cashPaid ? 'is-paid' : 'is-open',
+            invoiceClass: calculated ? (paymentFlags.invoicePaid ? 'is-paid' : 'is-open') : '',
+            cashClass: calculated ? (paymentFlags.cashPaid ? 'is-paid' : 'is-open') : '',
             rowClass: 'allocation-total-row'
           })}
         </div>
