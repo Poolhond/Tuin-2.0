@@ -403,6 +403,7 @@ function ensureUIPreferences(st){
 
   if (!("editLogId" in st.ui)) st.ui.editLogId = null;
   if (!("editSettlementId" in st.ui)) st.ui.editSettlementId = null;
+  if (!("manualSettlementPanelId" in st.ui)) st.ui.manualSettlementPanelId = null;
   if (st.ui.settlementEditModes && !st.ui.editSettlementId){
     const activeId = Object.entries(st.ui.settlementEditModes).find(([, isEditing]) => Boolean(isEditing))?.[0] || null;
     st.ui.editSettlementId = activeId;
@@ -504,8 +505,10 @@ function loadState(){
     if (!("invoiceAmount" in s)) s.invoiceAmount = 0;
     if (!("cashAmount" in s)) s.cashAmount = 0;
     if (!("invoiceLocked" in s)) s.invoiceLocked = Boolean(s.isCalculated);
+    s.manual = normalizeSettlementManual(s.manual);
     syncSettlementDatesFromLogs(s, st);
     ensureSettlementInvoiceDefaults(s);
+    refreshSettlementAllocations(s, st);
     syncSettlementAmounts(s);
     if (!("demo" in s)) s.demo = false;
   }
@@ -1212,6 +1215,86 @@ function adjustSettlementQuickQty(settlementId, bucket, kind, delta){
     if (oppositeLine) oppositeLine.qty = round2(Math.max(0, totalQty - nextQty));
   });
 }
+function normalizeSettlementManual(manual){
+  if (!manual || typeof manual !== "object" || Array.isArray(manual)){
+    return { enabled: false, hours: 0, products: [] };
+  }
+  const enabled = Boolean(manual.enabled);
+  const hoursRaw = Number(manual.hours);
+  const hours = Math.max(0, roundToNearestHalf(Number.isFinite(hoursRaw) ? hoursRaw : 0));
+  const products = Array.isArray(manual.products)
+    ? manual.products
+      .map(item => {
+        const productId = String(item?.productId || "").trim();
+        const qtyRaw = Number(item?.qty);
+        const qty = Math.max(0, round2(Number.isFinite(qtyRaw) ? qtyRaw : 0));
+        if (!productId || qty <= 0) return null;
+        return { productId, qty };
+      })
+      .filter(Boolean)
+    : [];
+  return { enabled, hours, products };
+}
+
+function getSettlementCalcSource(settlement){
+  return settlement?.manual?.enabled === true ? "manual" : "logs";
+}
+
+function buildAllocationsFromManual(manual, productsCatalog = state.products || [], settings = state.settings || {}, oldAllocations = null){
+  const normalizedManual = normalizeSettlementManual(manual);
+  const allocations = {};
+  const labourProduct = (productsCatalog || []).find(p => {
+    const n = String(p?.name || "").trim().toLowerCase();
+    return n === "werk" || n === "arbeid";
+  });
+  const hourlyRate = Number(settings?.hourlyRate || 38);
+
+  if (normalizedManual.hours > 0){
+    let cashQty = 0;
+    if (oldAllocations?.work && round2(oldAllocations.work.baseQty) === normalizedManual.hours){
+      cashQty = Math.min(oldAllocations.work.cashQty || 0, normalizedManual.hours);
+    }
+    cashQty = round2(Math.max(0, Math.min(normalizedManual.hours, cashQty)));
+    allocations.work = {
+      baseQty: normalizedManual.hours,
+      invoiceQty: round2(normalizedManual.hours - cashQty),
+      cashQty,
+      unitPrice: hourlyRate,
+      productId: labourProduct?.id || null,
+      name: labourProduct?.name || "Werk",
+      unit: labourProduct?.unit || "uur",
+      vatRate: labourProduct?.vatRate ?? Number(settings?.vatRate ?? 0.21)
+    };
+  }
+
+  const productQtyMap = new Map();
+  for (const item of normalizedManual.products){
+    productQtyMap.set(item.productId, round2((productQtyMap.get(item.productId) || 0) + item.qty));
+  }
+
+  for (const [productId, qty] of productQtyMap.entries()){
+    if (qty <= 0) continue;
+    const key = `p:${productId}`;
+    const product = (productsCatalog || []).find(p => p.id === productId);
+    let cashQty = 0;
+    if (oldAllocations?.[key] && round2(oldAllocations[key].baseQty) === qty){
+      cashQty = Math.min(oldAllocations[key].cashQty || 0, qty);
+    }
+    cashQty = round2(Math.max(0, Math.min(qty, cashQty)));
+    allocations[key] = {
+      baseQty: round2(qty),
+      invoiceQty: round2(qty - cashQty),
+      cashQty,
+      unitPrice: round2(Number(product?.unitPrice) || 0),
+      productId,
+      name: product?.name || "Product",
+      unit: product?.unit || "keer",
+      vatRate: product?.vatRate ?? Number(settings?.vatRate ?? 0.21)
+    };
+  }
+
+  return allocations;
+}
 function countGreenItems(log){
   return round2((log.items || []).reduce((total, item)=>{
     if (!isGreenProduct(item)) return total;
@@ -1737,6 +1820,21 @@ function buildAllocationsFromLogs(settlement, sourceState = state){
   return newAllocations;
 }
 
+function refreshSettlementAllocations(settlement, sourceState = state){
+  if (!settlement) return {};
+  const source = getSettlementCalcSource(settlement);
+  if (source === "manual"){
+    settlement.allocations = buildAllocationsFromManual(
+      settlement.manual,
+      sourceState.products || [],
+      sourceState.settings || {},
+      settlement.allocations || null
+    );
+    return settlement.allocations;
+  }
+  return buildAllocationsFromLogs(settlement, sourceState);
+}
+
 /**
  * shiftAllocation: verschuif qty tussen factuur en cash voor één item.
  * key = "work" | "p:<productId>"
@@ -1872,7 +1970,8 @@ const actions = {
       invoiceAmount: 0, cashAmount: 0, invoicePaid: false, cashPaid: false,
       invoiceNumber: null,
       invoiceDate,
-      invoiceLocked: false
+      invoiceLocked: false,
+      manual: { enabled: false, hours: 0, products: [] }
     };
     state.settlements.unshift(s);
     commit();
@@ -1884,7 +1983,7 @@ const actions = {
       if (isSettlementCalculated(s)) continue; // geen wijziging aan calculated settlements
       s.logIds = (s.logIds || []).filter(x => x !== logId);
       if (s.logIds.length === 0) s.allocations = {};
-      else buildAllocationsFromLogs(s);
+      else refreshSettlementAllocations(s);
     }
     if (settlementId === "none") return commit();
     if (settlementId === "new"){
@@ -1895,9 +1994,10 @@ const actions = {
         createdAt: now(), logIds: [logId], lines: [], allocations: {},
         status: "draft", markedCalculated: false, isCalculated: false, calculatedAt: null,
         invoiceAmount: 0, cashAmount: 0, invoicePaid: false, cashPaid: false,
-        invoiceNumber: null, invoiceDate: log.date || todayISO(), invoiceLocked: false
+        invoiceNumber: null, invoiceDate: log.date || todayISO(), invoiceLocked: false,
+        manual: { enabled: false, hours: 0, products: [] }
       };
-      buildAllocationsFromLogs(s);
+      refreshSettlementAllocations(s);
       syncSettlementAmounts(s);
       state.settlements.unshift(s);
       commit();
@@ -1907,7 +2007,7 @@ const actions = {
     if (!s) return commit();
     if (isSettlementCalculated(s)) return commit(); // geen link aan calculated
     s.logIds = Array.from(new Set([...(s.logIds || []), logId]));
-    buildAllocationsFromLogs(s);
+    refreshSettlementAllocations(s);
     syncSettlementAmounts(s);
     commit();
     return s;
@@ -1936,12 +2036,14 @@ const actions = {
   deleteSettlement(settlementId){
     state.settlements = state.settlements.filter(x => x.id !== settlementId);
     if (state.ui.editSettlementId === settlementId) state.ui.editSettlementId = null;
+    if (state.ui.manualSettlementPanelId === settlementId) state.ui.manualSettlementPanelId = null;
     commit();
   },
   editSettlement(settlementId, updater){
     const settlement = state.settlements.find(x => x.id === settlementId);
     if (!settlement || typeof updater !== "function") return;
     updater(settlement);
+    settlement.manual = normalizeSettlementManual(settlement.manual);
     syncSettlementDatesFromLogs(settlement);
     ensureSettlementInvoiceDefaults(settlement);
     commit();
@@ -1969,7 +2071,11 @@ const actions = {
     commit();
   },
   setEditSettlement(settlementId){
-    state.ui.editSettlementId = state.ui.editSettlementId === settlementId ? null : settlementId;
+    const nextId = state.ui.editSettlementId === settlementId ? null : settlementId;
+    state.ui.editSettlementId = nextId;
+    if (state.ui.manualSettlementPanelId && state.ui.manualSettlementPanelId !== nextId){
+      state.ui.manualSettlementPanelId = null;
+    }
     commit();
   },
   setLogbook(partial){ state.logbook = { ...(state.logbook || {}), ...partial }; commit(); },
@@ -4304,7 +4410,7 @@ function calculateSettlement(settlement){
   if (!settlement) return;
 
   // Bouw/update allocations vanuit logs (enkel als nog niet calculated)
-  buildAllocationsFromLogs(settlement);
+  refreshSettlementAllocations(settlement);
 
   syncSettlementDatesFromLogs(settlement);
 
@@ -4396,6 +4502,7 @@ function renderSettlementSheet(id){
   if (!("isCalculated" in s)) s.isCalculated = isSettlementCalculated(s);
   if (!("calculatedAt" in s)) s.calculatedAt = s.isCalculated ? (s.createdAt || now()) : null;
   if (!("invoiceLocked" in s)) s.invoiceLocked = Boolean(s.isCalculated);
+  s.manual = normalizeSettlementManual(s.manual);
   syncSettlementDatesFromLogs(s);
   ensureSettlementInvoiceDefaults(s);
   // Verwijder ensureDefaultSettlementLines — allocations zijn bron van waarheid
@@ -4415,7 +4522,7 @@ function renderSettlementSheet(id){
 
   // Zorg dat allocations bestaan (migratie of eerste keer openen)
   if (!s.allocations){
-    buildAllocationsFromLogs(s);
+    refreshSettlementAllocations(s);
     syncSettlementAmounts(s);
   }
 
@@ -4426,6 +4533,12 @@ function renderSettlementSheet(id){
   const canEditInvoiceNumber = s.status === "calculated" && pay.hasInvoice === true && s.status !== "paid";
   const invoiceNumberReadOnly = s.status === "paid";
   const logbookTotals = settlementLogbookTotals(s);
+  const manualEnabled = getSettlementCalcSource(s) === "manual";
+  const manualPanelOpen = state.ui.manualSettlementPanelId === s.id;
+  const manualHoursValue = String(s.manual?.hours ?? 0);
+  const manualProducts = s.manual?.products || [];
+  const manualProductQty = (productId)=> round2(manualProducts.find(item => item.productId === productId)?.qty || 0);
+  const manualProductCatalog = (state.products || []).filter(product => !isWorkProduct(product));
 
   // Bouw allocation-rijen vanuit s.allocations (bron van waarheid)
   const workIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="7"/><path d="M12 8.6v3.8l2.7 1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -4502,7 +4615,7 @@ function renderSettlementSheet(id){
     <div class="stack settlement-detail settlement-flow ${visual.accentClass}">
       ${(!isEdit && (s.note || '').trim()) ? `<div class="section section-tight settlement-note-top"><div class="settlement-note-text">${esc(s.note.trim())}</div></div>` : ``}
       <div class="section stack section-tight">
-        ${!isEdit ? `<div class="summary-row"><span class="label">Datum</span><span class="num">${esc(formatDatePretty(s.date))}${s.dateOverride ? `<span class="subtle-tag mono">aangepast</span>` : ""}</span></div>` : ""}
+        ${!isEdit ? `<div class="summary-row"><span class="label">Datum</span><span class="num">${esc(formatDatePretty(s.date))}${manualEnabled ? `<span class="manual-indicator" aria-label="Handmatig actief" title="Handmatig actief"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 20h4l10.5-10.5a1.4 1.4 0 0 0 0-2L16.5 5a1.4 1.4 0 0 0-2 0L4 15.5V20Z" stroke-linejoin="round"/><path d="M13.5 6.5 17.5 10.5" stroke-linecap="round"/></svg></span>` : ""}${s.dateOverride ? `<span class="subtle-tag mono">aangepast</span>` : ""}</span></div>` : ""}
         <div class="summary-row"><span class="label">Totale werkuren</span><span class="num mono tabular">${formatDurationCompact(Math.floor(logbookTotals.totalWorkMs / 60000))}</span></div>
         <div class="summary-row"><span class="label">Totale groen eenheden</span><span class="num mono tabular">${esc(String(formatQuickQty(logbookTotals.totalGreenUnits)))}</span></div>
         ${logbookTotals.totalExtraProducts > 0 ? `<div class="summary-row"><span class="label">Totale extra producten</span><span class="num mono tabular">${esc(String(formatQuickQty(logbookTotals.totalExtraProducts)))}</span></div>` : ''}
@@ -4549,6 +4662,19 @@ function renderSettlementSheet(id){
 
       </div>
 
+      ${manualPanelOpen ? `
+      <div class="section stack section-tight manual-settlement-panel">
+        <div class="compact-row"><label>Handmatig</label><div><input id="manualEnabledToggle" type="checkbox" ${manualEnabled ? "checked" : ""} /></div></div>
+        <div class="compact-row"><label>Uren</label><div><input id="manualHoursInput" type="number" min="0" step="0.5" value="${esc(manualHoursValue)}" ${manualEnabled ? "" : "disabled"} /></div></div>
+        <div class="manual-products-list">
+          ${manualProductCatalog.map(product => {
+            const qty = manualProductQty(product.id);
+            return `<div class="manual-product-row"><span>${esc(product.name || "Product")}</span><div class="manual-product-controls"><button class="iconbtn iconbtn-sm" type="button" data-manual-qty-step="${product.id}|-1" ${manualEnabled ? "" : "disabled"}>−</button><span class="mono tabular">${esc(String(formatQuickQty(qty)))}</span><button class="iconbtn iconbtn-sm" type="button" data-manual-qty-step="${product.id}|1" ${manualEnabled ? "" : "disabled"}>+</button></div></div>`;
+          }).join('') || `<div class="small">Geen producten</div>`}
+        </div>
+        <button class="btn ghost" id="btnManualReset" type="button">Wis handmatig</button>
+      </div>` : ""}
+
       ${isEdit ? `
       <div class="section stack">
         <h2>Acties</h2>
@@ -4565,7 +4691,7 @@ function renderSettlementSheet(id){
     <div class="settlement-status-bar">
       ${renderSettlementStatusIcons(s)}
     </div>
-    ${isEdit ? `
+    ${isEdit && !manualEnabled ? `
       <button class="iconbtn" id="btnSettlementRecalc" type="button" aria-label="Herbereken uit logs" title="Herbereken uit logs">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke-linecap="round"/>
@@ -4573,6 +4699,9 @@ function renderSettlementSheet(id){
         </svg>
       </button>
     ` : ""}
+    <button class="iconbtn ${manualPanelOpen ? "is-open" : ""}" id="btnSettlementManual" type="button" aria-label="Handmatig invullen" title="Handmatig invullen">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4l10.5-10.5a1.4 1.4 0 0 0 0-2L16.5 5a1.4 1.4 0 0 0-2 0L4 15.5V20Z" stroke-linejoin="round"/><path d="M13.5 6.5 17.5 10.5" stroke-linecap="round"/></svg>
+    </button>
     <button class="iconbtn" id="btnSettlementEdit" type="button" aria-label="${isEdit ? "Gereed" : "Bewerk"}" title="${isEdit ? "Gereed" : "Bewerk"}">
       ${isEdit
         ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
@@ -4608,6 +4737,63 @@ function renderSettlementSheet(id){
   });
   $('#btnSettlementEdit')?.addEventListener('click', ()=>{
     toggleEditSettlement(s.id);
+    renderSheet();
+  });
+  $('#btnSettlementManual')?.addEventListener('click', ()=>{
+    state.ui.manualSettlementPanelId = state.ui.manualSettlementPanelId === s.id ? null : s.id;
+    saveState(state);
+    renderSheet();
+  });
+
+  $('#manualEnabledToggle')?.addEventListener('change', ()=>{
+    actions.editSettlement(s.id, (draft)=>{
+      const normalized = normalizeSettlementManual(draft.manual);
+      normalized.enabled = Boolean($('#manualEnabledToggle').checked);
+      draft.manual = normalized;
+      refreshSettlementAllocations(draft, state);
+      syncSettlementAmounts(draft);
+    });
+    renderSheet();
+  });
+
+  $('#manualHoursInput')?.addEventListener('change', ()=>{
+    const parsed = Number(String($('#manualHoursInput').value || '').replace(',', '.'));
+    actions.editSettlement(s.id, (draft)=>{
+      const normalized = normalizeSettlementManual(draft.manual);
+      normalized.hours = Math.max(0, roundToNearestHalf(Number.isFinite(parsed) ? parsed : 0));
+      draft.manual = normalized;
+      refreshSettlementAllocations(draft, state);
+      syncSettlementAmounts(draft);
+    });
+    renderSheet();
+  });
+
+  $('#sheetBody').querySelectorAll('[data-manual-qty-step]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const raw = String(btn.getAttribute('data-manual-qty-step') || '');
+      const [productId, deltaRaw] = raw.split('|');
+      const delta = Number(deltaRaw);
+      if (!productId || !Number.isFinite(delta)) return;
+      actions.editSettlement(s.id, (draft)=>{
+        const normalized = normalizeSettlementManual(draft.manual);
+        const currentQty = round2((normalized.products.find(item => item.productId === productId)?.qty) || 0);
+        const nextQty = Math.max(0, round2(currentQty + delta));
+        normalized.products = normalized.products.filter(item => item.productId !== productId);
+        if (nextQty > 0) normalized.products.push({ productId, qty: nextQty });
+        draft.manual = normalized;
+        refreshSettlementAllocations(draft, state);
+        syncSettlementAmounts(draft);
+      });
+      renderSheetKeepScroll();
+    });
+  });
+
+  $('#btnManualReset')?.addEventListener('click', ()=>{
+    actions.editSettlement(s.id, (draft)=>{
+      draft.manual = { enabled: false, hours: 0, products: [] };
+      refreshSettlementAllocations(draft, state);
+      syncSettlementAmounts(draft);
+    });
     renderSheet();
   });
 
@@ -4675,7 +4861,7 @@ function renderSettlementSheet(id){
           if (cb.checked) draft.logIds = Array.from(new Set([...(draft.logIds||[]), logId]));
           else draft.logIds = (draft.logIds||[]).filter(x => x !== logId);
           // Herbouw allocations vanuit logs (bron van waarheid)
-          buildAllocationsFromLogs(draft, state);
+          refreshSettlementAllocations(draft, state);
           syncSettlementAmounts(draft);
         });
         renderSheet();
@@ -4686,7 +4872,7 @@ function renderSettlementSheet(id){
       // Herbereken = herbouw allocations vanuit logs zonder te finaliseren
       actions.editSettlement(s.id, (draft)=>{
         if (isSettlementCalculated(draft)) return;
-        buildAllocationsFromLogs(draft, state);
+        refreshSettlementAllocations(draft, state);
         syncSettlementAmounts(draft);
       });
       renderSheet();

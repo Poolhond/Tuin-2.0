@@ -2507,3 +2507,36 @@ h2{
   background: rgba(233,238,246,.12);
   border-color: rgba(233,238,246,.28);
 }
+
+.manual-indicator{
+  display:inline-flex;
+  width:14px;
+  height:14px;
+  margin-left:6px;
+  opacity:.72;
+  vertical-align:middle;
+}
+.manual-settlement-panel{
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px;
+}
+.manual-products-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.manual-product-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.manual-product-controls{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+.iconbtn.is-open{
+  background:rgba(255,255,255,.08);
+}
