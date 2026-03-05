@@ -504,6 +504,15 @@ function loadState(){
     if (!("invoiceAmount" in s)) s.invoiceAmount = 0;
     if (!("cashAmount" in s)) s.cashAmount = 0;
     if (!("invoiceLocked" in s)) s.invoiceLocked = Boolean(s.isCalculated);
+    s.manualOverride = {
+      ...getDefaultSettlementManualOverride(),
+      ...(s.manualOverride || {}),
+      enabled: Boolean(s.manualOverride?.enabled),
+      hoursInvoice: Math.max(0, round2(Number(s.manualOverride?.hoursInvoice) || 0)),
+      hoursCash: Math.max(0, round2(Number(s.manualOverride?.hoursCash) || 0)),
+      groenInvoice: Math.max(0, round2(Number(s.manualOverride?.groenInvoice) || 0)),
+      groenCash: Math.max(0, round2(Number(s.manualOverride?.groenCash) || 0))
+    };
     syncSettlementDatesFromLogs(s, st);
     ensureSettlementInvoiceDefaults(s);
     syncSettlementAmounts(s);
@@ -586,6 +595,33 @@ function ensureStateSafetyAfterMutations(st){
 
 function settlementTotals(settlement){
   return getSettlementTotals(settlement);
+}
+
+function getDefaultSettlementManualOverride(){
+  return {
+    enabled: false,
+    hoursInvoice: 0,
+    hoursCash: 0,
+    groenInvoice: 0,
+    groenCash: 0
+  };
+}
+
+function getSettlementManualOverride(settlement){
+  const defaults = getDefaultSettlementManualOverride();
+  const source = settlement?.manualOverride || {};
+  return {
+    ...defaults,
+    enabled: Boolean(source.enabled),
+    hoursInvoice: Math.max(0, round2(Number(source.hoursInvoice) || 0)),
+    hoursCash: Math.max(0, round2(Number(source.hoursCash) || 0)),
+    groenInvoice: Math.max(0, round2(Number(source.groenInvoice) || 0)),
+    groenCash: Math.max(0, round2(Number(source.groenCash) || 0))
+  };
+}
+
+function getSettlementCalcMode(settlement){
+  return (settlement?.manualOverride && settlement.manualOverride.enabled) ? "manual" : "logs";
 }
 
 // ---------- Demo seeding (deterministic, period-based, realistic chronology) ----------
@@ -1249,7 +1285,48 @@ function getLogVisualState(log){
   if (state === "linked") return { state: "linked", color: "#ffcc00" };
   return { state: "free", color: "#93a0b5" };
 }
+function getManualOverrideTotals(settlement){
+  const manual = getSettlementManualOverride(settlement);
+  const workProduct = preferredWorkProduct();
+  const greenProduct = findGreenProduct();
+  const hourlyRate = Number(workProduct?.unitPrice ?? state?.settings?.hourlyRate ?? 0);
+  const greenRate = Number(greenProduct?.unitPrice ?? 0);
+  const vatRate = Number(state?.settings?.vatRate ?? 0.21);
+
+  const allocations = {
+    work: {
+      invoiceQty: manual.hoursInvoice,
+      cashQty: manual.hoursCash,
+      unitPrice: hourlyRate
+    },
+    green: {
+      invoiceQty: manual.groenInvoice,
+      cashQty: manual.groenCash,
+      unitPrice: greenRate
+    }
+  };
+
+  let invoiceExcl = 0;
+  let cashExcl = 0;
+  for (const alloc of Object.values(allocations)){
+    invoiceExcl += (Number(alloc.invoiceQty) || 0) * (Number(alloc.unitPrice) || 0);
+    cashExcl += (Number(alloc.cashQty) || 0) * (Number(alloc.unitPrice) || 0);
+  }
+
+  invoiceExcl = round2(invoiceExcl);
+  cashExcl = round2(cashExcl);
+  const invoiceVat = round2(invoiceExcl * vatRate);
+  const invoiceTotal = round2(invoiceExcl + invoiceVat);
+  const cashTotal = round2(cashExcl);
+
+  return { invoiceSubtotal: invoiceExcl, invoiceVat, invoiceTotal, cashSubtotal: cashExcl, cashTotal };
+}
+
 function getSettlementTotals(settlement){
+  const mode = getSettlementCalcMode(settlement);
+  if (mode === "manual"){
+    return getManualOverrideTotals(settlement);
+  }
   // Nieuw pad: gebruik allocations als bron van waarheid
   if (settlement && settlement.allocations){
     return getTotalsFromAllocations(settlement);
@@ -1658,7 +1735,7 @@ function runGreenAllocationUnitPriceSanityCheck(sourceState = state){
   };
   buildAllocationsFromLogs(settlement, checkState);
   const groenAlloc = settlement.allocations?.[`p:${groen.id}`];
-  const totals = getTotalsFromAllocations(settlement);
+  const totals = getSettlementTotals(settlement);
   if (!groenAlloc) console.warn("Sanity check failed: Groen allocation missing.");
   if ((Number(groenAlloc?.unitPrice) || 0) !== (Number(groen.unitPrice) || 0)){
     console.warn("Sanity check failed: Groen unitPrice fallback not applied.", { allocation: groenAlloc, product: groen });
@@ -1872,7 +1949,8 @@ const actions = {
       invoiceAmount: 0, cashAmount: 0, invoicePaid: false, cashPaid: false,
       invoiceNumber: null,
       invoiceDate,
-      invoiceLocked: false
+      invoiceLocked: false,
+      manualOverride: getDefaultSettlementManualOverride()
     };
     state.settlements.unshift(s);
     commit();
@@ -1895,7 +1973,8 @@ const actions = {
         createdAt: now(), logIds: [logId], lines: [], allocations: {},
         status: "draft", markedCalculated: false, isCalculated: false, calculatedAt: null,
         invoiceAmount: 0, cashAmount: 0, invoicePaid: false, cashPaid: false,
-        invoiceNumber: null, invoiceDate: log.date || todayISO(), invoiceLocked: false
+        invoiceNumber: null, invoiceDate: log.date || todayISO(), invoiceLocked: false,
+        manualOverride: getDefaultSettlementManualOverride()
       };
       buildAllocationsFromLogs(s);
       syncSettlementAmounts(s);
@@ -1930,6 +2009,36 @@ const actions = {
     const s = state.settlements.find(x => x.id === settlementId);
     if (!s) return;
     s.cashPaid = Boolean(paid);
+    syncSettlementStatus(s);
+    commit();
+  },
+  toggleSettlementManualOverride(settlementId){
+    const s = state.settlements.find(x => x.id === settlementId);
+    if (!s) return;
+    const manual = getSettlementManualOverride(s);
+    s.manualOverride = {
+      ...manual,
+      enabled: !manual.enabled
+    };
+    syncSettlementAmounts(s);
+    ensureSettlementInvoiceDefaults(s);
+    syncSettlementStatus(s);
+    commit();
+  },
+  bumpSettlementManualValue(settlementId, key, delta){
+    const s = state.settlements.find(x => x.id === settlementId);
+    if (!s) return;
+    const allowed = new Set(["hoursInvoice", "hoursCash", "groenInvoice", "groenCash"]);
+    if (!allowed.has(key)) return;
+    const manual = getSettlementManualOverride(s);
+    const step = key.startsWith("hours") ? 0.5 : 1;
+    const next = Math.max(0, round2((Number(manual[key]) || 0) + (Number(delta) * step)));
+    s.manualOverride = {
+      ...manual,
+      [key]: next
+    };
+    syncSettlementAmounts(s);
+    ensureSettlementInvoiceDefaults(s);
     syncSettlementStatus(s);
     commit();
   },
@@ -4422,6 +4531,9 @@ function renderSettlementSheet(id){
   const pay = settlementPaymentState(s);
   const paymentFlags = getSettlementPaymentFlags(s);
   const visual = getSettlementVisualState(s);
+  const calcMode = getSettlementCalcMode(s);
+  const isManualMode = calcMode === "manual";
+  const manual = getSettlementManualOverride(s);
   const showInvoiceNumberSection = Boolean(pay.hasInvoice) && ["calculated", "paid"].includes(s.status);
   const canEditInvoiceNumber = s.status === "calculated" && pay.hasInvoice === true && s.status !== "paid";
   const invoiceNumberReadOnly = s.status === "paid";
@@ -4434,36 +4546,56 @@ function renderSettlementSheet(id){
   const boxIconSmall = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 8 8-4 8 4-8 4-8-4Z" stroke-linejoin="round"/><path d="M4 8v8l8 4 8-4V8" stroke-linejoin="round"/><path d="M12 12v8" stroke-linecap="round"/></svg>`;
   const greenProduct = findGreenProduct();
   const allocationRows = [];
-  const allocs = s.allocations || {};
-  if (allocs.work){
-    allocationRows.push({
-      key: 'work', icon: workIcon, label: allocs.work.name || 'Werk',
-      invoiceQty: allocs.work.invoiceQty || 0, cashQty: allocs.work.cashQty || 0,
-      baseQty: allocs.work.baseQty || 0
+
+  if (isManualMode){
+    allocationRows.push({ key: 'manual-hours', icon: workIcon, label: 'Werk', invoiceQty: manual.hoursInvoice, cashQty: manual.hoursCash });
+    allocationRows.push({ key: 'manual-groen', icon: greenIcon, label: 'Groen', invoiceQty: manual.groenInvoice, cashQty: manual.groenCash });
+  } else {
+    const allocs = s.allocations || {};
+    if (allocs.work){
+      allocationRows.push({
+        key: 'work', icon: workIcon, label: allocs.work.name || 'Werk',
+        invoiceQty: allocs.work.invoiceQty || 0, cashQty: allocs.work.cashQty || 0,
+        baseQty: allocs.work.baseQty || 0
+      });
+    }
+    // Producten: groen eerst, dan andere
+    const productEntries = Object.entries(allocs).filter(([k]) => k !== 'work');
+    productEntries.sort(([, a], [, b]) => {
+      const aG = a.productId && greenProduct && a.productId === greenProduct.id;
+      const bG = b.productId && greenProduct && b.productId === greenProduct.id;
+      if (aG && !bG) return -1;
+      if (!aG && bG) return 1;
+      return 0;
     });
-  }
-  // Producten: groen eerst, dan andere
-  const productEntries = Object.entries(allocs).filter(([k]) => k !== 'work');
-  productEntries.sort(([, a], [, b]) => {
-    const aG = a.productId && greenProduct && a.productId === greenProduct.id;
-    const bG = b.productId && greenProduct && b.productId === greenProduct.id;
-    if (aG && !bG) return -1;
-    if (!aG && bG) return 1;
-    return 0;
-  });
-  for (const [key, alloc] of productEntries){
-    const prod = alloc.productId ? getProduct(alloc.productId) : null;
-    const isGreen = prod ? isGreenProduct(prod) : false;
-    allocationRows.push({
-      key, icon: isGreen ? greenIcon : null,
-      label: alloc.name || prod?.name || 'Product',
-      invoiceQty: alloc.invoiceQty || 0, cashQty: alloc.cashQty || 0,
-      baseQty: alloc.baseQty || 0
-    });
+    for (const [key, alloc] of productEntries){
+      const prod = alloc.productId ? getProduct(alloc.productId) : null;
+      const isGreen = prod ? isGreenProduct(prod) : false;
+      allocationRows.push({
+        key, icon: isGreen ? greenIcon : null,
+        label: alloc.name || prod?.name || 'Product',
+        invoiceQty: alloc.invoiceQty || 0, cashQty: alloc.cashQty || 0,
+        baseQty: alloc.baseQty || 0
+      });
+    }
   }
 
   // Render helpers voor de matrix
   const renderAllocationControls = ({ key, bucket, qty })=>{
+    if (isManualMode){
+      const fieldMap = {
+        'manual-hours|invoice': 'hoursInvoice',
+        'manual-hours|cash': 'hoursCash',
+        'manual-groen|invoice': 'groenInvoice',
+        'manual-groen|cash': 'groenCash'
+      };
+      const fieldKey = fieldMap[`${key}|${bucket}`] || "";
+      return `<div class="allocation-controls" data-bucket="${bucket}">
+        <button class="iconbtn iconbtn-sm" type="button" data-settle-manual-step="${fieldKey}|-1" aria-label="${bucket} min">−</button>
+        <div class="allocation-value mono tabular">${esc(String(formatQuickQty(qty)))}</div>
+        <button class="iconbtn iconbtn-sm" type="button" data-settle-manual-step="${fieldKey}|1" aria-label="${bucket} plus">+</button>
+      </div>`;
+    }
     // Richting: invoice-min = toCash, invoice-plus = toInvoice
     //           cash-min = toInvoice, cash-plus = toCash
     const dirMinus = bucket === 'invoice' ? 'toCash' : 'toInvoice';
@@ -4565,7 +4697,7 @@ function renderSettlementSheet(id){
     <div class="settlement-status-bar">
       ${renderSettlementStatusIcons(s)}
     </div>
-    ${isEdit ? `
+    ${isEdit && !isManualMode ? `
       <button class="iconbtn" id="btnSettlementRecalc" type="button" aria-label="Herbereken uit logs" title="Herbereken uit logs">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke-linecap="round"/>
@@ -4573,6 +4705,16 @@ function renderSettlementSheet(id){
         </svg>
       </button>
     ` : ""}
+    <button class="iconbtn ${isManualMode ? "is-active" : ""}" id="btnSettlementManualOverride" type="button" aria-label="Handmatige override" title="Handmatige override" aria-pressed="${isManualMode ? "true" : "false"}">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+        <path d="M4 6h8" stroke-linecap="round"/>
+        <circle cx="15" cy="6" r="2"/>
+        <path d="M4 12h5" stroke-linecap="round"/>
+        <circle cx="12" cy="12" r="2"/>
+        <path d="M4 18h11" stroke-linecap="round"/>
+        <circle cx="18" cy="18" r="2"/>
+      </svg>
+    </button>
     <button class="iconbtn" id="btnSettlementEdit" type="button" aria-label="${isEdit ? "Gereed" : "Bewerk"}" title="${isEdit ? "Gereed" : "Bewerk"}">
       ${isEdit
         ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
@@ -4609,6 +4751,21 @@ function renderSettlementSheet(id){
   $('#btnSettlementEdit')?.addEventListener('click', ()=>{
     toggleEditSettlement(s.id);
     renderSheet();
+  });
+  $('#btnSettlementManualOverride')?.addEventListener('click', ()=>{
+    actions.toggleSettlementManualOverride(s.id);
+    renderSheet();
+  });
+
+  $('#sheetBody').querySelectorAll('[data-settle-manual-step]').forEach(btn=>{
+    const raw = String(btn.getAttribute('data-settle-manual-step') || '');
+    const [key, directionRaw] = raw.split('|');
+    const direction = Number(directionRaw || 0);
+    if (!key || !Number.isFinite(direction) || direction === 0) return;
+    btn.addEventListener('click', ()=>{
+      actions.bumpSettlementManualValue(s.id, key, direction);
+      renderSheetKeepScroll();
+    });
   });
 
   if (!isEdit){
