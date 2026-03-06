@@ -4705,16 +4705,18 @@ function renderSettlementSheet(id){
         </svg>
       </button>
     ` : ""}
-    <button class="iconbtn ${isManualMode ? "is-active" : ""}" id="btnSettlementManualOverride" type="button" aria-label="Handmatige override" title="Handmatige override" aria-pressed="${isManualMode ? "true" : "false"}">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
-        <path d="M4 6h8" stroke-linecap="round"/>
-        <circle cx="15" cy="6" r="2"/>
-        <path d="M4 12h5" stroke-linecap="round"/>
-        <circle cx="12" cy="12" r="2"/>
-        <path d="M4 18h11" stroke-linecap="round"/>
-        <circle cx="18" cy="18" r="2"/>
-      </svg>
-    </button>
+    ${isEdit ? `
+      <button class="iconbtn ${isManualMode ? "is-active" : ""}" id="btnSettlementManualOverride" type="button" aria-label="Handmatige override" title="Handmatige override" aria-pressed="${isManualMode ? "true" : "false"}">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+          <path d="M4 6h8" stroke-linecap="round"/>
+          <circle cx="15" cy="6" r="2"/>
+          <path d="M4 12h5" stroke-linecap="round"/>
+          <circle cx="12" cy="12" r="2"/>
+          <path d="M4 18h11" stroke-linecap="round"/>
+          <circle cx="18" cy="18" r="2"/>
+        </svg>
+      </button>
+    ` : ""}
     <button class="iconbtn" id="btnSettlementEdit" type="button" aria-label="${isEdit ? "Gereed" : "Bewerk"}" title="${isEdit ? "Gereed" : "Bewerk"}">
       ${isEdit
         ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
