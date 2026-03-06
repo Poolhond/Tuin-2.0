@@ -3056,6 +3056,7 @@ function renderSettlements(){
   };
   const invoiceIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"></rect><path d="M2.5 10h19" stroke-linecap="round"></path><path d="M7 14.5h4" stroke-linecap="round"></path></svg>`;
   const cashIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="8.5" cy="12" r="3.5"></circle><circle cx="15.5" cy="12" r="3.5"></circle><path d="M12 8.5v7" stroke-linecap="round"></path></svg>`;
+  const pendingIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2.5"></rect><path d="M8 8h8" stroke-linecap="round"></path><path d="M8 12h8" stroke-linecap="round"></path><path d="M8 16h3" stroke-linecap="round"></path></svg>`;
 
   const totalNotCalculatedExVat = round2(state.settlements.reduce((sum, settlement)=>{
     if (isSettlementCalculated(settlement)) return sum;
@@ -3139,21 +3140,21 @@ function renderSettlements(){
       }
 
       return `
-        <div class="item ${visual.accentClass}" data-open-settlement="${s.id}">
+        <div class="item ${visual.accentClass}">
           <div class="settlement-card-grid">
             <div class="settlement-row-grid">
-              <div class="item-main">
-                <div class="item-title-row settlement-title-row">
-                  <div class="item-title settlement-name" title="${esc(titleText)}">${esc(titleText)}</div>
-                </div>
-              </div>
-
               <div class="amtGroup settlement-amount-group">
                 <div class="amt invoice mono tabular ${flags.invoicePaid ? "is-paid" : "is-open"}" ${invoiceToggleAttrs}>${showInvoice ? formatMoneyEUR0(invoiceAmt) : ""}</div>
                 <div class="amt cash mono tabular ${flags.cashPaid ? "is-paid" : "is-open"}" ${cashToggleAttrs}>${showCash ? formatMoneyEUR0(cashAmt) : ""}</div>
               </div>
+
+              <button class="settlement-open-zone" type="button" data-open-settlement="${s.id}" aria-label="Open afrekening ${esc(titleText)}">
+                <div class="item-title-row settlement-title-row">
+                  <div class="item-title settlement-name" title="${esc(titleText)}">${esc(titleText)}</div>
+                </div>
+                <div class="meta-text settlement-meta-row">${detailItems.join(" · ")}</div>
+              </button>
             </div>
-            <div class="meta-text settlement-meta-row">${detailItems.join(" · ")}</div>
           </div>
         </div>
       `;
@@ -3163,8 +3164,10 @@ function renderSettlements(){
     <div class="stack">
       <div class="geld-header"><span class="geld-header-title">Afrekeningen</span></div>
       <div class="settlement-header-row mono tabular">
-        <div class="settlement-header-left">${formatMoneyEUR0(totalNotCalculatedExVat)}</div>
         <div class="settlement-outstanding-breakdown">
+          <span class="settlement-outstanding-col settlement-outstanding-col--pending ${totalNotCalculatedExVat > 0 ? "" : "is-hidden"}">
+            <span class="settlement-outstanding-content">${pendingIcon}<span>${totalNotCalculatedExVat > 0 ? formatMoneyEUR0(totalNotCalculatedExVat) : ""}</span></span>
+          </span>
           <span class="settlement-outstanding-col ${totalInvoiceOutstanding > 0 ? "is-open" : ""}">
             <span class="settlement-outstanding-content ${totalInvoiceOutstanding > 0 ? "" : "is-hidden"}">${invoiceIcon}<span>${totalInvoiceOutstanding > 0 ? formatMoneyEUR0(totalInvoiceOutstanding) : ""}</span></span>
           </span>

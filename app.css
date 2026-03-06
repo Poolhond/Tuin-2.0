@@ -1954,7 +1954,7 @@ h2{
 
 .settlement-row-grid{
   display:flex;
-  gap:10px;
+  gap:12px;
   width:100%;
   align-items:center;
 }
@@ -1991,16 +1991,15 @@ h2{
 }
 
 .amtGroup{
-  margin-left:auto;
   display:flex;
   align-items:center;
-  gap:10px;
+  gap:8px;
   flex:0 0 auto;
 }
 
 .amt{
   box-sizing:border-box;
-  width:78px;
+  width:72px;
   text-align:right;
   flex:0 0 auto;
   padding:4px 6px;
@@ -2053,6 +2052,26 @@ h2{
 .amount-inline:active:not(:disabled){ transform:scale(0.98); }
 .amount-inline:disabled{ cursor:default; }
 
+
+.settlement-open-zone{
+  min-width:0;
+  flex:1 1 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+  width:100%;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+
+.settlement-open-zone:active{
+  opacity:.9;
+}
 .settlement-meta-row{
   color:var(--muted);
   font-size:12px;
@@ -2071,9 +2090,7 @@ h2{
 
 .settlement-header-row{
   display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
+  justify-content:flex-end;
   padding:0 4px 8px;
 }
 
@@ -2086,7 +2103,7 @@ h2{
 
 .settlement-outstanding-breakdown{
   display:grid;
-  grid-template-columns:120px 120px;
+  grid-template-columns:repeat(3, minmax(0, auto));
   justify-content:end;
   column-gap:14px;
   color:var(--text);
@@ -2097,6 +2114,10 @@ h2{
 .settlement-outstanding-col{
   display:flex;
   justify-content:flex-end;
+}
+
+.settlement-outstanding-col.is-hidden{
+  display:none;
 }
 
 .settlement-outstanding-col.is-open{
