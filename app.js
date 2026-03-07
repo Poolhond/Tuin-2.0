@@ -443,6 +443,8 @@ function isSettlementEditing(settlementId){
 }
 
 function toggleEditSettlement(settlementId){
+  const isLeavingEdit = state.ui.editSettlementId === settlementId;
+  if (isLeavingEdit) delete ui.settlementDateDraft[settlementId];
   actions.setEditSettlement(settlementId);
 }
 
@@ -1676,6 +1678,9 @@ const ui = {
   transition: null,
   logDetailSegmentEditId: null,
   logDateEditSnapshot: {},
+  logDateDraft: {},
+  segmentDrafts: {},
+  settlementDateDraft: {},
   customerDetailEditingId: null,
   customerDetailDrafts: {},
   productDetailEditingId: null,
@@ -1958,9 +1963,15 @@ function toggleEditLog(logId){
   const isLeavingEdit = state.ui.editLogId === logId;
   if (!isLeavingEdit){
     const log = state.logs.find(item => item.id === logId);
-    if (log) ui.logDateEditSnapshot[logId] = log.date || "";
+    if (log) {
+      ui.logDateEditSnapshot[logId] = log.date || "";
+      ui.logDateDraft[logId] = log.date || "";
+    }
   } else {
     delete ui.logDateEditSnapshot[logId];
+    delete ui.logDateDraft[logId];
+    const log = state.logs.find(item => item.id === logId);
+    if (log) (log.segments || []).forEach(s => delete ui.segmentDrafts[s.id]);
   }
   actions.setEditLog(logId);
 }
@@ -1982,6 +1993,8 @@ function cancelLogDateEditIfNeeded(){
   state.ui.editLogId = null;
   ui.logDetailSegmentEditId = null;
   delete ui.logDateEditSnapshot[logId];
+  delete ui.logDateDraft[logId];
+  if (log) (log.segments || []).forEach(s => delete ui.segmentDrafts[s.id]);
 }
 
 function cancelDetailEditIfNeeded(){
@@ -3850,8 +3863,8 @@ function renderLogSheet(id){
                 ${isOpen ? `
                   <div class="segment-editor" data-segment-editor="${s.id}">
                     <div class="segment-grid">
-                      <label>Start<input type="time" value="${esc(fmtTimeInput(s.start))}" data-edit-segment="${s.id}" data-field="start" /></label>
-                      <label>Einde<input type="time" value="${esc(fmtTimeInput(s.end))}" data-edit-segment="${s.id}" data-field="end" /></label>
+                      <label>Start<input type="time" value="${esc((ui.segmentDrafts[s.id] || {}).start ?? fmtTimeInput(s.start))}" data-edit-segment="${s.id}" data-field="start" /></label>
+                      <label>Einde<input type="time" value="${esc((ui.segmentDrafts[s.id] || {}).end ?? fmtTimeInput(s.end))}" data-edit-segment="${s.id}" data-field="end" /></label>
                       <label>Type
                         <select data-edit-segment="${s.id}" data-field="type">
                           <option value="work" ${s.type === "work" ? "selected" : ""}>work</option>
@@ -3859,9 +3872,12 @@ function renderLogSheet(id){
                         </select>
                       </label>
                     </div>
-                    <button class="iconbtn iconbtn-sm danger" type="button" data-del-segment="${s.id}" title="Verwijder segment" aria-label="Verwijder segment">
-                      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 6h18" stroke-linecap="round"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6" stroke-linecap="round"/></svg>
-                    </button>
+                    <div class="segment-editor-actions">
+                      <button class="iconbtn iconbtn-sm" type="button" data-commit-segment="${s.id}" title="Bevestig tijden" aria-label="Bevestig tijden"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+                      <button class="iconbtn iconbtn-sm danger" type="button" data-del-segment="${s.id}" title="Verwijder segment" aria-label="Verwijder segment">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 6h18" stroke-linecap="round"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6" stroke-linecap="round"/></svg>
+                      </button>
+                    </div>
                   </div>
                 ` : ""}
               </div>
@@ -3898,11 +3914,13 @@ function renderLogSheet(id){
     const prettyDate = formatLogDatePretty(currentLog.date || "");
     const startTime = getStartTime(currentLog);
     const dateInputValue = formatLocalYMD(new Date(currentLog.date));
+    const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
     const dateHeader = editing
       ? `
         <div class="log-detail-date-edit" role="group" aria-label="Datum bewerken">
           <svg class="icon log-detail-date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18" stroke-linecap="round"></path></svg>
-          <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(dateInputValue)}" max="${formatLocalYMD(new Date())}" />
+          <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(draftDate)}" max="${formatLocalYMD(new Date())}" />
+          <button class="iconbtn iconbtn-sm" id="btnCommitLogDate" type="button" aria-label="Bevestig datum" title="Bevestig datum"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
         </div>
       `
       : `<div class="log-detail-header-main">${esc(prettyDate || currentLog.date || "—")}</div>`;
@@ -3997,10 +4015,17 @@ function renderLogSheet(id){
     const nextDate = event.target?.value;
     if (!nextDate) return;
     if (nextDate > formatLocalYMD(new Date())) return;
+    ui.logDateDraft[log.id] = nextDate;
+  });
 
+  $("#btnCommitLogDate")?.addEventListener("click", ()=>{
+    const nextDate = ui.logDateDraft[log.id];
+    if (!nextDate) return;
+    if (nextDate > formatLocalYMD(new Date())) return;
     actions.editLog(log.id, (draft)=>{
       setLogDay(draft, nextDate);
     });
+    delete ui.logDateDraft[log.id];
   });
 
 
@@ -4017,7 +4042,14 @@ function renderLogSheet(id){
   $("#sheetBody").querySelectorAll("[data-toggle-segment]").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const segmentId = btn.getAttribute("data-toggle-segment");
-      ui.logDetailSegmentEditId = ui.logDetailSegmentEditId === segmentId ? null : segmentId;
+      if (ui.logDetailSegmentEditId === segmentId){
+        delete ui.segmentDrafts[segmentId];
+        ui.logDetailSegmentEditId = null;
+      } else {
+        const seg = (log.segments || []).find(x => x.id === segmentId);
+        if (seg) ui.segmentDrafts[segmentId] = { start: fmtTimeInput(seg.start), end: fmtTimeInput(seg.end) };
+        ui.logDetailSegmentEditId = segmentId;
+      }
       renderSheet();
     });
   });
@@ -4029,33 +4061,50 @@ function renderLogSheet(id){
       const seg = (log.segments||[]).find(x => x.id === segmentId);
       if (!seg) return;
 
+      if (field === "start" || field === "end"){
+        // Draft only — geen directe opslag
+        ui.segmentDrafts[segmentId] = ui.segmentDrafts[segmentId] || { start: fmtTimeInput(seg.start), end: fmtTimeInput(seg.end) };
+        ui.segmentDrafts[segmentId][field] = inp.value;
+        return;
+      }
+
       if (field === "type"){
         if (!["work", "break"].includes(inp.value)){
           alert('Type moet "work" of "break" zijn.');
           renderSheet();
           return;
         }
+        actions.editLog(log.id, (draft)=>{
+          const target = (draft.segments||[]).find(x => x.id === segmentId);
+          if (!target) return;
+          target.type = inp.value;
+        });
+        renderSheet();
       }
+    });
+  });
 
-      if (field === "start" || field === "end"){
-        const nextStart = field === "start" ? parseLogTimeToMs(log.date, inp.value) : seg.start;
-        const nextEnd = field === "end" ? parseLogTimeToMs(log.date, inp.value) : seg.end;
-        if (nextStart == null || nextEnd == null || !(nextEnd > nextStart)){
-          alert("Segment ongeldig: einde moet later zijn dan start.");
-          renderSheet();
-          return;
-        }
+  $("#sheetBody").querySelectorAll("[data-commit-segment]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const segmentId = btn.getAttribute("data-commit-segment");
+      const seg = (log.segments||[]).find(x => x.id === segmentId);
+      if (!seg) return;
+      const draft = ui.segmentDrafts[segmentId];
+      if (!draft) return;
+      const nextStart = parseLogTimeToMs(log.date, draft.start);
+      const nextEnd = parseLogTimeToMs(log.date, draft.end);
+      if (nextStart == null || nextEnd == null || !(nextEnd > nextStart)){
+        alert("Segment ongeldig: einde moet later zijn dan start.");
+        return;
       }
-
-      actions.editLog(log.id, (draft)=>{
-        const target = (draft.segments||[]).find(x => x.id === segmentId);
+      actions.editLog(log.id, (appDraft)=>{
+        const target = (appDraft.segments||[]).find(x => x.id === segmentId);
         if (!target) return;
-        if (field === "type") target.type = inp.value;
-        if (field === "start" || field === "end"){
-          target.start = field === "start" ? parseLogTimeToMs(draft.date, inp.value) : target.start;
-          target.end = field === "end" ? parseLogTimeToMs(draft.date, inp.value) : target.end;
-        }
+        target.start = nextStart;
+        target.end = nextEnd;
       });
+      delete ui.segmentDrafts[segmentId];
+      ui.logDetailSegmentEditId = null;
       renderSheet();
     });
   });
@@ -4681,7 +4730,7 @@ function renderSettlementSheet(id){
       <div class="section stack">
         <h2>Acties</h2>
         <div class="compact-row"><label>Klant</label><div><select id="sCustomer">${customerOptions}</select></div></div>
-        <div class="compact-row"><label>Afrekendatum</label><div class="row-inline"><input id="settlementDateOverride" type="date" value="${esc(String(s.dateOverride || s.date || ""))}" />${s.dateOverride ? `<button class="iconbtn iconbtn-sm" id="btnResetSettlementDate" type="button" title="Reset naar automatisch" aria-label="Reset naar automatisch"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round"/><path d="M3 3v6h6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}</div></div>
+        <div class="compact-row"><label>Afrekendatum</label><div class="row-inline"><input id="settlementDateOverride" type="date" value="${esc(String(ui.settlementDateDraft[s.id] ?? s.dateOverride ?? s.date ?? ""))}" /><button class="iconbtn iconbtn-sm" id="btnCommitSettlementDate" type="button" title="Bevestig datum" aria-label="Bevestig datum"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>${s.dateOverride ? `<button class="iconbtn iconbtn-sm" id="btnResetSettlementDate" type="button" title="Reset naar automatisch" aria-label="Reset naar automatisch"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round"/><path d="M3 3v6h6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}</div></div>
         ${showInvoiceNumberSection ? `<div class="compact-row"><label>Factuurnr</label><div><input id="invoiceNumberInput" value="${esc(invoiceNumberDisplay)}" ${invoiceNumberReadOnly ? "readonly" : ""} /></div></div>` : ''}
         <textarea id="sNote" rows="3">${esc(s.note||"")}</textarea>
         <button class="btn danger" id="delSettlement">Verwijder</button>
@@ -4789,14 +4838,21 @@ function renderSettlementSheet(id){
     $('#settlementDateOverride')?.addEventListener('change', ()=>{
       const v = String($('#settlementDateOverride').value || "").trim();
       if (!v) return;
+      ui.settlementDateDraft[s.id] = v;
+    });
+    $('#btnCommitSettlementDate')?.addEventListener('click', ()=>{
+      const v = ui.settlementDateDraft[s.id] || String($('#settlementDateOverride').value || "").trim();
+      if (!v) return;
       actions.editSettlement(s.id, (draft)=>{
         draft.dateOverride = v;
         draft.date = v;
         if (!draft.invoiceLocked) draft.invoiceDate = v;
       });
+      delete ui.settlementDateDraft[s.id];
       renderSheet();
     });
     $('#btnResetSettlementDate')?.addEventListener('click', ()=>{
+      delete ui.settlementDateDraft[s.id];
       actions.editSettlement(s.id, (draft)=>{
         delete draft.dateOverride;
         draft.dateOverride = null;
