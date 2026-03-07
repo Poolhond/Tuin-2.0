@@ -780,6 +780,7 @@ function summarizeImportValidation(result){
 function safeReplaceAppState(nextState){
   const prepared = validateAndRepairState(migrateState(deepClone(nextState)));
   ensureUIPreferences(prepared);
+  sanitizeUiSelectionReferences(prepared);
   ensureUniqueCustomerNicknames(prepared);
   ensureCoreProducts(prepared);
   syncAllFixedQuarterSettlements(prepared);
@@ -1009,6 +1010,7 @@ function loadState(){
   }
 
   ensureUIPreferences(st);
+  sanitizeUiSelectionReferences(st);
 
   // Fixed quarter settlements: ensure + sync for all active templates at load time
   syncAllFixedQuarterSettlements(st);
@@ -1065,6 +1067,17 @@ function demoDateISO(daysBack){
   return d.toISOString().slice(0,10);
 }
 
+function sanitizeUiSelectionReferences(st){
+  if (!st || !isPlainObject(st)) return;
+  st.ui = isPlainObject(st.ui) ? st.ui : getDefaultUiState();
+  const logIds = makeSet(asArray(st.logs).map(l => l?.id).filter(Boolean));
+  const settlementIds = makeSet(asArray(st.settlements).map(s => s?.id).filter(Boolean));
+
+  if (!logIds.has(st.activeLogId)) st.activeLogId = null;
+  if (!logIds.has(st.ui.editLogId)) st.ui.editLogId = null;
+  if (!settlementIds.has(st.ui.editSettlementId)) st.ui.editSettlementId = null;
+}
+
 function ensureStateSafetyAfterMutations(st){
   const logIds = new Set(st.logs.map(l => l.id));
   for (const s of st.settlements){
@@ -1083,13 +1096,7 @@ function settlementTotals(settlement){
 }
 
 function getDefaultSettlementManualOverride(){
-  return {
-    enabled: false,
-    hoursInvoice: 0,
-    hoursCash: 0,
-    groenInvoice: 0,
-    groenCash: 0
-  };
+  return getDefaultManualOverride();
 }
 
 function getSettlementManualOverride(settlement){
@@ -1106,19 +1113,11 @@ function getSettlementManualOverride(settlement){
 }
 
 function getSettlementCalcMode(settlement){
-  return (settlement?.manualOverride && settlement.manualOverride.enabled) ? "manual" : "logs";
+  return getSettlementManualOverride(settlement).enabled ? "manual" : "logs";
 }
 
 function getDefaultFixedSettlementTemplate(){
-  return {
-    enabled: false,
-    periodType: "quarter",
-    laborInvoiceUnits: 0,
-    laborCashUnits: 0,
-    greenInvoiceUnits: 0,
-    greenCashUnits: 0,
-    note: ""
-  };
+  return getDefaultFixedTemplate();
 }
 
 function getCustomerFixedTemplate(customer){
@@ -1215,8 +1214,8 @@ function ensureCurrentFixedQuarterSettlement(st, customer){
 // Sync manual override amounts for a fixed-period settlement without full state dependency.
 // Needed during init when `state` is not yet available as a global.
 function syncSettlementAmountsFromManualOverride(settlement, sourceState){
-  if (!settlement?.manualOverride?.enabled) return;
-  const manual = settlement.manualOverride;
+  const manual = getSettlementManualOverride(settlement);
+  if (!manual.enabled) return;
   const settings = sourceState?.settings || {};
   const products = sourceState?.products || [];
 
@@ -3578,13 +3577,20 @@ function _attachSettingsHandlers(){
     const summary = summarizeImportValidation(result);
     const warnings = asArray(result.warnings);
     const fatals = asArray(result.fatalErrors);
+    const warningPreview = warnings.slice(0, 3);
+    const fatalPreview = fatals.slice(0, 3);
+    const warningOverflow = Math.max(0, warnings.length - warningPreview.length);
+    const fatalOverflow = Math.max(0, fatals.length - fatalPreview.length);
     host.innerHTML = `
       <div class="import-summary ${summary.canImport ? "is-ok" : "is-fatal"}">
         <div class="item-title">${esc(summary.userMessage)}</div>
-        <div class="meta-text">Klanten ${summary.counts.customers} · Producten ${summary.counts.products} · Logs ${summary.counts.logs} · Afspraken ${summary.counts.settlements}</div>
-        <div class="meta-text">Warnings: ${warnings.length} · Fatale fouten: ${fatals.length}</div>
-        ${warnings.length ? `<div class="small import-summary-list"><strong>Opmerkingen</strong><ul>${warnings.slice(0, 8).map(w => `<li>${esc(w)}</li>`).join("")}</ul></div>` : ""}
-        ${fatals.length ? `<div class="small import-summary-list"><strong>Fouten</strong><ul>${fatals.slice(0, 8).map(f => `<li>${esc(f)}</li>`).join("")}</ul></div>` : ""}
+        <div class="import-summary-stats mono">${summary.counts.customers} k · ${summary.counts.products} p · ${summary.counts.logs} l · ${summary.counts.settlements} a</div>
+        <div class="import-summary-badges">
+          <span class="import-badge import-badge-warning">Herstelbaar ${warnings.length}</span>
+          <span class="import-badge import-badge-fatal">Blokkerend ${fatals.length}</span>
+        </div>
+        ${warningPreview.length ? `<div class="small import-summary-list import-summary-list-warning"><ul>${warningPreview.map(w => `<li>${esc(w)}</li>`).join("")}${warningOverflow ? `<li>+${warningOverflow} meer</li>` : ""}</ul></div>` : ""}
+        ${fatalPreview.length ? `<div class="small import-summary-list import-summary-list-fatal"><ul>${fatalPreview.map(f => `<li>${esc(f)}</li>`).join("")}${fatalOverflow ? `<li>+${fatalOverflow} meer</li>` : ""}</ul></div>` : ""}
       </div>
     `;
   };
@@ -3680,7 +3686,7 @@ function _attachSettingsHandlers(){
           safeReplaceAppState(pendingImportState);
           state.ui.importSummary = null;
           setImportSummary(null);
-          setBackupFeedback("success", `Import klaar. ${asArray(result.warnings).length} kleine problemen automatisch hersteld.`);
+          setBackupFeedback("success", `Import klaar. ${asArray(result.warnings).length} kleine herstelpunten verwerkt.`);
           console.info("[backup-import] afgerond", result);
         } catch (error){
           console.error("[backup-import] kon state niet veilig vervangen", error);
@@ -3723,9 +3729,9 @@ function _attachSettingsHandlers(){
 
       const warningCount = result.warnings.length;
       if (warningCount){
-        setBackupFeedback("success", `Backup gecontroleerd. ${warningCount} aandachtspunten veilig hersteld. Klik nogmaals op importeren om te bevestigen.`);
+        setBackupFeedback("success", `Backup gecontroleerd. ${warningCount} kleine herstellingen gedaan. Tik opnieuw op importeren.`);
       } else {
-        setBackupFeedback("success", "Backup gecontroleerd. Klik nogmaals op importeren om te bevestigen.");
+        setBackupFeedback("success", "Backup gecontroleerd. Tik opnieuw op importeren.");
       }
     } catch (error) {
       console.error("[backup-import] onverwachte fout", error);
@@ -4194,7 +4200,7 @@ function renderSettingsSheet(){
         <div class="meta-text">Maak een reservekopie van je volledige lokale data of herstel een eerdere backup.</div>
         <div class="row">
           <button class="btn primary" id="backupExportBtn">Backup downloaden</button>
-          <button class="btn" id="backupImportBtn">Backup importeren / bevestigen</button>
+          <button class="btn" id="backupImportBtn">Backup importeren</button>
           <input id="backupImportInput" type="file" accept=".json,application/json" class="hidden" />
         </div>
         <div id="backupImportSummary" class="backup-import-summary"></div>
@@ -5366,8 +5372,12 @@ function renderSettlementSheet(id){
     })
     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 
+  // Zorg dat allocations altijd een veilig object zijn.
+  if (!isPlainObject(s.allocations)) s.allocations = {};
+  if (!isPlainObject(s.manualOverride)) s.manualOverride = getDefaultSettlementManualOverride();
+
   // Zorg dat allocations bestaan (migratie of eerste keer openen)
-  if (!s.allocations){
+  if (!isFixedPeriodSettlement(s) && Object.keys(s.allocations).length === 0){
     buildAllocationsFromLogs(s);
     syncSettlementAmounts(s);
   }
