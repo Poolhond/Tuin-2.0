@@ -611,6 +611,12 @@ body:not([data-view="meer"]) #moreActionBar{
   height:20px;
 }
 
+/* Purple accent for calendar icon when fixed quarter template is active */
+.detail-edit-toggle.is-template-active{
+  color:#9b59b6;
+  border-color:color-mix(in srgb, #9b59b6 42%, transparent);
+}
+
 .client-detail-view label,
 .product-detail-view label{
   font-size:12px;
