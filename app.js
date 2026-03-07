@@ -1689,7 +1689,8 @@ const ui = {
     open: false,
     productId: null,
     qty: "1"
-  }
+  },
+  insightsPeriod: "maand"
 };
 
 // Guardrail: keep state mutations inside actions + commit.
@@ -3096,12 +3097,301 @@ function renderSettlements(){
 }
 
 
+// ---------- Inzichten helpers ----------
+
+function getInsightsPeriodRange(period, now) {
+  const d = now instanceof Date ? now : new Date();
+  if (period === "kwartaal") {
+    return { start: getQuarterStart(d), end: getQuarterEnd(d) };
+  }
+  if (period === "jaar") {
+    const start = formatLocalYMD(new Date(d.getFullYear(), 0, 1));
+    const end = formatLocalYMD(new Date(d.getFullYear() + 1, 0, 1));
+    return { start, end };
+  }
+  // default: maand
+  const start = formatLocalYMD(new Date(d.getFullYear(), d.getMonth(), 1));
+  const end = formatLocalYMD(new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  return { start, end };
+}
+
+function getSettlementsForInsights(range) {
+  return (state.settlements || []).filter(s => {
+    if (!isSettlementCalculated(s)) return false;
+    const date = s.date || "";
+    return date >= range.start && date < range.end;
+  });
+}
+
+function getLogsForInsights(range) {
+  return (state.logs || []).filter(l => {
+    const date = l.date || "";
+    return date >= range.start && date < range.end;
+  });
+}
+
+function getEarningsSummary(range) {
+  const settlements = getSettlementsForInsights(range);
+  let invoice = 0, cash = 0;
+  for (const s of settlements) {
+    const amounts = getSettlementAmounts(s);
+    invoice += amounts.invoice || 0;
+    cash += amounts.cash || 0;
+  }
+  return {
+    total: round2(invoice + cash),
+    invoice: round2(invoice),
+    cash: round2(cash)
+  };
+}
+
+function getTopCustomersByRevenue(range) {
+  const settlements = getSettlementsForInsights(range);
+  const map = new Map();
+  for (const s of settlements) {
+    const cid = s.customerId || s.templateCustomerId;
+    if (!cid) continue;
+    const amounts = getSettlementAmounts(s);
+    map.set(cid, (map.get(cid) || 0) + (amounts.invoice || 0) + (amounts.cash || 0));
+  }
+  return [...map.entries()]
+    .map(([cid, amount]) => {
+      const customer = (state.customers || []).find(c => c.id === cid);
+      return {
+        customerId: cid,
+        name: customer?.nickname || customer?.name || "?",
+        amount: round2(amount)
+      };
+    })
+    .filter(x => x.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 4);
+}
+
+function getWorkRhythmSeries(range, period) {
+  const logs = getLogsForInsights(range);
+  const MONTH_NAMES = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+
+  if (period === "kwartaal" || period === "jaar") {
+    const startDate = parseLocalYMD(range.start);
+    const endDate = parseLocalYMD(range.end);
+    if (!startDate || !endDate) return { labels: [], values: [] };
+    const months = [];
+    const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    while (cur < endDate) {
+      months.push({ year: cur.getFullYear(), month: cur.getMonth() });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    const labels = months.map(m => MONTH_NAMES[m.month]);
+    const values = months.map(({ year, month }) =>
+      logs
+        .filter(l => {
+          const d = parseLocalYMD(l.date);
+          return d && d.getFullYear() === year && d.getMonth() === month;
+        })
+        .reduce((sum, l) => sum + sumWorkMs(l), 0)
+    );
+    return { labels, values };
+  }
+
+  // maand: split into weeks of 7 days
+  const startDate = parseLocalYMD(range.start);
+  if (!startDate) return { labels: [], values: [] };
+  const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+  const weeks = [];
+  for (let d = 1; d <= daysInMonth; d += 7) {
+    weeks.push({ from: d, to: Math.min(d + 6, daysInMonth) });
+  }
+  const labels = weeks.map((_, i) => `W${i + 1}`);
+  const values = weeks.map(({ from, to }) =>
+    logs
+      .filter(l => {
+        const d = parseLocalYMD(l.date);
+        if (!d) return false;
+        const day = d.getDate();
+        return day >= from && day <= to;
+      })
+      .reduce((sum, l) => sum + sumWorkMs(l), 0)
+  );
+  return { labels, values };
+}
+
+function getFavoriteWeekday(range) {
+  const DAY_NAMES_LONG = ["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"];
+  const logs = getLogsForInsights(range);
+  const totals = new Array(7).fill(0);
+  for (const log of logs) {
+    const d = parseLocalYMD(log.date);
+    if (!d) continue;
+    totals[d.getDay()] += sumWorkMs(log);
+  }
+  const maxMs = Math.max(...totals);
+  if (maxMs === 0) return { dayIndex: -1, dayName: null, totals };
+  const maxDay = totals.indexOf(maxMs);
+  return { dayIndex: maxDay, dayName: DAY_NAMES_LONG[maxDay], totals };
+}
+
+function getAverageEarnedPerWorkday(range) {
+  const logs = getLogsForInsights(range);
+  const uniqueDays = new Set(logs.map(l => l.date).filter(Boolean));
+  if (!uniqueDays.size) return 0;
+  const earned = getEarningsSummary(range);
+  return round2(earned.total / uniqueDays.size);
+}
+
+function renderWorkRhythmSVG(series) {
+  const { labels, values } = series;
+  if (!labels.length || values.every(v => v === 0)) {
+    return '<p class="insights-empty">Geen werkdata in deze periode</p>';
+  }
+  const W = 280, H = 56;
+  const maxVal = Math.max(...values, 1);
+  const n = labels.length;
+  const pts = values.map((v, i) => ({
+    x: n === 1 ? W / 2 : (i / (n - 1)) * W,
+    y: H - Math.max(0, (v / maxVal) * (H - 8)) - 4
+  }));
+
+  const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const areaD = `${pathD} L${pts[pts.length - 1].x.toFixed(1)},${H} L${pts[0].x.toFixed(1)},${H} Z`;
+
+  const xLabels = labels.map((label, i) => {
+    const x = n === 1 ? W / 2 : (i / (n - 1)) * W;
+    return `<text x="${x.toFixed(1)}" y="${H + 15}" text-anchor="middle" class="rhythm-x-label">${esc(label)}</text>`;
+  }).join("");
+
+  return `<svg viewBox="0 0 ${W} ${H + 20}" class="rhythm-svg" preserveAspectRatio="none">
+    <path d="${areaD}" class="rhythm-area"/>
+    <path d="${pathD}" class="rhythm-line"/>
+    ${xLabels}
+  </svg>`;
+}
+
+function renderWeekdayBarsSVG(totals) {
+  const DAY_SHORT = ["zo","ma","di","wo","do","vr","za"];
+  const maxVal = Math.max(...totals, 1);
+  const barW = 18, gap = 8, H = 32;
+  const totalW = 7 * barW + 6 * gap;
+
+  const bars = totals.map((v, i) => {
+    const x = i * (barW + gap);
+    const barH = Math.max(v > 0 ? 3 : 0, (v / maxVal) * H);
+    const y = H - barH;
+    const isPeak = v > 0 && v === Math.max(...totals);
+    return `<rect x="${x}" y="${y.toFixed(1)}" width="${barW}" height="${barH.toFixed(1)}" rx="3" class="weekday-bar${isPeak ? " weekday-bar--peak" : ""}"/>
+<text x="${(x + barW / 2).toFixed(1)}" y="${H + 14}" text-anchor="middle" class="weekday-x-label">${DAY_SHORT[i]}</text>`;
+  }).join("");
+
+  return `<svg viewBox="0 0 ${totalW} ${H + 18}" class="weekday-svg">${bars}</svg>`;
+}
+
+function renderTopCustomerBars(customers) {
+  if (!customers.length) {
+    return '<p class="insights-empty">Geen omzet in deze periode</p>';
+  }
+  const maxAmt = customers[0].amount;
+  return customers.map(c => {
+    const pct = maxAmt > 0 ? Math.max(4, (c.amount / maxAmt) * 100) : 4;
+    return `<div class="ins-bar-row" data-customer-id="${esc(c.customerId)}">
+  <span class="ins-bar-name">${esc(c.name)}</span>
+  <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${pct.toFixed(1)}%"></span></span>
+  <span class="ins-bar-amount">${fmtMoney0(c.amount)}</span>
+</div>`;
+  }).join("");
+}
+
 // ---------- Meer tab ----------
 function renderMeer(){
   const el = $("#tab-meer");
+  const period = ui.insightsPeriod || "maand";
+  const now = new Date();
+  const range = getInsightsPeriodRange(period, now);
+
+  const earnings = getEarningsSummary(range);
+  const topCustomers = getTopCustomersByRevenue(range);
+  const rhythmSeries = getWorkRhythmSeries(range, period);
+  const logsInRange = getLogsForInsights(range);
+  const totalWorkMs = logsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
+  const totalHoursLabel = `${Math.round(totalWorkMs / 3600000)}u gewerkt`;
+  const favDay = getFavoriteWeekday(range);
+  const avgPerDay = getAverageEarnedPerWorkday(range);
+
+  const periodSubLabel = period === "maand" ? "laatste maand" : period === "kwartaal" ? "laatste kwartaal" : "laatste jaar";
+
+  const heroSplitHTML = (earnings.invoice > 0 || earnings.cash > 0)
+    ? `<div class="insights-hero-split">
+        <span>factuur ${fmtMoney0(earnings.invoice)}</span>
+        <span class="insights-hero-dot">·</span>
+        <span>cash ${fmtMoney0(earnings.cash)}</span>
+      </div>`
+    : "";
+
+  const favDayHTML = favDay.dayName
+    ? `<div class="insights-stat-row">Meest gewerkt: <strong>${esc(favDay.dayName)}</strong></div>`
+    : `<div class="insights-stat-row insights-empty-inline">Geen werklogs in deze periode</div>`;
+
+  const avgHTML = avgPerDay > 0
+    ? `<div class="insights-stat-row">Gemiddeld per werkdag: <strong>${fmtMoney0(avgPerDay)}</strong></div>`
+    : "";
+
   el.innerHTML = `
-    <div class="stack meer-layout"></div>
+    <div class="stack meer-layout">
+      <div class="insights-period-ctrl">
+        <button class="ipc-btn${period === "maand" ? " ipc-active" : ""}" data-period="maand">Maand</button>
+        <button class="ipc-btn${period === "kwartaal" ? " ipc-active" : ""}" data-period="kwartaal">Kwartaal</button>
+        <button class="ipc-btn${period === "jaar" ? " ipc-active" : ""}" data-period="jaar">Jaar</button>
+      </div>
+
+      <div class="insights-hero">
+        <div class="insights-hero-amount">${fmtMoney0(earnings.total)}</div>
+        <div class="insights-hero-label">verdiend</div>
+        <div class="insights-hero-period">${esc(periodSubLabel)}</div>
+        ${heroSplitHTML}
+      </div>
+
+      <div class="insights-section">
+        <div class="insights-section-title">Top klanten</div>
+        <div class="ins-bars-list">
+          ${renderTopCustomerBars(topCustomers)}
+        </div>
+      </div>
+
+      <div class="insights-section">
+        <div class="insights-section-header">
+          <div class="insights-section-title">Werkritme</div>
+          <div class="insights-section-meta">${esc(totalHoursLabel)}</div>
+        </div>
+        ${renderWorkRhythmSVG(rhythmSeries)}
+      </div>
+
+      <div class="insights-section">
+        <div class="insights-section-title">Meest gewerkt</div>
+        <div class="insights-workstats">
+          ${favDayHTML}
+          ${avgHTML}
+        </div>
+        <div class="insights-weekday-chart">
+          ${renderWeekdayBarsSVG(favDay.totals)}
+        </div>
+      </div>
+    </div>
   `;
+
+  el.querySelectorAll(".ipc-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      ui.insightsPeriod = btn.dataset.period;
+      renderMeer();
+    });
+  });
+
+  el.querySelectorAll(".ins-bar-row[data-customer-id]").forEach(row => {
+    row.addEventListener("click", () => {
+      const cid = row.dataset.customerId;
+      if (!cid) return;
+      if (ui.navStack.some(v => v.view === "customerDetail" && v.id === cid)) return;
+      pushView({ view: "customerDetail", id: cid });
+    });
+  });
 }
 
 // ---------- Sheet rendering ----------

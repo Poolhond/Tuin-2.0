@@ -2455,7 +2455,227 @@ h2{
 /* ====== REFACTOR: Meer page ====== */
 .meer-layout{
   min-height: calc(100dvh - var(--topbar-height) - var(--bottom-tabbar-height) - var(--status-tabbar-height) - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
-  padding-bottom: calc(var(--more-actionbar-height) + 8px);
+  padding-bottom: calc(var(--more-actionbar-height) + 24px);
+}
+
+/* ====== Inzichten scherm ====== */
+
+/* Periode-selector */
+.insights-period-ctrl{
+  display: flex;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+.ipc-btn{
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+.ipc-btn.ipc-active{
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+
+/* Hero blok */
+.insights-hero{
+  text-align: center;
+  padding: 20px 16px 16px;
+}
+.insights-hero-amount{
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.insights-hero-label{
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+.insights-hero-period{
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.6;
+  margin-top: 2px;
+}
+.insights-hero-split{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.insights-hero-dot{
+  opacity: 0.4;
+}
+
+/* Secties */
+.insights-section{
+  padding: 0;
+}
+.insights-section-header{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.insights-section-title{
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.insights-section-meta{
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.insights-section > .insights-section-title{
+  margin-bottom: 10px;
+}
+
+/* Top klanten bars */
+.ins-bars-list{
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.ins-bar-row{
+  display: grid;
+  grid-template-columns: 90px 1fr 54px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 6px;
+}
+.ins-bar-name{
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ins-bar-track{
+  height: 5px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ins-bar-fill{
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  min-width: 4px;
+}
+.ins-bar-amount{
+  font-size: 13px;
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Werkritme SVG */
+.rhythm-svg{
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.rhythm-area{
+  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.rhythm-line{
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.rhythm-x-label{
+  font-size: 10px;
+  fill: var(--muted);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Meest gewerkt */
+.insights-workstats{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.insights-stat-row{
+  font-size: 14px;
+  color: var(--muted);
+}
+.insights-stat-row strong{
+  color: var(--text);
+  font-weight: 600;
+}
+.insights-empty-inline{
+  font-style: italic;
+  opacity: 0.6;
+}
+.insights-weekday-chart{
+  overflow: hidden;
+}
+.weekday-svg{
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.weekday-bar{
+  fill: var(--border);
+}
+.weekday-bar--peak{
+  fill: var(--accent);
+}
+.weekday-x-label{
+  font-size: 9px;
+  fill: var(--muted);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Lege toestanden */
+.insights-empty{
+  font-size: 13px;
+  color: var(--muted);
+  opacity: 0.6;
+  margin: 0;
+  padding: 4px 0;
+  font-style: italic;
+}
+
+/* Day-mode tweaks */
+body[data-theme="day"] .ipc-btn.ipc-active{
+  box-shadow: 0 1px 3px rgba(24,33,49,.12);
+}
+body[data-theme="day"] .rhythm-area{
+  fill: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 /* Settlement new-afrekening button on Geld tab */
