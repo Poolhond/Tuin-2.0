@@ -3368,13 +3368,13 @@ function renderSettlements(){
   const notCalculatedIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2.5"></rect><path d="M8.5 8h7" stroke-linecap="round"></path><circle cx="9" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="9" cy="15.5" r="1"></circle><circle cx="12" cy="15.5" r="1"></circle><circle cx="15" cy="15.5" r="1"></circle></svg>`;
 
   const totalNotCalculatedExVat = round2(state.settlements.reduce((sum, settlement)=>{
-    if (settlement?.mode === "vast") return sum;
+    if (isFixedQuarterlySettlement(settlement)) return sum;
     if (isSettlementCalculated(settlement)) return sum;
     const totals = getSettlementTotals(settlement);
     return sum + Number(totals.invoiceTotal || 0) + Number(totals.cashTotal || 0);
   }, 0));
   const totalInvoiceOutstanding = round2(state.settlements.reduce((sum, settlement)=>{
-    if (settlement?.mode === "vast") return sum;
+    if (isFixedQuarterlySettlement(settlement)) return sum;
     if (!isSettlementCalculated(settlement)) return sum;
     const flags = getSettlementPaymentFlags(settlement);
     if (flags.invoicePaid) return sum;
@@ -3383,7 +3383,7 @@ function renderSettlements(){
     return sum + Number(pay.invoiceTotal || 0);
   }, 0));
   const totalCashOutstanding = round2(state.settlements.reduce((sum, settlement)=>{
-    if (settlement?.mode === "vast") return sum;
+    if (isFixedQuarterlySettlement(settlement)) return sum;
     if (!isSettlementCalculated(settlement)) return sum;
     const flags = getSettlementPaymentFlags(settlement);
     if (flags.cashPaid) return sum;
