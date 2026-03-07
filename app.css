@@ -2080,47 +2080,46 @@ h2{
 .settlement-header-row{
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  gap:12px;
+  justify-content:flex-end;
+  gap:8px;
   padding:0 4px 8px;
 }
 
-.settlement-header-left{
+.settlement-header-totals{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  width:100%;
+  min-width:0;
   color:var(--text-muted);
-  font-size:15px;
-  font-weight:400;
-  line-height:1.2;
-  min-width:120px;
-}
-
-.settlement-outstanding-breakdown{
-  display:grid;
-  grid-template-columns:120px 120px;
-  justify-content:end;
-  column-gap:14px;
-  color:var(--text);
-  font-size:15px;
-  font-weight:700;
+  font-size:14px;
+  font-weight:600;
 }
 
 .settlement-outstanding-col{
   display:flex;
-  justify-content:flex-end;
-}
-
-.settlement-outstanding-col.is-open{
-  color:var(--status-calculated-border);
+  justify-content:center;
+  flex:1 1 0;
+  min-width:0;
 }
 
 .settlement-outstanding-content{
-  display:inline-flex;
+  display:flex;
   align-items:center;
-  justify-content:flex-end;
-  gap:7px;
+  justify-content:center;
+  gap:5px;
+  min-width:0;
+  white-space:nowrap;
 }
 
 .settlement-outstanding-content.is-hidden{
   visibility:hidden;
+}
+
+.settlement-outstanding-content .icon{
+  width:14px;
+  height:14px;
 }
 
 .amount-chip{
