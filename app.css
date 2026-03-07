@@ -29,6 +29,8 @@
   --status-linked-border: rgba(255, 204, 0, 0.9);
   --status-calculated-border: rgba(255, 140, 0, 0.9);
   --status-paid-border: rgba(0, 160, 90, 0.9);
+  --status-fixed-bg: rgba(147, 88, 220, 0.12);
+  --status-fixed-border: rgba(147, 88, 220, 0.88);
 }
 
 body[data-theme="day"]{
@@ -146,6 +148,7 @@ body{
 .topbar.nav--linked{ background: rgba(255,204,0,.18); border-bottom:2px solid rgba(255,204,0,.92); }
 .topbar.nav--calculated{ background: rgba(255,140,0,.18); border-bottom:2px solid rgba(255,140,0,.92); }
 .topbar.nav--paid{ background: rgba(0,160,90,.18); border-bottom:2px solid rgba(0,160,90,.92); }
+.topbar.nav--fixed{ background: rgba(147,88,220,.16); border-bottom:2px solid rgba(147,88,220,.88); }
 
 .main,
 .content-area{
@@ -1304,7 +1307,8 @@ body:not([data-view="meer"]) #moreActionBar{
 
 .settlement-detail.card-accent--open,
 .settlement-detail.card-accent--calculated,
-.settlement-detail.card-accent--paid{
+.settlement-detail.card-accent--paid,
+.settlement-detail.card-accent--fixed{
   border-left:0;
 }
 
@@ -1830,6 +1834,7 @@ body:not([data-view="meer"]) #moreActionBar{
 .pill-open{ border-color: rgba(255, 188, 56, 0.3); color:var(--text); }
 .pill-calc{ border-color: rgba(255, 140, 0, 0.34); color:var(--text); }
 .pill-paid{ border-color: rgba(0, 160, 90, 0.32); color:var(--text); }
+.pill-fixed{ border-color: rgba(147, 88, 220, 0.34); color:var(--text); }
 .pill-neutral{ border-color: var(--border); }
 
 [data-view="logDetail"] .pill{
@@ -1839,10 +1844,12 @@ body:not([data-view="meer"]) #moreActionBar{
 .card-accent--open{ border-left:3px solid rgba(255,204,0,.72); }
 .card-accent--calculated{ border-left:3px solid rgba(255,140,0,.82); }
 .card-accent--paid{ border-left:3px solid rgba(0,160,90,.82); }
+.card-accent--fixed{ border-left:3px solid rgba(147,88,220,.82); }
 
 .status-linked{ background: var(--status-linked-bg); border-left:4px solid var(--status-linked-border); }
 .status-calculated{ background: var(--status-calculated-bg); border-left:4px solid var(--status-calculated-border); }
 .status-paid{ background: var(--status-paid-bg); border-left:4px solid var(--status-paid-border); }
+.status-fixed{ background: var(--status-fixed-bg); border-left:4px solid var(--status-fixed-border); }
 
 .sheet-actions{ display:flex; gap:8px; }
 
@@ -2201,6 +2208,11 @@ h2{
   border-left:4px solid var(--status-paid-border);
   padding-left:10px;
 }
+.flat-list .item.status-fixed{
+  background: var(--status-fixed-bg);
+  border-left:4px solid var(--status-fixed-border);
+  padding-left:10px;
+}
 .flat-list .item.card-accent--open{
   border-left:3px solid rgba(255,204,0,.72);
   padding-left:10px;
@@ -2211,6 +2223,10 @@ h2{
 }
 .flat-list .item.card-accent--paid{
   border-left:3px solid rgba(0,160,90,.82);
+  padding-left:10px;
+}
+.flat-list .item.card-accent--fixed{
+  border-left:3px solid rgba(147,88,220,.82);
   padding-left:10px;
 }
 
