@@ -2531,3 +2531,69 @@ h2{
   background: rgba(233,238,246,.12);
   border-color: rgba(233,238,246,.28);
 }
+
+.backup-import-summary{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.import-summary{
+  border:1px solid var(--border);
+  background:var(--surface-2);
+  border-radius:12px;
+  padding:9px 10px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.import-summary.is-fatal{
+  border-color: rgba(255,77,77,.6);
+  background: rgba(255,77,77,.06);
+}
+
+.import-summary-stats{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.import-summary-badges{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.import-badge{
+  border-radius:999px;
+  font-size:11px;
+  padding:3px 8px;
+  border:1px solid transparent;
+}
+
+.import-badge-warning{
+  background: rgba(255,195,0,.12);
+  border-color: rgba(255,195,0,.3);
+}
+
+.import-badge-fatal{
+  background: rgba(255,77,77,.12);
+  border-color: rgba(255,77,77,.45);
+}
+
+.import-summary-list{
+  margin-top:2px;
+}
+
+.import-summary-list ul{
+  margin:0 0 0 14px;
+  padding:0;
+}
+
+.import-summary-list-warning{
+  color:var(--muted);
+}
+
+.import-summary-list-fatal{
+  color:#ff8d8d;
+}

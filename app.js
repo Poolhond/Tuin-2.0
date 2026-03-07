@@ -213,6 +213,107 @@ function normalizeTheme(theme){
   return theme === "day" ? "day" : "night";
 }
 
+function isPlainObject(value){
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function asArray(value){
+  return Array.isArray(value) ? value : [];
+}
+
+function ensureString(value, fallback = ""){
+  return typeof value === "string" ? value : fallback;
+}
+
+function ensureNumber(value, fallback = 0){
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function ensureBoolean(value, fallback = false){
+  if (typeof value === "boolean") return value;
+  return fallback;
+}
+
+function ensureDateOnlyString(value, fallback = ""){
+  const str = ensureString(value, "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (!str) return fallback;
+  const dt = new Date(str);
+  return Number.isFinite(dt.getTime()) ? formatLocalYMD(dt) : fallback;
+}
+
+function makeSet(list){
+  return new Set(asArray(list));
+}
+
+function deepClone(value){
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return null;
+  }
+}
+
+function getDefaultUiState(){
+  return {
+    demoDefaultLoaded: true,
+    editLogId: null,
+    editSettlementId: null
+  };
+}
+
+function getDefaultLogbookState(){
+  return {
+    statusFilter: "all",
+    showFilters: true,
+    customerId: "all",
+    period: "all",
+    groupBy: "date",
+    sortDir: "desc",
+    isFilterSheetOpen: false
+  };
+}
+
+function getDefaultSettlementListState(){
+  return {
+    statusFilter: ["draft", "calculated", "paid"],
+    onlyInvoices: false,
+    sortKey: "date",
+    sortDir: "desc"
+  };
+}
+
+function getDefaultManualOverride(){
+  return {
+    enabled: false,
+    hoursInvoice: 0,
+    hoursCash: 0,
+    groenInvoice: 0,
+    groenCash: 0
+  };
+}
+
+function getDefaultFixedTemplate(){
+  return {
+    enabled: false,
+    periodType: "quarter",
+    laborInvoiceUnits: 0,
+    laborCashUnits: 0,
+    greenInvoiceUnits: 0,
+    greenCashUnits: 0,
+    note: ""
+  };
+}
+
+function getDefaultSettings(){
+  return {
+    hourlyRate: 38,
+    vatRate: 0.21,
+    theme: "night"
+  };
+}
+
 function syncThemeColorWithChromeBg(){
   const meta = document.querySelector('meta[name="theme-color"]');
   if (!meta) return;
@@ -351,6 +452,361 @@ function safeParseState(raw){
   } catch {
     return { ok: false };
   }
+}
+
+
+function parseBackupFile(text){
+  if (typeof text !== "string") return { ok: false, error: "Bestand kon niet worden gelezen." };
+  try {
+    return { ok: true, payload: JSON.parse(text) };
+  } catch {
+    return { ok: false, error: "Bestand bevat geen geldige JSON." };
+  }
+}
+
+function getBackupStateCandidate(payload){
+  if (isPlainObject(payload?.data)) return payload.data;
+  return payload;
+}
+
+function normalizeImportedState(rawState){
+  const stateCandidate = deepClone(rawState);
+  if (!isPlainObject(stateCandidate)) return { ok: false, state: null, warnings: [], fatalErrors: ["Bestand bevat geen geldige Tuinlog-data."] };
+
+  const warnings = [];
+  const nextState = { ...stateCandidate };
+
+  const settingsSource = isPlainObject(nextState.settings) ? nextState.settings : {};
+  nextState.settings = {
+    ...getDefaultSettings(),
+    hourlyRate: ensureNumber(settingsSource.hourlyRate, getDefaultSettings().hourlyRate),
+    vatRate: ensureNumber(settingsSource.vatRate, getDefaultSettings().vatRate),
+    theme: normalizeTheme(settingsSource.theme)
+  };
+
+  if (!Array.isArray(nextState.customers)) warnings.push("Klantenlijst ontbrak en is leeg aangevuld.");
+  if (!Array.isArray(nextState.products)) warnings.push("Productlijst ontbrak en is leeg aangevuld.");
+  if (!Array.isArray(nextState.logs)) warnings.push("Logboek ontbrak en is leeg aangevuld.");
+  if (!Array.isArray(nextState.settlements)) warnings.push("Afrekeningen ontbraken en zijn leeg aangevuld.");
+
+  nextState.customers = asArray(nextState.customers).map((customer)=>{
+    const tpl = isPlainObject(customer?.fixedSettlementTemplate) ? customer.fixedSettlementTemplate : {};
+    return {
+      id: ensureString(customer?.id, ""),
+      nickname: ensureString(customer?.nickname, ""),
+      name: ensureString(customer?.name, ""),
+      address: ensureString(customer?.address, ""),
+      createdAt: ensureNumber(customer?.createdAt, now()),
+      demo: ensureBoolean(customer?.demo, false),
+      fixedSettlementTemplate: {
+        ...getDefaultFixedTemplate(),
+        enabled: ensureBoolean(tpl.enabled, false),
+        periodType: tpl.periodType === "quarter" ? "quarter" : "quarter",
+        laborInvoiceUnits: Math.max(0, round2(ensureNumber(tpl.laborInvoiceUnits, 0))),
+        laborCashUnits: Math.max(0, round2(ensureNumber(tpl.laborCashUnits, 0))),
+        greenInvoiceUnits: Math.max(0, round2(ensureNumber(tpl.greenInvoiceUnits, 0))),
+        greenCashUnits: Math.max(0, round2(ensureNumber(tpl.greenCashUnits, 0))),
+        note: ensureString(tpl.note, "")
+      }
+    };
+  });
+
+  nextState.products = asArray(nextState.products).map((product)=>({
+    id: ensureString(product?.id, ""),
+    name: ensureString(product?.name, ""),
+    unit: ensureString(product?.unit, "keer"),
+    unitPrice: round2(ensureNumber(product?.unitPrice, 0)),
+    vatRate: ensureNumber(product?.vatRate, nextState.settings.vatRate),
+    defaultBucket: product?.defaultBucket === "cash" ? "cash" : "invoice",
+    demo: ensureBoolean(product?.demo, false)
+  }));
+
+  const customerIds = makeSet(nextState.customers.map(c => c.id).filter(Boolean));
+  const productIds = makeSet(nextState.products.map(p => p.id).filter(Boolean));
+
+  nextState.logs = asArray(nextState.logs).map((log)=>{
+    const createdAt = ensureNumber(log?.createdAt, now());
+    const normalizedDate = ensureDateOnlyString(log?.date, formatLocalYMD(createdAt) || todayISO());
+    const normalizedSegments = asArray(log?.segments).map((segment)=>{
+      const start = ensureNumber(segment?.start, createdAt);
+      const endRaw = segment?.end == null ? null : ensureNumber(segment?.end, start);
+      const end = endRaw == null ? null : Math.max(start, endRaw);
+      return {
+        id: ensureString(segment?.id, uid()),
+        type: "work",
+        start,
+        end
+      };
+    });
+
+    const maxSegmentEnd = normalizedSegments.reduce((max, seg)=>{
+      const candidate = seg.end == null ? seg.start : seg.end;
+      return Math.max(max, ensureNumber(candidate, createdAt));
+    }, createdAt);
+    const closedAtBase = log?.closedAt == null ? maxSegmentEnd : ensureNumber(log?.closedAt, maxSegmentEnd);
+    // Strategie: closedAt wordt defensief verhoogd naar max segment-einde, zo bewaren we log-geschiedenis.
+    const closedAt = Math.max(createdAt, closedAtBase, maxSegmentEnd);
+
+    const cleanedItems = [];
+    for (const item of asArray(log?.items)){
+      const productId = ensureString(item?.productId, "");
+      if (!productIds.has(productId)){
+        warnings.push(`Log ${ensureString(log?.id, "(zonder id)")} bevatte een verwijderd product en is opgeschoond.`);
+        continue;
+      }
+      cleanedItems.push({
+        id: ensureString(item?.id, uid()),
+        productId,
+        qty: Math.max(0, round2(ensureNumber(item?.qty, 0))),
+        unitPrice: round2(ensureNumber(item?.unitPrice, 0)),
+        note: ensureString(item?.note, "")
+      });
+    }
+
+    if (!customerIds.has(ensureString(log?.customerId, ""))){
+      warnings.push(`Log ${ensureString(log?.id, "(zonder id)")} verwijst naar een onbekende klant.`);
+    }
+
+    return {
+      id: ensureString(log?.id, ""),
+      customerId: ensureString(log?.customerId, ""),
+      date: normalizedDate,
+      createdAt,
+      closedAt,
+      note: ensureString(log?.note, ""),
+      segments: normalizedSegments,
+      items: cleanedItems,
+      demo: ensureBoolean(log?.demo, false)
+    };
+  });
+
+  const logIds = makeSet(nextState.logs.map(l => l.id).filter(Boolean));
+
+  nextState.settlements = asArray(nextState.settlements).map((settlement)=>{
+    const date = ensureDateOnlyString(settlement?.date, todayISO());
+    const isCalculated = ensureBoolean(settlement?.isCalculated, false);
+    const manualOverrideSrc = isPlainObject(settlement?.manualOverride) ? settlement.manualOverride : {};
+    const manualOverride = {
+      ...getDefaultManualOverride(),
+      enabled: ensureBoolean(manualOverrideSrc.enabled, false),
+      hoursInvoice: round2(ensureNumber(manualOverrideSrc.hoursInvoice, 0)),
+      hoursCash: round2(ensureNumber(manualOverrideSrc.hoursCash, 0)),
+      groenInvoice: round2(ensureNumber(manualOverrideSrc.groenInvoice, 0)),
+      groenCash: round2(ensureNumber(manualOverrideSrc.groenCash, 0))
+    };
+
+    const kind = settlement?.kind === "fixed-period" ? "fixed-period" : ensureString(settlement?.kind, "");
+    const fixedPeriodType = settlement?.fixedPeriodType === "quarter" ? "quarter" : "quarter";
+    let periodStart = ensureDateOnlyString(settlement?.periodStart, "");
+    let periodEnd = ensureDateOnlyString(settlement?.periodEnd, "");
+    if (kind === "fixed-period"){
+      if (!periodStart) periodStart = getQuarterStart(date);
+      if (!periodEnd) periodEnd = getQuarterEnd(date);
+    }
+
+    let status = ensureString(settlement?.status, "draft");
+    let invoiceAmount = round2(ensureNumber(settlement?.invoiceAmount, 0));
+    let cashAmount = round2(ensureNumber(settlement?.cashAmount, 0));
+    let calculatedAt = settlement?.calculatedAt == null ? null : ensureNumber(settlement?.calculatedAt, null);
+
+    if (!isCalculated){
+      if (invoiceAmount > 0 || cashAmount > 0){
+        warnings.push(`Afrekening ${ensureString(settlement?.id, "(zonder id)")} had bedragen zonder berekening en is hersteld.`);
+      }
+      invoiceAmount = 0;
+      cashAmount = 0;
+      calculatedAt = null;
+      if (status === "paid"){
+        status = "draft";
+        warnings.push(`Afrekening ${ensureString(settlement?.id, "(zonder id)")} stond onterecht op betaald en is teruggezet.`);
+      }
+    } else {
+      if (!("calculated" === status || "paid" === status)) status = "calculated";
+      const invoicePaid = ensureBoolean(settlement?.invoicePaid, false);
+      const cashPaid = ensureBoolean(settlement?.cashPaid, false);
+      if (status === "paid" && !invoicePaid && !cashPaid){
+        status = "calculated";
+        warnings.push(`Afrekening ${ensureString(settlement?.id, "(zonder id)")} stond op betaald zonder betaalstatus en is teruggezet.`);
+      }
+    }
+
+    const allocations = isPlainObject(settlement?.allocations) ? settlement.allocations : {};
+    if (!isPlainObject(settlement?.allocations)) warnings.push(`Afrekening ${ensureString(settlement?.id, "(zonder id)")} had geen geldige verdeling en is veilig hersteld.`);
+
+    const validLogIds = asArray(settlement?.logIds).filter((id)=>{
+      if (!logIds.has(id)){
+        warnings.push(`Afrekening ${ensureString(settlement?.id, "(zonder id)")} verwees naar een verwijderde log.`);
+        return false;
+      }
+      return true;
+    });
+
+    return {
+      id: ensureString(settlement?.id, ""),
+      customerId: ensureString(settlement?.customerId, ""),
+      date,
+      createdAt: ensureNumber(settlement?.createdAt, now()),
+      logIds: validLogIds,
+      lines: asArray(settlement?.lines),
+      allocations: kind === "fixed-period" ? {} : allocations,
+      status,
+      markedCalculated: ensureBoolean(settlement?.markedCalculated, isCalculated),
+      isCalculated,
+      calculatedAt,
+      invoiceAmount,
+      cashAmount,
+      invoicePaid: ensureBoolean(settlement?.invoicePaid, false),
+      cashPaid: ensureBoolean(settlement?.cashPaid, false),
+      invoiceNumber: settlement?.invoiceNumber == null ? null : ensureString(settlement?.invoiceNumber, ""),
+      invoiceDate: ensureDateOnlyString(settlement?.invoiceDate, date),
+      invoiceLocked: ensureBoolean(settlement?.invoiceLocked, false),
+      manualOverride,
+      kind,
+      fixedPeriodType,
+      templateCustomerId: ensureString(settlement?.templateCustomerId, ensureString(settlement?.customerId, "")),
+      periodStart,
+      periodEnd,
+      dateOverride: ensureDateOnlyString(settlement?.dateOverride, ""),
+      note: ensureString(settlement?.note, ""),
+      demo: ensureBoolean(settlement?.demo, false)
+    };
+  });
+
+  nextState.ui = { ...getDefaultUiState(), ...(isPlainObject(nextState.ui) ? nextState.ui : {}) };
+  nextState.logbook = { ...getDefaultLogbookState(), ...(isPlainObject(nextState.logbook) ? nextState.logbook : {}) };
+  nextState.settlementList = { ...getDefaultSettlementListState(), ...(isPlainObject(nextState.settlementList) ? nextState.settlementList : {}) };
+
+  const normalizedLogIds = makeSet(nextState.logs.map(l => l.id).filter(Boolean));
+  const normalizedSettlementIds = makeSet(nextState.settlements.map(s => s.id).filter(Boolean));
+  if (!normalizedLogIds.has(nextState.activeLogId)) nextState.activeLogId = null;
+  if (!normalizedLogIds.has(nextState.ui.editLogId)) nextState.ui.editLogId = null;
+  if (!normalizedSettlementIds.has(nextState.ui.editSettlementId)) nextState.ui.editSettlementId = null;
+
+  return { ok: true, state: nextState, warnings, fatalErrors: [] };
+}
+
+function validateBackupPayload(payload){
+  const fatalErrors = [];
+  const warnings = [];
+  const stateCandidate = getBackupStateCandidate(payload);
+
+  if (!isPlainObject(stateCandidate)){
+    fatalErrors.push("Bestand bevat geen geldige Tuinlog-data.");
+    return { ok: false, fatalErrors, warnings, stats: { customers: 0, products: 0, logs: 0, settlements: 0 } };
+  }
+
+  const rawCustomers = asArray(stateCandidate.customers);
+  const rawProducts = asArray(stateCandidate.products);
+  const rawLogs = asArray(stateCandidate.logs);
+  const rawSettlements = asArray(stateCandidate.settlements);
+
+  const seen = { customer: new Set(), product: new Set(), log: new Set(), settlement: new Set() };
+  for (const c of rawCustomers){
+    const id = ensureString(c?.id, "");
+    if (!id) fatalErrors.push("Klant zonder ID gevonden.");
+    else if (seen.customer.has(id)) fatalErrors.push(`Dubbele klant-ID gevonden: ${id}.`);
+    else seen.customer.add(id);
+  }
+  for (const p of rawProducts){
+    const id = ensureString(p?.id, "");
+    if (!id) fatalErrors.push("Product zonder ID gevonden.");
+    else if (seen.product.has(id)) fatalErrors.push(`Dubbele product-ID gevonden: ${id}.`);
+    else seen.product.add(id);
+  }
+  for (const l of rawLogs){
+    const id = ensureString(l?.id, "");
+    if (!id) fatalErrors.push("Log zonder ID gevonden.");
+    else if (seen.log.has(id)) fatalErrors.push(`Dubbele log-ID gevonden: ${id}.`);
+    else seen.log.add(id);
+  }
+  for (const s of rawSettlements){
+    const id = ensureString(s?.id, "");
+    if (!id) fatalErrors.push("Afrekening zonder ID gevonden.");
+    else if (seen.settlement.has(id)) fatalErrors.push(`Dubbele afrekening-ID gevonden: ${id}.`);
+    else seen.settlement.add(id);
+  }
+
+  const customerIds = seen.customer;
+  const productIds = seen.product;
+  const logIds = seen.log;
+
+  for (const log of rawLogs){
+    if (!customerIds.has(ensureString(log?.customerId, ""))){
+      warnings.push(`Log ${ensureString(log?.id, "(zonder id)")} hoort bij een onbekende klant.`);
+    }
+    for (const item of asArray(log?.items)){
+      if (!productIds.has(ensureString(item?.productId, ""))){
+        warnings.push(`Log ${ensureString(log?.id, "(zonder id)")} bevat een onbekend product.`);
+      }
+    }
+  }
+
+  for (const settlement of rawSettlements){
+    if (!customerIds.has(ensureString(settlement?.customerId, ""))){
+      warnings.push(`Afrekening ${ensureString(settlement?.id, "(zonder id)")} hoort bij een onbekende klant.`);
+    }
+    for (const logId of asArray(settlement?.logIds)){
+      if (!logIds.has(logId)) warnings.push(`Afrekening ${ensureString(settlement?.id, "(zonder id)")} verwijst naar een onbekende log.`);
+    }
+  }
+
+  const result = {
+    ok: fatalErrors.length === 0,
+    fatalErrors,
+    warnings,
+    stats: {
+      customers: rawCustomers.length,
+      products: rawProducts.length,
+      logs: rawLogs.length,
+      settlements: rawSettlements.length
+    }
+  };
+  return result;
+}
+
+function summarizeImportValidation(result){
+  const summary = {
+    counts: result?.stats || { customers: 0, products: 0, logs: 0, settlements: 0 },
+    warningsCount: asArray(result?.warnings).length,
+    fatalCount: asArray(result?.fatalErrors).length,
+    canImport: Boolean(result?.ok),
+    userMessage: "Backup gecontroleerd"
+  };
+  if (!summary.canImport) summary.userMessage = "Deze backup kan niet geïmporteerd worden";
+  else if (summary.warningsCount > 0) summary.userMessage = "Sommige gegevens waren onvolledig en zijn veilig aangevuld";
+  return summary;
+}
+
+function safeReplaceAppState(nextState){
+  const prepared = validateAndRepairState(migrateState(deepClone(nextState)));
+  ensureUIPreferences(prepared);
+  sanitizeUiSelectionReferences(prepared);
+  ensureUniqueCustomerNicknames(prepared);
+  ensureCoreProducts(prepared);
+  syncAllFixedQuarterSettlements(prepared);
+  state = prepared;
+  saveState(state);
+  render();
+}
+
+function importBackupPayload(payload){
+  const validation = validateBackupPayload(payload);
+  const stateCandidate = getBackupStateCandidate(payload);
+  const normalization = normalizeImportedState(stateCandidate);
+
+  const combined = {
+    ok: validation.ok && normalization.ok,
+    fatalErrors: [...validation.fatalErrors, ...normalization.fatalErrors],
+    warnings: [...validation.warnings, ...normalization.warnings],
+    stats: validation.stats
+  };
+
+  if (combined.fatalErrors.length){
+    combined.ok = false;
+    return { ...combined, imported: false, state: null, summary: summarizeImportValidation(combined) };
+  }
+
+  return { ...combined, imported: false, state: normalization.state, summary: summarizeImportValidation(combined) };
 }
 
 function migrateState(st){
@@ -554,6 +1010,7 @@ function loadState(){
   }
 
   ensureUIPreferences(st);
+  sanitizeUiSelectionReferences(st);
 
   // Fixed quarter settlements: ensure + sync for all active templates at load time
   syncAllFixedQuarterSettlements(st);
@@ -610,6 +1067,17 @@ function demoDateISO(daysBack){
   return d.toISOString().slice(0,10);
 }
 
+function sanitizeUiSelectionReferences(st){
+  if (!st || !isPlainObject(st)) return;
+  st.ui = isPlainObject(st.ui) ? st.ui : getDefaultUiState();
+  const logIds = makeSet(asArray(st.logs).map(l => l?.id).filter(Boolean));
+  const settlementIds = makeSet(asArray(st.settlements).map(s => s?.id).filter(Boolean));
+
+  if (!logIds.has(st.activeLogId)) st.activeLogId = null;
+  if (!logIds.has(st.ui.editLogId)) st.ui.editLogId = null;
+  if (!settlementIds.has(st.ui.editSettlementId)) st.ui.editSettlementId = null;
+}
+
 function ensureStateSafetyAfterMutations(st){
   const logIds = new Set(st.logs.map(l => l.id));
   for (const s of st.settlements){
@@ -628,13 +1096,7 @@ function settlementTotals(settlement){
 }
 
 function getDefaultSettlementManualOverride(){
-  return {
-    enabled: false,
-    hoursInvoice: 0,
-    hoursCash: 0,
-    groenInvoice: 0,
-    groenCash: 0
-  };
+  return getDefaultManualOverride();
 }
 
 function getSettlementManualOverride(settlement){
@@ -651,19 +1113,11 @@ function getSettlementManualOverride(settlement){
 }
 
 function getSettlementCalcMode(settlement){
-  return (settlement?.manualOverride && settlement.manualOverride.enabled) ? "manual" : "logs";
+  return getSettlementManualOverride(settlement).enabled ? "manual" : "logs";
 }
 
 function getDefaultFixedSettlementTemplate(){
-  return {
-    enabled: false,
-    periodType: "quarter",
-    laborInvoiceUnits: 0,
-    laborCashUnits: 0,
-    greenInvoiceUnits: 0,
-    greenCashUnits: 0,
-    note: ""
-  };
+  return getDefaultFixedTemplate();
 }
 
 function getCustomerFixedTemplate(customer){
@@ -760,8 +1214,8 @@ function ensureCurrentFixedQuarterSettlement(st, customer){
 // Sync manual override amounts for a fixed-period settlement without full state dependency.
 // Needed during init when `state` is not yet available as a global.
 function syncSettlementAmountsFromManualOverride(settlement, sourceState){
-  if (!settlement?.manualOverride?.enabled) return;
-  const manual = settlement.manualOverride;
+  const manual = getSettlementManualOverride(settlement);
+  if (!manual.enabled) return;
   const settings = sourceState?.settings || {};
   const products = sourceState?.products || [];
 
@@ -3107,27 +3561,48 @@ function _attachSettingsHandlers(){
     if (!feedbackEl) return;
     feedbackEl.textContent = text || "";
     feedbackEl.classList.remove("is-error", "is-success");
-    if (text){
-      feedbackEl.classList.add(type === "error" ? "is-error" : "is-success");
-    }
+    if (text) feedbackEl.classList.add(type === "error" ? "is-error" : "is-success");
   };
 
-  const parseBackupFile = (file)=> new Promise((resolve, reject)=>{
+  const setImportSummary = (result)=>{
+    state.ui = state.ui || {};
+    state.ui.importSummary = result || null;
+    const host = $("#backupImportSummary");
+    if (!host) return;
+    if (!result){
+      host.innerHTML = "";
+      return;
+    }
+
+    const summary = summarizeImportValidation(result);
+    const warnings = asArray(result.warnings);
+    const fatals = asArray(result.fatalErrors);
+    const warningPreview = warnings.slice(0, 3);
+    const fatalPreview = fatals.slice(0, 3);
+    const warningOverflow = Math.max(0, warnings.length - warningPreview.length);
+    const fatalOverflow = Math.max(0, fatals.length - fatalPreview.length);
+    host.innerHTML = `
+      <div class="import-summary ${summary.canImport ? "is-ok" : "is-fatal"}">
+        <div class="item-title">${esc(summary.userMessage)}</div>
+        <div class="import-summary-stats mono">${summary.counts.customers} k · ${summary.counts.products} p · ${summary.counts.logs} l · ${summary.counts.settlements} a</div>
+        <div class="import-summary-badges">
+          <span class="import-badge import-badge-warning">Herstelbaar ${warnings.length}</span>
+          <span class="import-badge import-badge-fatal">Blokkerend ${fatals.length}</span>
+        </div>
+        ${warningPreview.length ? `<div class="small import-summary-list import-summary-list-warning"><ul>${warningPreview.map(w => `<li>${esc(w)}</li>`).join("")}${warningOverflow ? `<li>+${warningOverflow} meer</li>` : ""}</ul></div>` : ""}
+        ${fatalPreview.length ? `<div class="small import-summary-list import-summary-list-fatal"><ul>${fatalPreview.map(f => `<li>${esc(f)}</li>`).join("")}${fatalOverflow ? `<li>+${fatalOverflow} meer</li>` : ""}</ul></div>` : ""}
+      </div>
+    `;
+  };
+
+  const readFileText = (file)=> new Promise((resolve, reject)=>{
     const reader = new FileReader();
     reader.onload = ()=> resolve(String(reader.result || ""));
     reader.onerror = ()=> reject(new Error("Bestand kon niet worden gelezen."));
     reader.readAsText(file);
   });
 
-  const validateBackupPayload = (payload)=>{
-    if (!payload || typeof payload !== "object") return "Ongeldige backup: JSON-object ontbreekt.";
-    if (payload.version !== STORAGE_KEY) return "Ongeldige backup-versie. Alleen backups van TuinLog MVP v1 zijn toegestaan.";
-    if (!payload.data || typeof payload.data !== "object") return "Ongeldige backup: data-object ontbreekt.";
-    const required = ["customers", "logs", "settlements", "settings"];
-    const missing = required.filter((key)=> !(key in payload.data));
-    if (missing.length) return `Ongeldige backup: ontbrekende velden (${missing.join(", ")}).`;
-    return "";
-  };
+  let pendingImportState = null;
 
   $("#saveSettings").onclick = ()=>{
     const hourly = Number(String($("#settingHourly").value).replace(",", ".") || "0");
@@ -3198,6 +3673,30 @@ function _attachSettingsHandlers(){
   };
 
   $("#backupImportBtn").onclick = ()=>{
+    const result = state.ui?.importSummary;
+    if (result?.ok && pendingImportState){
+      openConfirmModal({
+        title: "Backup herstellen",
+        message: "Weet je zeker dat je alle huidige data wilt vervangen?",
+        confirmText: "Herstellen",
+        cancelText: "Annuleren",
+      }).then((confirmed)=>{
+        if (!confirmed) return;
+        try {
+          safeReplaceAppState(pendingImportState);
+          state.ui.importSummary = null;
+          setImportSummary(null);
+          setBackupFeedback("success", `Import klaar. ${asArray(result.warnings).length} kleine herstelpunten verwerkt.`);
+          console.info("[backup-import] afgerond", result);
+        } catch (error){
+          console.error("[backup-import] kon state niet veilig vervangen", error);
+          setBackupFeedback("error", "Import mislukt: gegevens konden niet veilig worden toegepast.");
+        } finally {
+          pendingImportState = null;
+        }
+      });
+      return;
+    }
     $("#backupImportInput")?.click();
   };
 
@@ -3206,39 +3705,38 @@ function _attachSettingsHandlers(){
     if (!file) return;
 
     try {
-      const text = await parseBackupFile(file);
-      let payload = null;
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        setBackupFeedback("error", "Import mislukt: bestand bevat geen geldige JSON.");
-        event.target.value = "";
+      const text = await readFileText(file);
+      const parsed = parseBackupFile(text);
+      if (!parsed.ok){
+        setImportSummary(null);
+        pendingImportState = null;
+        setBackupFeedback("error", `Import mislukt: ${parsed.error}`);
         return;
       }
 
-      const validationError = validateBackupPayload(payload);
-      if (validationError){
-        setBackupFeedback("error", validationError);
-        event.target.value = "";
+      const result = importBackupPayload(parsed.payload);
+      if (result.warnings.length) console.warn("[backup-import] warnings", result.warnings);
+      if (result.fatalErrors.length) console.error("[backup-import] fatals", result.fatalErrors);
+
+      setImportSummary(result);
+      pendingImportState = result.state;
+
+      if (!result.ok){
+        pendingImportState = null;
+        setBackupFeedback("error", "Deze backup kan niet geïmporteerd worden.");
         return;
       }
 
-      const exportedAt = payload.exportedAt || "onbekende datum";
-      const confirmed = await openConfirmModal({
-        title: "Backup herstellen",
-        message: `Weet je zeker dat je alle huidige data wilt vervangen door de backup van ${exportedAt}?`,
-        confirmText: "Herstellen",
-        cancelText: "Annuleren",
-      });
-      if (!confirmed){
-        setBackupFeedback("error", "Herstel geannuleerd.");
-        event.target.value = "";
-        return;
+      const warningCount = result.warnings.length;
+      if (warningCount){
+        setBackupFeedback("success", `Backup gecontroleerd. ${warningCount} kleine herstellingen gedaan. Tik opnieuw op importeren.`);
+      } else {
+        setBackupFeedback("success", "Backup gecontroleerd. Tik opnieuw op importeren.");
       }
-
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.data));
-      location.reload();
-    } catch {
+    } catch (error) {
+      console.error("[backup-import] onverwachte fout", error);
+      setImportSummary(null);
+      pendingImportState = null;
       setBackupFeedback("error", "Import mislukt: kon het backup-bestand niet verwerken.");
     } finally {
       event.target.value = "";
@@ -3273,7 +3771,10 @@ function _attachSettingsHandlers(){
     localStorage.removeItem(STORAGE_KEY);
     location.reload();
   };
+
+  setImportSummary(state.ui?.importSummary || null);
 }
+
 
 function renderSettlements(){
   const el = $("#tab-settlements");
@@ -3702,6 +4203,7 @@ function renderSettingsSheet(){
           <button class="btn" id="backupImportBtn">Backup importeren</button>
           <input id="backupImportInput" type="file" accept=".json,application/json" class="hidden" />
         </div>
+        <div id="backupImportSummary" class="backup-import-summary"></div>
         <button class="btn danger" id="backupWipeBtn">Alles wissen</button>
         <div class="meta-text" style="color:rgba(255,77,77,.92);">Let op: hiermee verwijder je alle klanten, werklogs en facturen permanent.</div>
         <div class="meta-text backup-feedback ${state.ui?.backupFeedback?.type === "error" ? "is-error" : "is-success"}" id="backupFeedback">${esc(state.ui?.backupFeedback?.text || "")}</div>
@@ -4870,8 +5372,12 @@ function renderSettlementSheet(id){
     })
     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 
+  // Zorg dat allocations altijd een veilig object zijn.
+  if (!isPlainObject(s.allocations)) s.allocations = {};
+  if (!isPlainObject(s.manualOverride)) s.manualOverride = getDefaultSettlementManualOverride();
+
   // Zorg dat allocations bestaan (migratie of eerste keer openen)
-  if (!s.allocations){
+  if (!isFixedPeriodSettlement(s) && Object.keys(s.allocations).length === 0){
     buildAllocationsFromLogs(s);
     syncSettlementAmounts(s);
   }
