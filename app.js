@@ -542,7 +542,13 @@ function loadState(){
     };
     syncSettlementDatesFromLogs(s, st);
     ensureSettlementInvoiceDefaults(s);
-    syncSettlementAmounts(s);
+    // Gebruik syncSettlementAmountsFromManualOverride (met lokale st) voor manual-override
+    // settlements zodat de globale `state` variabele nog niet nodig is (TDZ vermijden).
+    if (s.manualOverride?.enabled) {
+      syncSettlementAmountsFromManualOverride(s, st);
+    } else {
+      syncSettlementAmounts(s);
+    }
     if (!("demo" in s)) s.demo = false;
   }
   // log fields
@@ -556,7 +562,11 @@ function loadState(){
   ensureUIPreferences(st);
 
   // Fixed quarter settlements: ensure + sync for all active templates at load time
-  syncAllFixedQuarterSettlements(st);
+  try {
+    syncAllFixedQuarterSettlements(st);
+  } catch(e) {
+    console.error("[loadState] syncAllFixedQuarterSettlements mislukt:", e);
+  }
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
 
@@ -1490,11 +1500,14 @@ function getLogVisualState(log){
 }
 function getManualOverrideTotals(settlement){
   const manual = getSettlementManualOverride(settlement);
-  const workProduct = preferredWorkProduct();
-  const greenProduct = findGreenProduct();
-  const hourlyRate = Number(workProduct?.unitPrice ?? state?.settings?.hourlyRate ?? 0);
+  // try-catch vereist: state kan nog in TDZ zijn wanneer aangeroepen vanuit loadState().
+  let workProduct = null, greenProduct = null, stateSettings = null;
+  try { workProduct = preferredWorkProduct(); } catch(e) { /* TDZ */ }
+  try { greenProduct = findGreenProduct(); } catch(e) { /* TDZ */ }
+  try { stateSettings = state?.settings; } catch(e) { /* TDZ */ }
+  const hourlyRate = Number(workProduct?.unitPrice ?? stateSettings?.hourlyRate ?? 0);
   const greenRate = Number(greenProduct?.unitPrice ?? 0);
-  const vatRate = Number(state?.settings?.vatRate ?? 0.21);
+  const vatRate = Number(stateSettings?.vatRate ?? 0.21);
 
   const allocations = {
     work: {
@@ -2090,9 +2103,19 @@ if (!state.ui?.demoDefaultLoaded){
 function commit(){
   state = validateAndRepairState(state);
   // Sync fixed quarter settlements on every commit (idempotent, safe to run repeatedly)
-  syncAllFixedQuarterSettlements(state);
+  try {
+    syncAllFixedQuarterSettlements(state);
+  } catch(e) {
+    console.error("[commit] syncAllFixedQuarterSettlements mislukt:", e);
+  }
   saveState(state);
-  render();
+  try {
+    render();
+  } catch(e) {
+    console.error("[commit] render mislukt:", e);
+    // Sla toch op zodat state niet verloren gaat bij een render-fout
+    saveState(state);
+  }
 }
 
 const actions = {
