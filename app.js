@@ -460,23 +460,6 @@ function ensureCoreProducts(st){
   }
 }
 
-function ensureDemoProducts(st){
-  st.products = st.products || [];
-  const demoExtras = [
-    { name:"Meststof", unit:"zak", unitPrice:12.5, vatRate:0.21, defaultBucket:"invoice" },
-    { name:"Hakselhout", unit:"m³", unitPrice:35, vatRate:0.21, defaultBucket:"invoice" },
-    { name:"Anti-worteldoek", unit:"rol", unitPrice:18, vatRate:0.21, defaultBucket:"invoice" },
-    { name:"Transport", unit:"rit", unitPrice:15, vatRate:0.21, defaultBucket:"invoice" },
-    { name:"Machine huur", unit:"dag", unitPrice:45, vatRate:0.21, defaultBucket:"invoice" },
-  ];
-  for (const demoExtra of demoExtras){
-    const exists = st.products.find(p => (p.name || "").trim().toLowerCase() === demoExtra.name.toLowerCase());
-    if (!exists){
-      st.products.push({ id: uid(), ...demoExtra, demo: true });
-    }
-  }
-}
-
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw){
@@ -506,7 +489,6 @@ function loadState(){
   ensureUIPreferences(st);
 
   for (const c of st.customers){
-    if (!("demo" in c)) c.demo = false;
     c.fixedSettlementTemplate = {
       ...getDefaultFixedSettlementTemplate(),
       ...(c.fixedSettlementTemplate || {}),
@@ -520,10 +502,6 @@ function loadState(){
     };
   }
   ensureUniqueCustomerNicknames(st);
-  for (const p of st.products){
-    if (!("demo" in p)) p.demo = false;
-  }
-
   ensureCoreProducts(st);
 
   // settlement status default
@@ -570,14 +548,12 @@ function loadState(){
     } else {
       syncSettlementAmounts(s);
     }
-    if (!("demo" in s)) s.demo = false;
   }
   // log fields
   for (const l of st.logs){
     if (!l.segments) l.segments = [];
     if (!l.items) l.items = [];
     if (!l.date) l.date = todayISO();
-    if (!("demo" in l)) l.demo = false;
   }
 
   ensureUIPreferences(st);
@@ -595,14 +571,6 @@ function loadState(){
 }
 
 function saveState(nextState = state){ localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState)); }
-
-const DEMO = {
-  firstNames: ["Jan", "Els", "Koen", "Sofie", "Lotte", "Tom", "An", "Pieter", "Nina", "Wim", "Bram", "Fien", "Arne", "Joke", "Raf", "Mira", "Tine", "Milan"],
-  lastNames: ["Peeters", "Janssens", "Van den Broeck", "Wouters", "Claes", "Lambrechts", "Maes", "Vermeulen", "Hermans", "Goossens", "De Smet", "Schreurs", "Leclercq", "Van Acker", "Bogaert", "Pieters", "Nijs", "Declercq"],
-  streets: ["Naamsesteenweg", "Tiensevest", "Diestsesteenweg", "Tervuursesteenweg", "Geldenaaksebaan", "Kapucijnenvoer", "Ridderstraat", "Brusselsestraat", "Parkstraat", "Molenstraat", "Blandenstraat"],
-  zones: ["Heverlee", "Kessel-Lo", "Wilsele", "Herent", "Leuven", "Wijgmaal", "Haasrode", "Bertem"],
-  nicknames: ["Jules", "Noor", "Milo", "Tess", "Lina", "Bram", "Nina", "Otis", "Fien", "Wout", "Lotte", "Ibe", "Mats", "Rosa", "Yara", "Lio", "Cis", "Mona", "Sem", "Bo"]
-};
 
 function normalizeNickname(value){
   return String(value || "").trim().toLowerCase();
@@ -630,15 +598,6 @@ function ensureUniqueCustomerNicknames(st){
     customer.nickname = candidate;
     used.add(normalizeNickname(candidate));
   }
-}
-
-function ri(min, max){ return Math.floor(Math.random() * (max - min + 1)) + min; }
-function rf(min, max){ return Math.random() * (max - min) + min; }
-function pick(arr){ return arr[ri(0, arr.length - 1)]; }
-function demoDateISO(daysBack){
-  const d = new Date();
-  d.setDate(d.getDate() - daysBack);
-  return d.toISOString().slice(0,10);
 }
 
 function ensureStateSafetyAfterMutations(st){
@@ -872,420 +831,6 @@ function syncAllFixedQuarterSettlements(st){
       syncFixedQuarterSettlementLogs(currentSettlement, st);
     }
   }
-}
-
-// ---------- Demo seeding (deterministic, period-based, realistic chronology) ----------
-function createSeededRandom(seed = "demo-v2"){
-  let h = 1779033703 ^ String(seed).length;
-  for (let i = 0; i < String(seed).length; i++){
-    h = Math.imul(h ^ String(seed).charCodeAt(i), 3432918353);
-    h = (h << 13) | (h >>> 19);
-  }
-  return function(){
-    h = Math.imul(h ^ (h >>> 16), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    const t = (h ^= h >>> 16) >>> 0;
-    return t / 4294967296;
-  };
-}
-
-function seedDemoPeriod(st, { months = 24, force = false, seed = "demo-v2" } = {}){
-  const hasDemo = (st.customers||[]).some(c => c.demo) || (st.logs||[]).some(l => l.demo) || (st.settlements||[]).some(s => s.demo);
-  if (!force && hasDemo) return false;
-
-  ensureCoreProducts(st);
-  ensureDemoProducts(st);
-  const workProduct = st.products.find(p => (p.name||"").trim().toLowerCase() === "werk");
-  const greenProduct = st.products.find(p => (p.name||"").trim().toLowerCase() === "groen");
-  if (!workProduct || !greenProduct) return false;
-
-  const rnd = createSeededRandom(`${seed}|${months}`);
-  const sri = (min, max)=> Math.floor(rnd() * (max - min + 1)) + min;
-  const srf = (min, max)=> rnd() * (max - min) + min;
-  const spick = (arr)=> arr[sri(0, arr.length - 1)];
-  const chance = (p)=> rnd() < p;
-
-  const formatISO = (d)=> `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-  const startOfDay = (d)=> { const x = new Date(d); x.setHours(0,0,0,0); return x; };
-  const addDays = (d, n)=> { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-  const monthDiff = (a, b)=> (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
-
-  const DEMO_NOTES = [
-    "Haag gesnoeid voor- en achterkant",
-    "Gazon gemaaid en borders bijgewerkt",
-    "Onkruid gewied moestuin",
-    "Snoeiafval afgevoerd",
-    "Conifeer teruggesnoeid",
-    "Rozen gesnoeid en bemest",
-    "Oprit onkruidvrij gemaakt",
-    "Nieuwe border aangelegd",
-    "Bladeren geruimd",
-    "Terras schoongemaakt en onkruid verwijderd",
-    "Fruitbomen gesnoeid",
-    "Herfstonderhoud",
-    "Lenteschoonmaak",
-    "Taxus in vorm gesnoeid"
-  ];
-
-  const rhythmList = ["direct","direct","direct","monthly","monthly","monthly","monthly","monthly","monthly","monthly","quarterly","quarterly","quarterly","quarterly","quarterly"];
-  const shuffledRhythms = rhythmList.slice();
-  for (let i = shuffledRhythms.length - 1; i > 0; i--){
-    const j = sri(0, i);
-    [shuffledRhythms[i], shuffledRhythms[j]] = [shuffledRhythms[j], shuffledRhythms[i]];
-  }
-
-  const usedNames = new Set();
-  const nicknames = DEMO.nicknames.slice();
-  for (let i = nicknames.length - 1; i > 0; i--){
-    const j = sri(0, i);
-    [nicknames[i], nicknames[j]] = [nicknames[j], nicknames[i]];
-  }
-
-  const nowDate = startOfDay(new Date());
-  const endDate = new Date(nowDate);
-  const startDate = startOfDay(new Date(nowDate));
-  startDate.setMonth(startDate.getMonth() - months);
-  const mondayOffset = (startDate.getDay() + 6) % 7;
-  startDate.setDate(startDate.getDate() - mondayOffset);
-
-  const customers = [];
-  for (let i = 0; i < 15; i++){
-    let fn, ln, key;
-    do {
-      fn = spick(DEMO.firstNames);
-      ln = spick(DEMO.lastNames);
-      key = `${fn}|${ln}`;
-    } while (usedNames.has(key));
-    usedNames.add(key);
-
-    const createdAtDate = addDays(startDate, sri(0, Math.max(1, Math.floor((endDate - startDate) / 86400000))));
-    customers.push({
-      id: uid(),
-      nickname: nicknames[i] || `${fn} ${ln}`,
-      name: `${fn} ${ln}`,
-      address: `${spick(DEMO.streets)} ${sri(1, 180)}, ${spick(DEMO.zones)}, Leuven`,
-      createdAt: createdAtDate.getTime(),
-      demo: true,
-      frequent: i < 10,
-      settlementRhythm: shuffledRhythms[i]
-    });
-  }
-
-  const frequentCustomers = customers.filter(c => c.frequent);
-  const rareCustomers = customers.filter(c => !c.frequent);
-  const otherProducts = (st.products || []).filter(p => p.id !== workProduct.id && p.id !== greenProduct.id);
-
-  const logs = [];
-  const usedCustomerDate = new Set();
-
-  function seasonDayBias(month){
-    if ([11,0,1].includes(month)) return 0.48;
-    if ([2,3,4].includes(month)) return 0.74;
-    if ([5,6,7].includes(month)) return 0.82;
-    return 0.68;
-  }
-
-  function createLog(customer, dayDate, slotIndex){
-    const dateISO = formatISO(dayDate);
-    const key = `${customer.id}-${dateISO}`;
-    if (usedCustomerDate.has(key)) return null;
-    usedCustomerDate.add(key);
-
-    const isEvening = chance(slotIndex === 0 ? 0.04 : 0.09);
-    const startHour = isEvening ? sri(17, 19) : (chance(0.78) ? sri(7, 9) : sri(8, 10));
-    const startMinuteChoices = isEvening ? [0, 15, 30] : [0, 15, 30, 45];
-    const startMinute = spick(startMinuteChoices);
-    const startMs = new Date(`${dateISO}T${pad2(startHour)}:${pad2(startMinute)}:00`).getTime();
-
-    const firstWorkMin = isEvening ? sri(60, 130) : sri(85, 230);
-    const withBreak = !isEvening && chance(0.46);
-    const breakMin = withBreak ? sri(15, 45) : 0;
-    const secondWorkMin = isEvening ? 0 : (chance(0.62) ? sri(55, 190) : 0);
-
-    const firstEnd = startMs + firstWorkMin * 60000;
-    const breakEnd = firstEnd + breakMin * 60000;
-    const finalEnd = breakEnd + secondWorkMin * 60000;
-
-    const segments = [{ id: uid(), type: "work", start: startMs, end: firstEnd }];
-    if (breakMin > 0) segments.push({ id: uid(), type: "break", start: firstEnd, end: breakEnd });
-    if (secondWorkMin > 0) segments.push({ id: uid(), type: "work", start: breakEnd, end: finalEnd });
-
-    const greenQty = round2(sri(0, 6) / 2);
-    const items = [
-      { id: uid(), productId: greenProduct.id, qty: greenQty, unitPrice: 38, note: "" }
-    ];
-
-    const smallExtras = otherProducts.filter(p => (Number(p.unitPrice || p.price) || 0) <= 20);
-    const bigExtras = otherProducts.filter(p => (Number(p.unitPrice || p.price) || 0) > 20);
-    const pool = chance(0.8) ? smallExtras : bigExtras;
-    const extraChance = pool === smallExtras ? 0.02 : 0.005;
-    if (pool.length && chance(extraChance)){
-      const extra = spick(pool);
-      items.push({
-        id: uid(),
-        productId: extra.id,
-        qty: round2(Math.max(1, srf(1, 3))),
-        unitPrice: Number(extra.price || extra.unitPrice || 25) || 25,
-        note: chance(0.4) ? "Aanvullend materiaal" : ""
-      });
-    }
-
-    return {
-      id: uid(),
-      customerId: customer.id,
-      date: dateISO,
-      createdAt: startMs,
-      closedAt: finalEnd,
-      note: chance(0.32) ? spick(DEMO_NOTES) : "",
-      segments,
-      items,
-      demo: true
-    };
-  }
-
-  for (let cursor = new Date(startDate); cursor <= endDate; cursor = addDays(cursor, 1)){
-    if (cursor > endDate) break;
-    const dow = cursor.getDay();
-    const month = cursor.getMonth();
-    if (dow === 0) continue;
-    if (dow === 6 && !chance(0.06)) continue;
-
-    const span = Math.max(1, monthDiff(startDate, endDate));
-    const progress = monthDiff(startDate, cursor) / span;
-    const dayChance = Math.min(0.9, seasonDayBias(month) + (progress * 0.08));
-    if (!chance(dayChance)) continue;
-
-    const maxCustomers = chance(0.1) ? 3 : (chance(0.45) ? 2 : 1);
-    const selected = [];
-    while (selected.length < maxCustomers){
-      const pool = chance(0.77) ? frequentCustomers : rareCustomers;
-      if (!pool.length) break;
-      const customer = spick(pool);
-      if (!selected.some(c => c.id === customer.id)) selected.push(customer);
-      if (selected.length >= customers.length) break;
-    }
-
-    selected.forEach((customer, idx)=>{
-      const log = createLog(customer, cursor, idx);
-      if (!log) return;
-      if (new Date(log.date) > endDate) return;
-      logs.push(log);
-    });
-  }
-
-  logs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-
-  const logsByCustomer = new Map();
-  for (const log of logs){
-    if (!logsByCustomer.has(log.customerId)) logsByCustomer.set(log.customerId, []);
-    logsByCustomer.get(log.customerId).push(log);
-  }
-
-  function makeLinesFromLogs(logsArr){
-    const summary = { workQty: 0, greenQty: 0 };
-    for (const log of logsArr){
-      summary.workQty += sumWorkMs(log) / 3600000;
-      for (const it of (log.items || [])){
-        if (it.productId === greenProduct.id) summary.greenQty += Number(it.qty) || 0;
-      }
-    }
-    summary.workQty = round2(summary.workQty);
-    summary.greenQty = round2(summary.greenQty);
-
-    const modeRoll = rnd();
-    const mode = modeRoll < 0.38 ? "invoice" : (modeRoll < 0.72 ? "cash" : "mixed");
-    const lines = [];
-    const addLine = ({ bucket, productId, description, unit, qty, unitPrice, vatRate })=>{
-      const quantity = round2(Number(qty) || 0);
-      if (quantity <= 0) return;
-      lines.push({ id: uid(), bucket, productId, description, unit, qty: quantity, unitPrice, vatRate });
-    };
-
-    if (mode === "invoice"){
-      addLine({ bucket: "invoice", productId: workProduct.id, description: "Werk", unit: "uur", qty: summary.workQty, unitPrice: 38, vatRate: 0.21 });
-      addLine({ bucket: "invoice", productId: greenProduct.id, description: "Groen", unit: "keer", qty: summary.greenQty, unitPrice: 38, vatRate: 0.21 });
-    } else if (mode === "cash"){
-      addLine({ bucket: "cash", productId: workProduct.id, description: "Werk", unit: "uur", qty: summary.workQty, unitPrice: 38, vatRate: 0 });
-      addLine({ bucket: "cash", productId: greenProduct.id, description: "Groen", unit: "keer", qty: summary.greenQty, unitPrice: 38, vatRate: 0 });
-    } else {
-      const invoiceWorkQty = round2(Math.max(0.5, summary.workQty * srf(0.45, 0.78)));
-      const cashWorkQty = round2(Math.max(0, summary.workQty - invoiceWorkQty));
-      const invoiceGreenQty = round2(Math.max(0, summary.greenQty * srf(0.3, 0.7)));
-      const cashGreenQty = round2(Math.max(0, summary.greenQty - invoiceGreenQty));
-      addLine({ bucket: "invoice", productId: workProduct.id, description: "Werk", unit: "uur", qty: invoiceWorkQty, unitPrice: 38, vatRate: 0.21 });
-      addLine({ bucket: "cash", productId: workProduct.id, description: "Werk", unit: "uur", qty: cashWorkQty, unitPrice: 38, vatRate: 0 });
-      addLine({ bucket: "invoice", productId: greenProduct.id, description: "Groen", unit: "keer", qty: invoiceGreenQty, unitPrice: 38, vatRate: 0.21 });
-      addLine({ bucket: "cash", productId: greenProduct.id, description: "Groen", unit: "keer", qty: cashGreenQty, unitPrice: 38, vatRate: 0 });
-    }
-    return lines;
-  }
-
-  const dateWithBusinessTime = (isoDate)=>{
-    const hour = sri(9, 16);
-    const minOptions = [10, 20, 30, 40];
-    return new Date(`${isoDate}T${pad2(hour)}:${pad2(spick(minOptions))}:00`).getTime();
-  };
-
-  const nextMonthInvoiceDate = (lastLogDate)=>{
-    const d = new Date(`${lastLogDate}T00:00:00`);
-    const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    const day = sri(1, 7);
-    return formatISO(new Date(nextMonth.getFullYear(), nextMonth.getMonth(), day));
-  };
-
-  const nextQuarterInvoiceDate = (lastLogDate)=>{
-    const d = new Date(`${lastLogDate}T00:00:00`);
-    const nextQuarterMonth = Math.floor(d.getMonth() / 3) * 3 + 3;
-    const q = new Date(d.getFullYear(), nextQuarterMonth, 1);
-    return formatISO(new Date(q.getFullYear(), q.getMonth(), sri(1, 10)));
-  };
-
-  const settlements = [];
-
-  function buildSettlement(customer, groupedLogs){
-    if (!groupedLogs.length) return null;
-    const sortedLogs = groupedLogs.slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    const lastLog = sortedLogs[sortedLogs.length - 1];
-    let invoiceDate = lastLog.date;
-
-    if (customer.settlementRhythm === "direct"){
-      invoiceDate = formatISO(addDays(new Date(`${lastLog.date}T00:00:00`), sri(0, 3)));
-    } else if (customer.settlementRhythm === "monthly"){
-      invoiceDate = nextMonthInvoiceDate(lastLog.date);
-    } else {
-      invoiceDate = nextQuarterInvoiceDate(lastLog.date);
-    }
-    const today = todayISO();
-    if (invoiceDate > today) invoiceDate = today;
-    if (invoiceDate < lastLog.date) invoiceDate = lastLog.date;
-
-    const createdAt = dateWithBusinessTime(invoiceDate);
-    const lines = makeLinesFromLogs(sortedLogs);
-    if (!lines.length) return null;
-
-    const ageDays = (endDate.getTime() - createdAt) / 86400000;
-    let status = "draft";
-    if (ageDays > 60) status = chance(0.97) ? "calculated" : "draft";
-    else if (ageDays > 21) status = chance(0.85) ? "calculated" : "draft";
-    else status = chance(0.35) ? "calculated" : "draft";
-
-    const settlement = {
-      id: uid(),
-      customerId: customer.id,
-      date: invoiceDate,
-      invoiceDate,
-      createdAt,
-      logIds: sortedLogs.map(l => l.id),
-      lines,
-      status,
-      invoicePaid: false,
-      cashPaid: false,
-      invoiceNumber: null,
-      demo: true
-    };
-
-    const totals = settlementTotals(settlement);
-    if (status !== "draft"){
-      const payChance = ageDays > 120 ? 0.98 : (ageDays > 45 ? 0.93 : 0.75);
-      settlement.invoicePaid = totals.invoiceTotal > 0 ? chance(payChance) : false;
-      settlement.cashPaid = totals.cashTotal > 0 ? chance(payChance) : false;
-    }
-    return settlement;
-  }
-
-  for (const customer of customers){
-    const customerLogs = (logsByCustomer.get(customer.id) || []).slice().sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    if (!customerLogs.length) continue;
-
-    if (customer.settlementRhythm === "direct"){
-      for (const log of customerLogs){
-        const settlement = buildSettlement(customer, [log]);
-        if (settlement) settlements.push(settlement);
-      }
-      continue;
-    }
-
-    const groups = new Map();
-    for (const log of customerLogs){
-      const d = new Date(`${log.date}T00:00:00`);
-      const key = customer.settlementRhythm === "monthly"
-        ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`
-        : `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(log);
-    }
-
-    for (const groupedLogs of groups.values()){
-      const settlement = buildSettlement(customer, groupedLogs);
-      if (settlement) settlements.push(settlement);
-    }
-  }
-
-  const todayIso = todayISO();
-  const draftSettlements = settlements
-    .filter(s => s.status === "draft")
-    .sort((a, b) => String(b.invoiceDate || "").localeCompare(String(a.invoiceDate || "")));
-  for (const settlement of draftSettlements.slice(6)){
-    if (String(settlement.invoiceDate || "") > todayIso) continue;
-    settlement.status = "calculated";
-  }
-
-  const demoCalculated = settlements.filter(s => s.status !== "draft");
-  demoCalculated.sort((a, b)=>{
-    const byDate = String(a.invoiceDate || "").localeCompare(String(b.invoiceDate || ""));
-    if (byDate !== 0) return byDate;
-    return (a.createdAt || 0) - (b.createdAt || 0);
-  });
-
-  let nextInvoice = (st.settlements || []).reduce((max, settlement)=>{
-    if (!isSettlementCalculated(settlement)) return max;
-    const digits = String(settlement.invoiceNumber || "").match(/(\d+)/g) || [];
-    const value = Number(digits.join(""));
-    return Number.isFinite(value) ? Math.max(max, value) : max;
-  }, 0);
-
-  for (const settlement of demoCalculated){
-    settlement.status = "calculated";
-    settlement.isCalculated = true;
-    settlement.markedCalculated = true;
-    settlement.invoiceLocked = true;
-    settlement.invoiceNumber = settlementHasInvoiceComponent(settlement) ? `F${++nextInvoice}` : null;
-    settlement.calculatedAt = settlement.createdAt;
-  }
-
-  for (const settlement of settlements){
-    if (settlement.status === "draft"){
-      settlement.invoicePaid = false;
-      settlement.cashPaid = false;
-      settlement.invoiceNumber = null;
-      settlement.invoiceLocked = false;
-      settlement.isCalculated = false;
-      settlement.markedCalculated = false;
-      settlement.calculatedAt = null;
-    }
-  }
-
-  const cleanCustomers = customers.map(({ frequent, settlementRhythm, ...rest }) => rest);
-  st.customers = [...cleanCustomers, ...(st.customers || [])];
-  st.logs = [...logs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), ...(st.logs || [])];
-  st.settlements = [...settlements.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), ...(st.settlements || [])];
-  ensureStateSafetyAfterMutations(st);
-  return true;
-}
-
-function seedDemoMonths(st, { months = 24, force = false, seed = "demo-v2" } = {}){
-  return seedDemoPeriod(st, { months, force, seed });
-}
-
-function clearDemoData(st){
-  const removedLogIds = new Set((st.logs||[]).filter(l => l.demo).map(l => l.id));
-  st.customers = (st.customers||[]).filter(c => !c.demo);
-  st.products = (st.products||[]).filter(p => !p.demo);
-  st.logs = (st.logs||[]).filter(l => !l.demo);
-  st.settlements = (st.settlements||[])
-    .filter(s => !s.demo)
-    .map(s => ({ ...s, logIds: (s.logIds||[]).filter(id => !removedLogIds.has(id)) }));
-  ensureStateSafetyAfterMutations(st);
 }
 
 let state = loadState();
@@ -2141,13 +1686,6 @@ const ui = {
     qty: "1"
   }
 };
-
-if (!state.ui?.demoDefaultLoaded){
-  const changed = seedDemoPeriod(state, { months: 24, force: false, seed: "demo-v2" });
-  state.ui = state.ui || {};
-  state.ui.demoDefaultLoaded = true;
-  if (changed) saveState(state);
-}
 
 // Guardrail: keep state mutations inside actions + commit.
 function commit(){
@@ -3212,30 +2750,6 @@ function _attachSettingsHandlers(){
     alert("Instellingen opgeslagen.");
   };
 
-  $("#fillDemoBtn").onclick = ()=>{
-    if (!confirmAction("Demo data toevoegen voor 24 maanden (2 jaar)?")) return;
-    const changed = seedDemoPeriod(state, { months: 24, force: false, seed: "demo-v2" });
-    if (changed){
-
-      commit();
-    } else {
-      alert("Demo data bestaat al. Wis eerst demo data om opnieuw te seeden.");
-    }
-  };
-
-  $("#clearDemoBtn").onclick = ()=>{
-    const demoRecordCount = state.customers.filter(c => c.demo).length + state.logs.filter(l => l.demo).length + state.settlements.filter(s => s.demo).length;
-    if (!demoRecordCount){
-      alert("Geen demo data om te wissen.");
-      return;
-    }
-    if (!confirmAction("Alle demo records wissen? Echte data blijft behouden.")) return;
-    clearDemoData(state);
-    closeSheet();
-
-    commit();
-  };
-
   $("#resetAllBtn").onclick = ()=>{
     if (!confirmAction("Reset alles? Dit wist alle lokale data.")) return;
     localStorage.removeItem(STORAGE_KEY);
@@ -3788,12 +3302,6 @@ function renderProductsSheet(){
 
 function renderSettingsSheet(){
   const body = $("#sheetBody");
-  const demoCounts = {
-    customers: state.customers.filter(c => c.demo).length,
-    logs: state.logs.filter(l => l.demo).length,
-    settlements: state.settlements.filter(a => a.demo).length,
-  };
-
   body.innerHTML = `
     <div class="stack">
       <div class="card stack">
@@ -3809,13 +3317,6 @@ function renderSettingsSheet(){
           </div>
         </div>
         <button class="btn primary" id="saveSettings">Opslaan</button>
-      </div>
-
-      <div class="card stack">
-        <div class="item-title">Demo data</div>
-        <div class="meta-text">Demo records: klanten ${demoCounts.customers} · logs ${demoCounts.logs} · afrekeningen ${demoCounts.settlements}</div>
-        <button class="btn" id="fillDemoBtn">Vul demo data (2 jaar)</button>
-        <button class="btn danger" id="clearDemoBtn">Wis demo data</button>
       </div>
 
       <div class="card stack">
