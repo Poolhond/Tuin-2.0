@@ -1967,6 +1967,27 @@ h2{
   width:100%;
 }
 
+
+.settlement-card-item{
+  position:relative;
+  overflow:hidden;
+}
+
+.settlement-status-indicator-right{
+  position:absolute;
+  top:0;
+  right:0;
+  width:4px;
+  height:100%;
+  border-radius:2px;
+  pointer-events:none;
+}
+
+.settlement-status-indicator-right.card-accent--open{ background:rgba(255,204,0,.72); }
+.settlement-status-indicator-right.card-accent--calculated{ background:rgba(255,140,0,.82); }
+.settlement-status-indicator-right.card-accent--paid{ background:rgba(0,160,90,.82); }
+.settlement-status-indicator-right.card-accent--fixed{ background:rgba(147,88,220,.82); }
+
 .settlement-row-grid{
   display:flex;
   flex-direction:row-reverse;
@@ -2213,21 +2234,21 @@ h2{
   border-left:4px solid var(--status-fixed-border);
   padding-left:10px;
 }
-.flat-list .item.card-accent--open{
-  border-left:3px solid rgba(255,204,0,.72);
-  padding-left:10px;
+.flat-list .item.settlement-card-item.card-accent--open{
+  border-left:0;
+  padding-left:4px;
 }
-.flat-list .item.card-accent--calculated{
-  border-left:3px solid rgba(255,140,0,.82);
-  padding-left:10px;
+.flat-list .item.settlement-card-item.card-accent--calculated{
+  border-left:0;
+  padding-left:4px;
 }
-.flat-list .item.card-accent--paid{
-  border-left:3px solid rgba(0,160,90,.82);
-  padding-left:10px;
+.flat-list .item.settlement-card-item.card-accent--paid{
+  border-left:0;
+  padding-left:4px;
 }
-.flat-list .item.card-accent--fixed{
-  border-left:3px solid rgba(147,88,220,.82);
-  padding-left:10px;
+.flat-list .item.settlement-card-item.card-accent--fixed{
+  border-left:0;
+  padding-left:4px;
 }
 
 /* ====== REFACTOR: Timer-first UX ====== */
