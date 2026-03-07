@@ -112,6 +112,22 @@ function formatDurationCompact(totalMinutes){
   return `${h}u${String(m).padStart(2, "0")}m`;
 }
 function round2(n){ return Math.round((Number(n||0))*100)/100; }
+
+// ---------- Quarter date helpers (fixed-period feature) ----------
+function getQuarterStart(date){
+  const dt = date instanceof Date ? date : parseLocalYMD(date) || new Date();
+  const quarterMonth = Math.floor(dt.getMonth() / 3) * 3;
+  return formatLocalYMD(new Date(dt.getFullYear(), quarterMonth, 1));
+}
+function getQuarterEnd(date){
+  const dt = date instanceof Date ? date : parseLocalYMD(date) || new Date();
+  const quarterMonth = Math.floor(dt.getMonth() / 3) * 3 + 3;
+  return formatLocalYMD(new Date(dt.getFullYear(), quarterMonth, 1));
+}
+function isDateInRange(dateStr, startStr, endStr){
+  const d = String(dateStr || "");
+  return d >= String(startStr || "") && d < String(endStr || "");
+}
 function roundToNearestHalf(n){
   return Math.round((Number(n || 0) * 2)) / 2;
 }
@@ -539,6 +555,9 @@ function loadState(){
 
   ensureUIPreferences(st);
 
+  // Fixed quarter settlements: ensure + sync for all active templates at load time
+  syncAllFixedQuarterSettlements(st);
+
   localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
 
   return st;
@@ -660,6 +679,152 @@ function getCustomerFixedTemplate(customer){
     greenCashUnits: Math.max(0, round2(Number(source.greenCashUnits) || 0)),
     note: typeof source.note === "string" ? source.note : ""
   };
+}
+
+// ---------- Fixed-period quarter settlement helpers ----------
+// A fixed-period settlement is identified by metadata, not by inference from dates or notes.
+function isFixedPeriodSettlement(settlement){
+  return settlement?.kind === "fixed-period";
+}
+
+// Find existing fixed quarter settlement for a customer and period start
+function findFixedQuarterSettlement(settlements, customerId, periodStart){
+  return (settlements || []).find(s =>
+    s.kind === "fixed-period" &&
+    s.fixedPeriodType === "quarter" &&
+    s.templateCustomerId === customerId &&
+    s.periodStart === periodStart
+  ) || null;
+}
+
+// Ensure exactly 1 fixed quarter settlement exists for the current quarter.
+// Idempotent: same input = same result, never creates duplicates.
+function ensureCurrentFixedQuarterSettlement(st, customer){
+  if (!customer?.id) return null;
+  const tmpl = getCustomerFixedTemplate(customer);
+  if (!tmpl.enabled) return null;
+
+  const today = todayISO();
+  const periodStart = getQuarterStart(today);
+  const periodEnd = getQuarterEnd(today);
+
+  // Check if settlement already exists for this quarter
+  const existing = findFixedQuarterSettlement(st.settlements, customer.id, periodStart);
+  if (existing) return existing;
+
+  // Create new fixed quarter settlement with template values as manual override
+  const s = {
+    id: uid(),
+    customerId: customer.id,
+    date: periodStart,
+    invoiceDate: periodStart,
+    createdAt: now(),
+    logIds: [],
+    lines: [],
+    allocations: {},
+    status: "draft",
+    markedCalculated: false,
+    isCalculated: false,
+    calculatedAt: null,
+    invoiceAmount: 0,
+    cashAmount: 0,
+    invoicePaid: false,
+    cashPaid: false,
+    invoiceNumber: null,
+    invoiceLocked: false,
+    // Fixed-period metadata: identifies this as an auto-managed quarter settlement
+    kind: "fixed-period",
+    fixedPeriodType: "quarter",
+    templateCustomerId: customer.id,
+    periodStart,
+    periodEnd,
+    // Use dateOverride to prevent syncSettlementDatesFromLogs from moving the date
+    dateOverride: periodStart,
+    // Manual override with template values (bedragen blijven vast, logs herberekenen niet)
+    manualOverride: {
+      enabled: true,
+      hoursInvoice: round2(tmpl.laborInvoiceUnits),
+      hoursCash: round2(tmpl.laborCashUnits),
+      groenInvoice: round2(tmpl.greenInvoiceUnits),
+      groenCash: round2(tmpl.greenCashUnits)
+    },
+    // Template note as initial value (only set on creation, never overwritten by sync)
+    note: tmpl.note || ""
+  };
+
+  syncSettlementAmountsFromManualOverride(s, st);
+  st.settlements.unshift(s);
+  return s;
+}
+
+// Sync manual override amounts for a fixed-period settlement without full state dependency.
+// Needed during init when `state` is not yet available as a global.
+function syncSettlementAmountsFromManualOverride(settlement, sourceState){
+  if (!settlement?.manualOverride?.enabled) return;
+  const manual = settlement.manualOverride;
+  const settings = sourceState?.settings || {};
+  const products = sourceState?.products || [];
+
+  const workProduct = products.find(p => {
+    const n = (p.name || "").toLowerCase();
+    return n === "werk" || n === "arbeid";
+  });
+  const greenProduct = products.find(p => (p.name || "").toLowerCase() === "groen");
+
+  const hourlyRate = Number(workProduct?.unitPrice ?? settings.hourlyRate ?? 38);
+  const greenRate = Number(greenProduct?.unitPrice ?? 0);
+  const vatRate = Number(settings.vatRate ?? 0.21);
+
+  let invoiceExcl = (manual.hoursInvoice || 0) * hourlyRate + (manual.groenInvoice || 0) * greenRate;
+  let cashExcl = (manual.hoursCash || 0) * hourlyRate + (manual.groenCash || 0) * greenRate;
+  invoiceExcl = round2(invoiceExcl);
+  cashExcl = round2(cashExcl);
+
+  settlement.invoiceAmount = round2(invoiceExcl + round2(invoiceExcl * vatRate));
+  settlement.cashAmount = round2(cashExcl);
+}
+
+// Sync logIds for a fixed quarter settlement: link all logs of this customer within the quarter.
+// Idempotent: produces the same result regardless of how many times called.
+// Only syncs current quarter; historical quarters are left untouched.
+function syncFixedQuarterSettlementLogs(settlement, st){
+  if (!isFixedPeriodSettlement(settlement)) return;
+  if (!settlement.periodStart || !settlement.periodEnd) return;
+
+  const customerId = settlement.templateCustomerId || settlement.customerId;
+  if (!customerId) return;
+
+  // Collect all logs for this customer within the quarter period
+  const quarterLogIds = (st.logs || [])
+    .filter(l =>
+      l.customerId === customerId &&
+      isDateInRange(l.date, settlement.periodStart, settlement.periodEnd)
+    )
+    .map(l => l.id);
+
+  // Set logIds (unique, no duplicates)
+  settlement.logIds = [...new Set(quarterLogIds)];
+}
+
+// Central sync pipeline: run for all customers with active templates.
+// Called at app init and after relevant mutations.
+function syncAllFixedQuarterSettlements(st){
+  const today = todayISO();
+  const currentPeriodStart = getQuarterStart(today);
+
+  for (const customer of (st.customers || [])){
+    const tmpl = getCustomerFixedTemplate(customer);
+    if (!tmpl.enabled) continue;
+
+    // Ensure settlement exists for current quarter
+    ensureCurrentFixedQuarterSettlement(st, customer);
+
+    // Sync logs only for the current quarter settlement (historical = untouched)
+    const currentSettlement = findFixedQuarterSettlement(st.settlements, customer.id, currentPeriodStart);
+    if (currentSettlement){
+      syncFixedQuarterSettlementLogs(currentSettlement, st);
+    }
+  }
 }
 
 // ---------- Demo seeding (deterministic, period-based, realistic chronology) ----------
@@ -1789,6 +1954,8 @@ function runGreenAllocationUnitPriceSanityCheck(sourceState = state){
  * Migreert vanuit oude `lines` structuur als er nog geen allocations zijn.
  */
 function buildAllocationsFromLogs(settlement, sourceState = state){
+  // Guard: fixed-period settlements use manual override, never rebuild allocations from logs
+  if (isFixedPeriodSettlement(settlement)) return settlement.allocations || {};
   const { baseWorkHours, baseDate, productMap } = computeBaseTotals(settlement, sourceState);
   const labourProduct = sourceState.products.find(p => {
     const n = (p.name || "").toLowerCase();
@@ -1922,6 +2089,8 @@ if (!state.ui?.demoDefaultLoaded){
 // Guardrail: keep state mutations inside actions + commit.
 function commit(){
   state = validateAndRepairState(state);
+  // Sync fixed quarter settlements on every commit (idempotent, safe to run repeatedly)
+  syncAllFixedQuarterSettlements(state);
   saveState(state);
   render();
 }
@@ -1998,6 +2167,7 @@ const actions = {
     // Ontkoppel de log uit alle afrekeningen (inclusief calculated: geen wijziging voor die)
     for (const s of state.settlements){
       if (isSettlementCalculated(s)) continue; // geen wijziging aan calculated settlements
+      if (isFixedPeriodSettlement(s)) continue; // fixed-period settlements managed by auto-sync
       s.logIds = (s.logIds || []).filter(x => x !== logId);
       if (s.logIds.length === 0) s.allocations = {};
       else buildAllocationsFromLogs(s);
@@ -3615,7 +3785,7 @@ function renderCustomerSheet(id){
       </div>
       <div class="client-detail-actionbar-right">
         ${!isEditing ? `
-          <button class="detail-edit-toggle" id="btnOpenCustomerTemplate" type="button" aria-label="Vaste kwartaal-template" title="Vaste kwartaal-template">
+          <button class="detail-edit-toggle${getCustomerFixedTemplate(c).enabled ? " is-template-active" : ""}" id="btnOpenCustomerTemplate" type="button" aria-label="Vaste kwartaal-template" title="Vaste kwartaal-template">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <rect x="3" y="4" width="18" height="18" rx="2"/>
               <path d="M16 2v4M8 2v4M3 10h18M7 15h10M7 19h6" stroke-linecap="round"/>
@@ -4599,7 +4769,8 @@ function calculateSettlement(settlement){
   settlement.calculatedAt = now();
 
   // Factuurnummer pas toewijzen zodra de afrekening berekend is.
-  const totals = getTotalsFromAllocations(settlement);
+  // Use getSettlementTotals so manual override totals are respected for fixed-period settlements
+  const totals = getSettlementTotals(settlement);
   if (totals.invoiceTotal > 0){
     lockInvoice(settlement);
     const hasInvoiceNumber = Boolean(String(settlement.invoiceNumber || "").trim());
