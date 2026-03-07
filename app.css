@@ -611,6 +611,11 @@ body:not([data-view="meer"]) #moreActionBar{
   height:20px;
 }
 
+.detail-edit-toggle--template.is-active{
+  color:#8b5cf6;
+  border-color:#8b5cf6;
+}
+
 .client-detail-view label,
 .product-detail-view label{
   font-size:12px;

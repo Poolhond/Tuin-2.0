@@ -635,6 +635,18 @@ function getSettlementCalcMode(settlement){
   return (settlement?.manualOverride && settlement.manualOverride.enabled) ? "manual" : "logs";
 }
 
+function getCurrentQuarterKey(){
+  const d = new Date();
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return `${d.getFullYear()}-Q${q}`;
+}
+
+function getQuarterStartISO(){
+  const d = new Date();
+  const q = Math.floor(d.getMonth() / 3);
+  return new Date(d.getFullYear(), q * 3, 1).toISOString().slice(0, 10);
+}
+
 function getDefaultFixedSettlementTemplate(){
   return {
     enabled: false,
@@ -2137,7 +2149,47 @@ const actions = {
     const c = state.customers.find(x => x.id === customerId);
     if (!c) return;
     const tmpl = getCustomerFixedTemplate(c);
-    c.fixedSettlementTemplate = { ...tmpl, enabled: !tmpl.enabled };
+    const enabling = !tmpl.enabled;
+    c.fixedSettlementTemplate = { ...tmpl, enabled: enabling };
+    if (enabling){
+      const quarterKey = getCurrentQuarterKey();
+      const hasQS = state.settlements.some(s => s.customerId === customerId && s.quarterKey === quarterKey);
+      if (!hasQS){
+        const quarterStart = getQuarterStartISO();
+        state.settlements.unshift({
+          id: uid(),
+          customerId,
+          date: quarterStart,
+          dateOverride: quarterStart,
+          invoiceDate: quarterStart,
+          createdAt: now(),
+          logIds: [],
+          lines: [],
+          allocations: {},
+          manualOverride: {
+            enabled: true,
+            hoursInvoice: tmpl.laborInvoiceUnits,
+            hoursCash: tmpl.laborCashUnits,
+            groenInvoice: tmpl.greenInvoiceUnits,
+            groenCash: tmpl.greenCashUnits
+          },
+          status: "draft",
+          markedCalculated: false,
+          isCalculated: false,
+          calculatedAt: null,
+          invoiceLocked: false,
+          invoiceAmount: 0,
+          cashAmount: 0,
+          invoicePaid: false,
+          cashPaid: false,
+          invoiceNumber: null,
+          note: tmpl.note || "",
+          quarterKey,
+          fromFixedTemplate: true,
+          demo: false
+        });
+      }
+    }
     commit();
   },
   bumpCustomerTemplateValue(customerId, key, delta){
@@ -3600,6 +3652,9 @@ function renderCustomerSheet(id){
   const logs = state.logs.filter(l => l.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   const settlements = state.settlements.filter(s => s.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 
+  const tmpl = getCustomerFixedTemplate(c);
+  const tmplActive = tmpl.enabled;
+
   $("#sheetActions").innerHTML = "";
 
   setDetailActionBar({
@@ -3615,7 +3670,9 @@ function renderCustomerSheet(id){
       </div>
       <div class="client-detail-actionbar-right">
         ${!isEditing ? `
-          <button class="detail-edit-toggle" id="btnOpenCustomerTemplate" type="button" aria-label="Vaste kwartaal-template" title="Vaste kwartaal-template">
+          <button class="detail-edit-toggle detail-edit-toggle--template${tmplActive ? " is-active" : ""}" id="btnOpenCustomerTemplate" type="button"
+            aria-label="Vaste kwartaal-template${tmplActive ? " (actief)" : ""}"
+            title="Vaste kwartaal-template${tmplActive ? " (actief)" : ""}">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <rect x="3" y="4" width="18" height="18" rx="2"/>
               <path d="M16 2v4M8 2v4M3 10h18M7 15h10M7 19h6" stroke-linecap="round"/>
