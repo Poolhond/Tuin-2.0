@@ -1931,6 +1931,7 @@ h2{
 }
 .settlement-title-row{
   min-width:0;
+  justify-content:flex-end;
 }
 .settlement-name{
   min-width:0;
@@ -1954,9 +1955,14 @@ h2{
 
 .settlement-row-grid{
   display:flex;
+  flex-direction:row-reverse;
   gap:10px;
   width:100%;
   align-items:center;
+}
+
+.settlement-main-info{
+  text-align:right;
 }
 
 .settlement-col{
@@ -1991,9 +1997,10 @@ h2{
 }
 
 .amtGroup{
-  margin-left:auto;
+  margin-right:auto;
   display:flex;
   align-items:center;
+  justify-content:flex-start;
   gap:10px;
   flex:0 0 auto;
 }
@@ -2001,7 +2008,7 @@ h2{
 .amt{
   box-sizing:border-box;
   width:78px;
-  text-align:right;
+  text-align:left;
   flex:0 0 auto;
   padding:4px 6px;
   border-radius:8px;
@@ -2057,6 +2064,7 @@ h2{
   color:var(--muted);
   font-size:12px;
   line-height:1.25;
+  text-align:right;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -2082,6 +2090,7 @@ h2{
   font-size:15px;
   font-weight:400;
   line-height:1.2;
+  min-width:120px;
 }
 
 .settlement-outstanding-breakdown{
