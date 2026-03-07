@@ -528,6 +528,8 @@ function loadState(){
     ensureSettlementInvoiceDefaults(s);
     syncSettlementAmounts(s);
     if (!("demo" in s)) s.demo = false;
+    if (!("isFixedTemplate" in s)) s.isFixedTemplate = false;
+    if (!("templateQuarterStart" in s)) s.templateQuarterStart = null;
   }
   // log fields
   for (const l of st.logs){
@@ -538,6 +540,7 @@ function loadState(){
   }
 
   ensureUIPreferences(st);
+  syncAllFixedTemplateSettlements(st);
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
 
@@ -660,6 +663,105 @@ function getCustomerFixedTemplate(customer){
     greenCashUnits: Math.max(0, round2(Number(source.greenCashUnits) || 0)),
     note: typeof source.note === "string" ? source.note : ""
   };
+}
+
+// ---------- Vaste kwartaal-template helpers ----------
+function currentQuarterStartISO(){
+  const d = new Date();
+  const qMonth = Math.floor(d.getMonth() / 3) * 3;
+  return new Date(d.getFullYear(), qMonth, 1).toISOString().slice(0, 10);
+}
+
+function quarterStartForDate(dateISO){
+  const d = new Date(dateISO + "T00:00:00");
+  const qMonth = Math.floor(d.getMonth() / 3) * 3;
+  return new Date(d.getFullYear(), qMonth, 1).toISOString().slice(0, 10);
+}
+
+function dateInQuarter(dateISO, quarterStartISO){
+  return quarterStartForDate(dateISO) === quarterStartISO;
+}
+
+function syncFixedTemplateSettlementsForCustomer(customerId, sourceState){
+  const st = sourceState || state;
+  const c = st.customers.find(x => x.id === customerId);
+  if (!c) return;
+  const tmpl = getCustomerFixedTemplate(c);
+  if (!tmpl.enabled) return;
+  const qStart = currentQuarterStartISO();
+
+  // Find or create the fixed template settlement for the current quarter
+  let fixed = st.settlements.find(s =>
+    s.customerId === customerId &&
+    s.isFixedTemplate === true &&
+    s.templateQuarterStart === qStart &&
+    !isSettlementCalculated(s)
+  );
+  if (!fixed){
+    const manualOverride = {
+      enabled: true,
+      hoursInvoice: tmpl.laborInvoiceUnits,
+      hoursCash: tmpl.laborCashUnits,
+      groenInvoice: tmpl.greenInvoiceUnits,
+      groenCash: tmpl.greenCashUnits
+    };
+    fixed = {
+      id: uid(), customerId, date: qStart, createdAt: now(),
+      logIds: [], lines: [], allocations: {},
+      status: "draft", markedCalculated: false, isCalculated: false, calculatedAt: null,
+      invoiceAmount: 0, cashAmount: 0, invoicePaid: false, cashPaid: false,
+      invoiceNumber: null, invoiceDate: qStart, invoiceLocked: false,
+      dateOverride: qStart,
+      manualOverride,
+      isFixedTemplate: true,
+      templateQuarterStart: qStart,
+      demo: false
+    };
+    syncSettlementAmounts(fixed);
+    ensureSettlementInvoiceDefaults(fixed);
+    syncSettlementStatus(fixed);
+    st.settlements.unshift(fixed);
+  }
+
+  // Link all logs for this customer in the current quarter to the fixed settlement
+  const customerLogs = st.logs.filter(l =>
+    l.customerId === customerId &&
+    l.date &&
+    dateInQuarter(l.date, qStart)
+  );
+  for (const log of customerLogs){
+    // Skip if already linked to a different calculated settlement
+    const alreadyCalculated = st.settlements.some(s =>
+      s.id !== fixed.id &&
+      isSettlementCalculated(s) &&
+      (s.logIds || []).includes(log.id)
+    );
+    if (alreadyCalculated) continue;
+
+    // Remove from other non-fixed draft settlements
+    for (const s of st.settlements){
+      if (s.id === fixed.id) continue;
+      if (isSettlementCalculated(s)) continue;
+      if ((s.logIds || []).includes(log.id)){
+        s.logIds = s.logIds.filter(x => x !== log.id);
+        if (s.logIds.length === 0) s.allocations = {};
+        else buildAllocationsFromLogs(s, st);
+      }
+    }
+
+    // Link to fixed settlement
+    if (!(fixed.logIds || []).includes(log.id)){
+      fixed.logIds = [...(fixed.logIds || []), log.id];
+    }
+  }
+}
+
+function syncAllFixedTemplateSettlements(sourceState){
+  const st = sourceState || state;
+  for (const c of st.customers){
+    const tmpl = getCustomerFixedTemplate(c);
+    if (tmpl.enabled) syncFixedTemplateSettlementsForCustomer(c.id, st);
+  }
 }
 
 // ---------- Demo seeding (deterministic, period-based, realistic chronology) ----------
@@ -1936,6 +2038,10 @@ const actions = {
     openSegment(log, "work");
     state.logs.unshift(log);
     state.activeLogId = log.id;
+    const startCustomer = state.customers.find(x => x.id === customerId);
+    if (startCustomer && getCustomerFixedTemplate(startCustomer).enabled){
+      syncFixedTemplateSettlementsForCustomer(customerId);
+    }
     commit();
     return log;
   },
@@ -1955,6 +2061,10 @@ const actions = {
     log.closedAt = now();
     state.activeLogId = null;
     ui.activeLogQuickAdd.open = false;
+    const stopCustomer = state.customers.find(x => x.id === log.customerId);
+    if (stopCustomer && getCustomerFixedTemplate(stopCustomer).enabled){
+      syncFixedTemplateSettlementsForCustomer(log.customerId);
+    }
     commit();
   },
   addGreenToLog(logId){
@@ -2138,6 +2248,10 @@ const actions = {
     if (!c) return;
     const tmpl = getCustomerFixedTemplate(c);
     c.fixedSettlementTemplate = { ...tmpl, enabled: !tmpl.enabled };
+    if (!tmpl.enabled){
+      // Was disabled, now enabling — create/sync the quarterly settlement
+      syncFixedTemplateSettlementsForCustomer(customerId);
+    }
     commit();
   },
   bumpCustomerTemplateValue(customerId, key, delta){
@@ -3599,6 +3713,7 @@ function renderCustomerSheet(id){
 
   const logs = state.logs.filter(l => l.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   const settlements = state.settlements.filter(s => s.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const customerTmpl = getCustomerFixedTemplate(c);
 
   $("#sheetActions").innerHTML = "";
 
@@ -3615,7 +3730,7 @@ function renderCustomerSheet(id){
       </div>
       <div class="client-detail-actionbar-right">
         ${!isEditing ? `
-          <button class="detail-edit-toggle" id="btnOpenCustomerTemplate" type="button" aria-label="Vaste kwartaal-template" title="Vaste kwartaal-template">
+          <button class="detail-edit-toggle${customerTmpl.enabled ? " is-template-active" : ""}" id="btnOpenCustomerTemplate" type="button" aria-label="Vaste kwartaal-template" title="Vaste kwartaal-template">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <rect x="3" y="4" width="18" height="18" rx="2"/>
               <path d="M16 2v4M8 2v4M3 10h18M7 15h10M7 19h6" stroke-linecap="round"/>
