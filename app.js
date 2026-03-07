@@ -19,6 +19,7 @@ const NAV_TRANSITION_EASING = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 const SETTLEMENT_LIST_DEFAULTS = {
   statusFilter: ["draft", "calculated"],
   onlyInvoices: false,
+  showFixed: true,
   sortKey: "date",
   sortDir: "desc"
 };
@@ -123,6 +124,12 @@ function getQuarterEnd(date){
   const dt = date instanceof Date ? date : parseLocalYMD(date) || new Date();
   const quarterMonth = Math.floor(dt.getMonth() / 3) * 3 + 3;
   return formatLocalYMD(new Date(dt.getFullYear(), quarterMonth, 1));
+}
+// Returns a stable quarter key like "2026-Q2" for use as a unique quarter identifier.
+function getQuarterKey(dateStr){
+  const dt = dateStr instanceof Date ? dateStr : parseLocalYMD(dateStr) || new Date();
+  const q = Math.floor(dt.getMonth() / 3) + 1;
+  return `${dt.getFullYear()}-Q${q}`;
 }
 function isDateInRange(dateStr, startStr, endStr){
   const d = String(dateStr || "");
@@ -414,6 +421,7 @@ function ensureUIPreferences(st){
     ? normalizedStatusFilter
     : [...SETTLEMENT_LIST_DEFAULTS.statusFilter];
   if (typeof st.settlementList.onlyInvoices !== "boolean") st.settlementList.onlyInvoices = SETTLEMENT_LIST_DEFAULTS.onlyInvoices;
+  if (typeof st.settlementList.showFixed !== "boolean") st.settlementList.showFixed = SETTLEMENT_LIST_DEFAULTS.showFixed;
   if (!["date", "invoiceNumber"].includes(st.settlementList.sortKey)) st.settlementList.sortKey = SETTLEMENT_LIST_DEFAULTS.sortKey;
   if (!["desc", "asc"].includes(st.settlementList.sortDir)) st.settlementList.sortDir = SETTLEMENT_LIST_DEFAULTS.sortDir;
 
@@ -520,6 +528,19 @@ function loadState(){
 
   // settlement status default
   for (const s of st.settlements){
+    // Backward compat: bestaande settlements zonder type zijn "normal"
+    if (!s.type){
+      s.type = s.kind === "fixed-period" ? "fixed_quarterly" : "normal";
+    }
+    // Backward compat: vaste kwartaalafrekeningen zonder "fixed" status krijgen die nu
+    if (s.type === "fixed_quarterly" && s.status !== "fixed"){
+      s.status = "fixed";
+    }
+    // Voeg quarterKey toe als die ontbreekt
+    if (s.type === "fixed_quarterly" && !s.quarterKey){
+      s.quarterKey = getQuarterKey(s.periodStart || s.date);
+    }
+    // Normal settlement status default
     if (!s.status) s.status = "draft";
     if (!s.lines) s.lines = [];
     if (!s.logIds) s.logIds = [];
@@ -696,6 +717,11 @@ function getCustomerFixedTemplate(customer){
 function isFixedPeriodSettlement(settlement){
   return settlement?.kind === "fixed-period";
 }
+// Central type check for fixed quarterly settlements.
+// Covers both the new explicit type field and the legacy kind field for backward compat.
+function isFixedQuarterlySettlement(settlement){
+  return settlement?.type === "fixed_quarterly" || settlement?.kind === "fixed-period";
+}
 
 // Find existing fixed quarter settlement for a customer and period start
 function findFixedQuarterSettlement(settlements, customerId, periodStart){
@@ -732,7 +758,10 @@ function ensureCurrentFixedQuarterSettlement(st, customer){
     logIds: [],
     lines: [],
     allocations: {},
-    status: "draft",
+    // Nieuw type-systeem: vaste kwartaalafrekening is altijd "fixed_quarterly" / "fixed"
+    type: "fixed_quarterly",
+    status: "fixed",
+    quarterKey: getQuarterKey(periodStart),
     markedCalculated: false,
     isCalculated: false,
     calculatedAt: null,
@@ -742,7 +771,7 @@ function ensureCurrentFixedQuarterSettlement(st, customer){
     cashPaid: false,
     invoiceNumber: null,
     invoiceLocked: false,
-    // Fixed-period metadata: identifies this as an auto-managed quarter settlement
+    // Fixed-period metadata: behoud voor backward compat met bestaande functies
     kind: "fixed-period",
     fixedPeriodType: "quarter",
     templateCustomerId: customer.id,
@@ -757,6 +786,14 @@ function ensureCurrentFixedQuarterSettlement(st, customer){
       hoursCash: round2(tmpl.laborCashUnits),
       groenInvoice: round2(tmpl.greenInvoiceUnits),
       groenCash: round2(tmpl.greenCashUnits)
+    },
+    // fixedConfig: configuratie van de vaste kwartaalafrekening (voor latere uitbreiding)
+    fixedConfig: {
+      periodType: "quarterly",
+      autoInvoice: true,
+      autoPaid: false,
+      startsOn: periodStart,
+      endsOn: periodEnd
     },
     // Template note as initial value (only set on creation, never overwritten by sync)
     note: tmpl.note || ""
@@ -1485,10 +1522,12 @@ function openSegment(log, type){
 }
 
 // ---------- Status helpers ----------
+// Central visual-state → CSS class mapper. Add new states here, never inline.
 function statusClassFromStatus(s){
   if (s === "linked" || s === "draft") return "status-linked";
   if (s === "calculated") return "status-calculated";
   if (s === "paid") return "status-paid";
+  if (s === "fixed") return "status-fixed";
   return "";
 }
 function getLogVisualState(log){
@@ -1496,6 +1535,7 @@ function getLogVisualState(log){
   if (state === "paid") return { state: "paid", color: "#00a05a" };
   if (state === "calculated") return { state: "calculated", color: "#ff8c00" };
   if (state === "linked") return { state: "linked", color: "#ffcc00" };
+  if (state === "fixed") return { state: "fixed", color: "#9358dc" };
   return { state: "free", color: "#93a0b5" };
 }
 function getManualOverrideTotals(settlement){
@@ -1683,6 +1723,9 @@ function getLogPresentation(log, sourceState){
   const settlement = (sourceState?.settlements || []).find(s => (s.logIds || []).includes(log?.id));
   if (!settlement) return { state: "free" };
 
+  // Vaste kwartaalafrekeningen krijgen altijd paarse status, ongeacht de normale flow.
+  if (isFixedQuarterlySettlement(settlement)) return { state: "fixed", settlement };
+
   const icons = getSettlementIconPresentation(settlement);
   const visibleIcons = icons.filter(icon => icon.show);
   const allVisiblePaid = visibleIcons.length > 0 && visibleIcons.every(icon => icon.color === "green");
@@ -1693,6 +1736,10 @@ function getLogPresentation(log, sourceState){
 }
 function getSettlementVisualState(settlement){
   if (!settlement) return { state: "open", accentClass: "card-accent--open", navClass: "nav--linked" };
+  // Vaste kwartaalafrekeningen: altijd paars, nooit door de normale draft/calculated/paid flow.
+  if (isFixedQuarterlySettlement(settlement)){
+    return { state: "fixed", accentClass: "card-accent--fixed", navClass: "nav--fixed" };
+  }
   const iconPresentation = getSettlementIconPresentation(settlement);
   const visibleIcons = iconPresentation.filter(icon => icon.show);
   const isPaid = visibleIcons.length > 0 && visibleIcons.every(icon => icon.color === "green");
@@ -1742,6 +1789,7 @@ function settlementVisualState(settlement){
   const visual = getSettlementVisualState(settlement);
   if (visual.state === "paid") return "paid";
   if (visual.state === "calculated") return "calculated";
+  if (visual.state === "fixed") return "fixed";
   return "linked";
 }
 function logStatus(logId){
@@ -1814,6 +1862,8 @@ function settlementPaymentState(settlement){
 
 function syncSettlementStatus(settlement){
   if (!settlement) return;
+  // Vaste kwartaalafrekeningen gebruiken nooit de normale draft/calculated/paid flow.
+  if (isFixedQuarterlySettlement(settlement)) return;
   settlement.isCalculated = isSettlementCalculated(settlement);
   const iconPresentation = getSettlementIconPresentation(settlement).filter(icon => icon.show);
   const isPaid = iconPresentation.length > 0 && iconPresentation.every(icon => icon.color === "green");
@@ -2175,6 +2225,7 @@ const actions = {
     const invoiceDate = todayISO();
     const s = {
       id: uid(), customerId, date: invoiceDate, createdAt: now(), logIds: [], lines: [],
+      type: "normal",
       status: "draft", markedCalculated: false, isCalculated: false, calculatedAt: null,
       invoiceAmount: 0, cashAmount: 0, invoicePaid: false, cashPaid: false,
       invoiceNumber: null,
@@ -2190,7 +2241,7 @@ const actions = {
     // Ontkoppel de log uit alle afrekeningen (inclusief calculated: geen wijziging voor die)
     for (const s of state.settlements){
       if (isSettlementCalculated(s)) continue; // geen wijziging aan calculated settlements
-      if (isFixedPeriodSettlement(s)) continue; // fixed-period settlements managed by auto-sync
+      if (isFixedQuarterlySettlement(s)) continue; // vaste kwartaalafrekeningen via auto-sync
       s.logIds = (s.logIds || []).filter(x => x !== logId);
       if (s.logIds.length === 0) s.allocations = {};
       else buildAllocationsFromLogs(s);
@@ -2505,7 +2556,7 @@ function renderTopbar(){
   const btnNew = $("#btnNewLog");
   const rightInfoEl = $("#topbarRightInfo");
   let linkedCustomerId = "";
-  topbar.classList.remove("nav--free", "nav--linked", "nav--calculated", "nav--paid");
+  topbar.classList.remove("nav--free", "nav--linked", "nav--calculated", "nav--paid", "nav--fixed");
   subtitleEl.classList.add("hidden");
   subtitleEl.textContent = "";
   metricEl.classList.add("hidden");
@@ -2920,6 +2971,7 @@ function getStatusKey(logId){
   const status = getWorkLogStatus(logId);
   if (status === "calculated") return "calculated";
   if (status === "paid") return "paid";
+  if (status === "fixed") return "fixed";
   return "open";
 }
 
@@ -2942,8 +2994,8 @@ function applyFiltersAndSort(logs){
   const filtered = logs.filter(log => {
     const status = getStatusKey(log.id);
     if (statusFilter === "open"){
-      // Logboek abstraheert "open" als niet-betaald: open + calculated.
-      if (status !== "open" && status !== "calculated") return false;
+      // Logboek abstraheert "open" als niet-betaald: open + calculated + fixed (actief).
+      if (status !== "open" && status !== "calculated" && status !== "fixed") return false;
     } else if (statusFilter === "paid"){
       if (status !== "paid") return false;
     }
@@ -3339,6 +3391,8 @@ function renderSettlements(){
 
   const list = [...state.settlements]
     .filter((s)=>{
+      // Vaste kwartaalafrekeningen worden gefilterd via showFixed, niet via statusFilter.
+      if (isFixedQuarterlySettlement(s)) return Boolean(prefs.showFixed);
       const status = getSettlementVisualState(s).state;
       if (!prefs.statusFilter.includes(status)) return false;
       if (prefs.onlyInvoices && !settlementHasInvoiceComponent(s)) return false;
@@ -3368,6 +3422,7 @@ function renderSettlements(){
     .map(s=>{
       const customerName = cname(s.customerId);
       const invoiceNumber = String(s.invoiceNumber || "").trim();
+      const isFixed = isFixedQuarterlySettlement(s);
       const titleText = invoiceNumber ? `${invoiceNumber} ${customerName}` : customerName;
       const pay = settlementPaymentState(s);
       const visual = getSettlementVisualState(s);
@@ -3378,6 +3433,37 @@ function renderSettlements(){
         .filter(Boolean);
       const totalMinutes = Math.floor(linkedLogs.reduce((acc, log) => acc + sumWorkMs(log), 0) / 60000);
       const logbookTotals = settlementLogbookTotals(s);
+
+      if (isFixed){
+        // Vaste kwartaalafrekening: toon paars, vaste bedragen, geen betaal-toggles.
+        const quarterLabel = s.quarterKey || getQuarterKey(s.date || s.periodStart);
+        const fixedAmt = Number(s.invoiceAmount || 0) + Number(s.cashAmount || 0);
+        const fixedAmtDisplay = fixedAmt > 0 ? formatMoneyEUR0(fixedAmt) : "";
+        const detailItems = [
+          esc(formatDateNoWeekday(s.date || s.periodStart)),
+          `${(s.logIds||[]).length} logs`,
+          formatDurationCompact(totalMinutes)
+        ];
+        return `
+          <div class="item ${visual.accentClass}" data-open-settlement="${s.id}">
+            <div class="settlement-card-grid">
+              <div class="settlement-row-grid">
+                <div class="item-main settlement-main-info">
+                  <div class="item-title-row settlement-title-row">
+                    <div class="item-title settlement-name" title="${esc(titleText)}">${esc(titleText)}</div>
+                    <span class="meta-text" style="font-size:11px;opacity:.7;">${esc(quarterLabel)}</span>
+                  </div>
+                </div>
+                <div class="amtGroup settlement-amount-group">
+                  <div class="amt invoice mono tabular" style="color:rgba(147,88,220,.9);">${fixedAmtDisplay}</div>
+                </div>
+              </div>
+              <div class="meta-text settlement-meta-row">${detailItems.join(" · ")}</div>
+            </div>
+          </div>
+        `;
+      }
+
       const invoiceAmt = round2(pay.invoiceTotal);
       const cashAmt = round2(pay.cashTotal);
       const showInvoice = calculated && invoiceAmt > 0;
@@ -3531,6 +3617,11 @@ function renderSettlementListOptionsSheet(){
       </div>
 
       <div class="card stack">
+        <div class="item-title">Vaste klanten</div>
+        <button class="btn ${prefs.showFixed ? "primary" : ""}" type="button" id="toggleShowFixed">Vaste kwartaalafrekeningen</button>
+      </div>
+
+      <div class="card stack">
         <button class="btn ${prefs.onlyInvoices ? "primary" : ""}" type="button" id="toggleOnlyInvoices">Enkel facturen</button>
       </div>
 
@@ -3561,6 +3652,16 @@ function renderSettlementListOptionsSheet(){
       saveState();
       renderSheet();
     });
+  });
+
+  $("#toggleShowFixed")?.addEventListener("click", ()=>{
+    state.settlementList = {
+      ...SETTLEMENT_LIST_DEFAULTS,
+      ...(state.settlementList || {}),
+      showFixed: !Boolean(state.settlementList?.showFixed ?? SETTLEMENT_LIST_DEFAULTS.showFixed)
+    };
+    saveState();
+    renderSheet();
   });
 
   $("#toggleOnlyInvoices")?.addEventListener("click", ()=>{
@@ -4216,8 +4317,8 @@ function renderLogSheet(id){
   const settlementOptions = buildSettlementSelectOptions(log.customerId, af?.id);
 
   const visual = getLogVisualState(log);
-  const statusPillClass = visual.state === "paid" ? "pill-paid" : visual.state === "calculated" ? "pill-calc" : visual.state === "linked" ? "pill-open" : "pill-neutral";
-  const statusLabel = visual.state === "free" ? "vrij" : visual.state === "linked" ? "gekoppeld" : visual.state === "calculated" ? "berekend" : "betaald";
+  const statusPillClass = visual.state === "paid" ? "pill-paid" : visual.state === "calculated" ? "pill-calc" : visual.state === "linked" ? "pill-open" : visual.state === "fixed" ? "pill-fixed" : "pill-neutral";
+  const statusLabel = visual.state === "free" ? "vrij" : visual.state === "linked" ? "gekoppeld" : visual.state === "calculated" ? "berekend" : visual.state === "fixed" ? "vaste klant" : "betaald";
   const isEditing = state.ui.editLogId === log.id;
 
   function renderSegments(currentLog, editing){
@@ -4736,6 +4837,13 @@ function syncSettlementAmounts(settlement){
 }
 
 function renderSettlementStatusIcons(settlement){
+  // Vaste kwartaalafrekening: geen berekenflow, geen betaaltoggle — toon vaste status.
+  if (isFixedQuarterlySettlement(settlement)){
+    return `<div class="status-icon-chip" style="color:rgba(147,88,220,.9);border-color:rgba(147,88,220,.45);background:rgba(147,88,220,.10);cursor:default;" aria-label="Vaste kwartaalafrekening" tabindex="-1">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none"/></svg>
+    </div>`;
+  }
+
   const isCalculated = isSettlementCalculated(settlement);
   const isEdit = isSettlementEditing(settlement?.id);
   const showCalculateIcon = settlement?.status !== "calculated" || isEdit === true;
@@ -4781,6 +4889,8 @@ function calculateSettlement(settlement){
   // finalizeSettlement: VERANDER NOOIT quantities/allocations.
   // Doet enkel: status frozen, datum, factuurnummer, totals voor weergave.
   if (!settlement) return;
+  // Vaste kwartaalafrekeningen gebruiken geen berekenflow.
+  if (isFixedQuarterlySettlement(settlement)) return;
 
   // Bouw/update allocations vanuit logs (enkel als nog niet calculated)
   buildAllocationsFromLogs(settlement);
@@ -4809,6 +4919,8 @@ function calculateSettlement(settlement){
 
 function uncalculateSettlement(settlement){
   if (!settlement) return;
+  // Vaste kwartaalafrekeningen gebruiken geen berekenflow.
+  if (isFixedQuarterlySettlement(settlement)) return;
   settlement.isCalculated = false;
   settlement.markedCalculated = false;
   settlement.calculatedAt = null;
@@ -4905,8 +5017,13 @@ function renderSettlementSheet(id){
   const calcMode = getSettlementCalcMode(s);
   const isManualMode = calcMode === "manual";
   const manual = getSettlementManualOverride(s);
-  const showInvoiceNumberSection = Boolean(pay.hasInvoice) && ["calculated", "paid"].includes(s.status);
-  const canEditInvoiceNumber = s.status === "calculated" && pay.hasInvoice === true && s.status !== "paid";
+  const isFixed = isFixedQuarterlySettlement(s);
+  // Vaste kwartaalafrekeningen: toon factuurnummer-sectie wanneer er een bedrag is,
+  // ook al is status "fixed" (niet "calculated"/"paid").
+  const showInvoiceNumberSection = Boolean(pay.hasInvoice) &&
+    (["calculated", "paid"].includes(s.status) || isFixed);
+  const canEditInvoiceNumber = (s.status === "calculated" && pay.hasInvoice === true && s.status !== "paid")
+    || (isFixed && Boolean(pay.hasInvoice));
   const invoiceNumberReadOnly = s.status === "paid";
   const logbookTotals = settlementLogbookTotals(s);
 
@@ -5001,8 +5118,10 @@ function renderSettlementSheet(id){
   $('#sheetActions').innerHTML = '';
   $('#sheetBody').style.paddingBottom = 'calc(var(--bottom-tabbar-height) + var(--status-tabbar-height) + env(safe-area-inset-bottom) + 40px)';
   const calculated = isSettlementCalculated(s);
+  const quarterLabel = isFixed ? (s.quarterKey || getQuarterKey(s.date || s.periodStart)) : null;
   $('#sheetBody').innerHTML = `
     <div class="stack settlement-detail settlement-flow ${visual.accentClass}">
+      ${isFixed ? `<div class="section section-tight"><div class="summary-row"><span class="label" style="color:rgba(147,88,220,.9);">Vaste kwartaalafrekening</span><span class="num mono" style="color:rgba(147,88,220,.9);">${esc(quarterLabel)}</span></div></div>` : ""}
       ${(!isEdit && (s.note || '').trim()) ? `<div class="section section-tight settlement-note-top"><div class="settlement-note-text">${esc(s.note.trim())}</div></div>` : ``}
       <div class="section stack section-tight">
         ${!isEdit ? `<div class="summary-row"><span class="label">Datum</span><span class="num">${esc(formatDatePretty(s.date))}${s.dateOverride ? `<span class="subtle-tag mono">aangepast</span>` : ""}</span></div>` : ""}
@@ -5068,7 +5187,7 @@ function renderSettlementSheet(id){
     <div class="settlement-status-bar">
       ${renderSettlementStatusIcons(s)}
     </div>
-    ${isEdit && !isManualMode ? `
+    ${isEdit && !isManualMode && !isFixed ? `
       <button class="iconbtn" id="btnSettlementRecalc" type="button" aria-label="Herbereken uit logs" title="Herbereken uit logs">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke-linecap="round"/>
@@ -5076,7 +5195,7 @@ function renderSettlementSheet(id){
         </svg>
       </button>
     ` : ""}
-    ${isEdit ? `
+    ${isEdit && !isFixed ? `
       <button class="iconbtn ${isManualMode ? "is-active" : ""}" id="btnSettlementManualOverride" type="button" aria-label="Handmatige override" title="Handmatige override" aria-pressed="${isManualMode ? "true" : "false"}">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
           <path d="M4 6h8" stroke-linecap="round"/>
