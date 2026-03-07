@@ -483,6 +483,17 @@ function loadState(){
 
   for (const c of st.customers){
     if (!("demo" in c)) c.demo = false;
+    c.fixedSettlementTemplate = {
+      ...getDefaultFixedSettlementTemplate(),
+      ...(c.fixedSettlementTemplate || {}),
+      enabled: Boolean(c.fixedSettlementTemplate?.enabled),
+      periodType: c.fixedSettlementTemplate?.periodType || "quarter",
+      laborInvoiceUnits: Math.max(0, round2(Number(c.fixedSettlementTemplate?.laborInvoiceUnits) || 0)),
+      laborCashUnits: Math.max(0, round2(Number(c.fixedSettlementTemplate?.laborCashUnits) || 0)),
+      greenInvoiceUnits: Math.max(0, round2(Number(c.fixedSettlementTemplate?.greenInvoiceUnits) || 0)),
+      greenCashUnits: Math.max(0, round2(Number(c.fixedSettlementTemplate?.greenCashUnits) || 0)),
+      note: typeof c.fixedSettlementTemplate?.note === "string" ? c.fixedSettlementTemplate.note : ""
+    };
   }
   ensureUniqueCustomerNicknames(st);
   for (const p of st.products){
@@ -622,6 +633,33 @@ function getSettlementManualOverride(settlement){
 
 function getSettlementCalcMode(settlement){
   return (settlement?.manualOverride && settlement.manualOverride.enabled) ? "manual" : "logs";
+}
+
+function getDefaultFixedSettlementTemplate(){
+  return {
+    enabled: false,
+    periodType: "quarter",
+    laborInvoiceUnits: 0,
+    laborCashUnits: 0,
+    greenInvoiceUnits: 0,
+    greenCashUnits: 0,
+    note: ""
+  };
+}
+
+function getCustomerFixedTemplate(customer){
+  const defaults = getDefaultFixedSettlementTemplate();
+  const source = customer?.fixedSettlementTemplate || {};
+  return {
+    ...defaults,
+    enabled: Boolean(source.enabled),
+    periodType: source.periodType || defaults.periodType,
+    laborInvoiceUnits: Math.max(0, round2(Number(source.laborInvoiceUnits) || 0)),
+    laborCashUnits: Math.max(0, round2(Number(source.laborCashUnits) || 0)),
+    greenInvoiceUnits: Math.max(0, round2(Number(source.greenInvoiceUnits) || 0)),
+    greenCashUnits: Math.max(0, round2(Number(source.greenCashUnits) || 0)),
+    note: typeof source.note === "string" ? source.note : ""
+  };
 }
 
 // ---------- Demo seeding (deterministic, period-based, realistic chronology) ----------
@@ -2095,6 +2133,31 @@ const actions = {
     return { ok: true };
   },
   deleteCustomer(customerId){ state.customers = state.customers.filter(x => x.id !== customerId); commit(); },
+  toggleCustomerTemplateEnabled(customerId){
+    const c = state.customers.find(x => x.id === customerId);
+    if (!c) return;
+    const tmpl = getCustomerFixedTemplate(c);
+    c.fixedSettlementTemplate = { ...tmpl, enabled: !tmpl.enabled };
+    commit();
+  },
+  bumpCustomerTemplateValue(customerId, key, delta){
+    const c = state.customers.find(x => x.id === customerId);
+    if (!c) return;
+    const allowed = new Set(["laborInvoiceUnits", "laborCashUnits", "greenInvoiceUnits", "greenCashUnits"]);
+    if (!allowed.has(key)) return;
+    const tmpl = getCustomerFixedTemplate(c);
+    const step = key.startsWith("labor") ? 0.5 : 1;
+    const next = Math.max(0, round2((Number(tmpl[key]) || 0) + (Number(delta) * step)));
+    c.fixedSettlementTemplate = { ...tmpl, [key]: next };
+    commit();
+  },
+  updateCustomerTemplateNote(customerId, note){
+    const c = state.customers.find(x => x.id === customerId);
+    if (!c) return;
+    const tmpl = getCustomerFixedTemplate(c);
+    c.fixedSettlementTemplate = { ...tmpl, note: String(note || "").trim() };
+    commit();
+  },
   updateProduct(productId, patch){
     const p = state.products.find(x => x.id === productId);
     if (!p) return;
@@ -2420,6 +2483,7 @@ function openSheet(type, id){
   const map = {
     "log": "logDetail",
     "customer": "customerDetail",
+    "customer-fixed-template": "customerFixedTemplate",
     "product": "productDetail",
     "settlement": "settlementDetail",
     "new-log": "newLog"
@@ -3243,6 +3307,7 @@ function renderSheet(){
   setBottomBarHeights({ statusVisible: false });
 
   if (active.view === "customerDetail") renderCustomerSheet(active.id);
+  if (active.view === "customerFixedTemplate") renderCustomerFixedTemplateSheet(active.id);
   if (active.view === "productDetail") renderProductSheet(active.id);
   if (active.view === "logDetail") renderLogSheet(active.id);
   if (active.view === "settlementDetail") renderSettlementSheet(active.id);
@@ -3549,6 +3614,14 @@ function renderCustomerSheet(id){
         ` : ""}
       </div>
       <div class="client-detail-actionbar-right">
+        ${!isEditing ? `
+          <button class="detail-edit-toggle" id="btnOpenCustomerTemplate" type="button" aria-label="Vaste kwartaal-template" title="Vaste kwartaal-template">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <path d="M16 2v4M8 2v4M3 10h18M7 15h10M7 19h6" stroke-linecap="round"/>
+            </svg>
+          </button>
+        ` : ""}
         <button class="detail-edit-toggle" id="toggleClientEdit" type="button" aria-label="${isEditing ? "Klant opslaan" : "Klant bewerken"}" title="${isEditing ? "Klant opslaan" : "Klant bewerken"}">
           ${isEditing
             ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
@@ -3662,6 +3735,10 @@ function renderCustomerSheet(id){
     render();
   });
 
+  $("#btnOpenCustomerTemplate")?.addEventListener("click", ()=>{
+    pushView({ view: "customerFixedTemplate", id: c.id });
+  });
+
   $("#delCustomer")?.addEventListener("click", ()=>{
     const hasLogs = state.logs.some(l => l.customerId === c.id);
     const hasSet = state.settlements.some(s => s.customerId === c.id);
@@ -3676,6 +3753,96 @@ function renderCustomerSheet(id){
   });
   $("#sheetBody").querySelectorAll("[data-open-settlement]").forEach(x=>{
     x.addEventListener("click", ()=> openSheet("settlement", x.getAttribute("data-open-settlement")));
+  });
+}
+
+function renderCustomerFixedTemplateSheet(customerId){
+  const c = getCustomer(customerId);
+  if (!c){ closeSheet(); return; }
+  const tmpl = getCustomerFixedTemplate(c);
+
+  $("#sheetTitle").textContent = "Vaste kwartaal-template";
+  $("#sheetActions").innerHTML = "";
+
+  const workIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="7"/><path d="M12 8.6v3.8l2.7 1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const greenIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 15c2.2-6.2 8.4-8.7 14-9-1.1 5.7-3 11.8-9 14-4 1.4-7-1.3-5-5Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 14.5c2 .2 4.6-.4 7.5-2.4" stroke-linecap="round"/></svg>`;
+
+  const renderTmplControls = (key, bucket, qty) => {
+    const fieldMap = {
+      'labor|invoice': 'laborInvoiceUnits',
+      'labor|cash':    'laborCashUnits',
+      'green|invoice': 'greenInvoiceUnits',
+      'green|cash':    'greenCashUnits'
+    };
+    const fieldKey = fieldMap[`${key}|${bucket}`] || "";
+    return `<div class="allocation-controls" data-bucket="${bucket}">
+      <button class="iconbtn iconbtn-sm" type="button" data-tmpl-step="${fieldKey}|-1" aria-label="${bucket} min">−</button>
+      <div class="allocation-value mono tabular">${esc(String(formatQuickQty(qty)))}</div>
+      <button class="iconbtn iconbtn-sm" type="button" data-tmpl-step="${fieldKey}|1" aria-label="${bucket} plus">+</button>
+    </div>`;
+  };
+
+  $("#sheetBody").innerHTML = `
+    <div class="stack">
+      <div class="section section-tight">
+        <div class="summary-row">
+          <span class="label">${esc(c.nickname || c.name || "Klant")}</span>
+          <span class="num muted">kwartaal</span>
+        </div>
+      </div>
+
+      <div class="card stack">
+        <div class="row space" style="min-height:44px;align-items:center">
+          <span style="font-size:14px;color:var(--text)">Actief</span>
+          <button class="iconbtn ${tmpl.enabled ? "is-active" : ""}" id="btnTmplToggle" type="button"
+            aria-pressed="${tmpl.enabled}" aria-label="${tmpl.enabled ? "Template uitschakelen" : "Template inschakelen"}"
+            title="${tmpl.enabled ? "Template uitschakelen" : "Template inschakelen"}">
+            ${tmpl.enabled
+              ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+              : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>`}
+          </button>
+        </div>
+
+        <div class="allocation-matrix">
+          <div class="allocation-col-head" aria-hidden="true"></div>
+          <div class="allocation-col-head">Factuur</div>
+          <div class="allocation-col-head">Cash</div>
+
+          <div class="allocation-matrix-icon" aria-hidden="true">${workIcon}</div>
+          ${renderTmplControls('labor', 'invoice', tmpl.laborInvoiceUnits)}
+          ${renderTmplControls('labor', 'cash',    tmpl.laborCashUnits)}
+
+          <div class="allocation-matrix-icon" aria-hidden="true">${greenIcon}</div>
+          ${renderTmplControls('green', 'invoice', tmpl.greenInvoiceUnits)}
+          ${renderTmplControls('green', 'cash',    tmpl.greenCashUnits)}
+        </div>
+      </div>
+
+      <div class="card stack">
+        <label style="font-size:12px;color:var(--muted)">Notitie</label>
+        <textarea id="tmplNote" rows="3" style="width:100%;min-height:44px;border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent;padding:8px 2px;resize:vertical">${esc(tmpl.note || "")}</textarea>
+      </div>
+    </div>
+  `;
+
+  $("#btnTmplToggle")?.addEventListener("click", ()=>{
+    actions.toggleCustomerTemplateEnabled(customerId);
+    renderSheetKeepScroll();
+  });
+
+  $("#sheetBody").querySelectorAll("[data-tmpl-step]").forEach(btn=>{
+    const raw = String(btn.getAttribute("data-tmpl-step") || "");
+    const [key, directionRaw] = raw.split("|");
+    const direction = Number(directionRaw || 0);
+    if (!key || !Number.isFinite(direction) || direction === 0) return;
+    btn.addEventListener("click", ()=>{
+      actions.bumpCustomerTemplateValue(customerId, key, direction);
+      renderSheetKeepScroll();
+    });
+  });
+
+  $("#tmplNote")?.addEventListener("change", ()=>{
+    actions.updateCustomerTemplateNote(customerId, $("#tmplNote").value || "");
   });
 }
 

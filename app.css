@@ -571,6 +571,7 @@ body:not([data-view="meer"]) #moreActionBar{
 
 .client-detail-actionbar-right{
   justify-content:flex-end;
+  gap:8px;
 }
 
 .detail-delete-toggle{
