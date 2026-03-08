@@ -1707,6 +1707,8 @@ const ui = {
   insightsPeriod: "maand",
   insightsAnchorDate: new Date(),
   insightsCustomersMode: "settlements",
+  isInsightsPeriodPickerOpen: false,
+  insightsPeriodPickerDraft: null,
   meerPanel: "default",
   workRhythmSelectedIdx: null
 };
@@ -3171,6 +3173,145 @@ function getInsightsPeriodRange(period, anchorDate) {
   return { start, end };
 }
 
+function getISOWeekInfo(dateLike) {
+  const d = dateLike instanceof Date ? dateLike : new Date();
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = tmp.getUTCDay() || 7;
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+  const isoYear = tmp.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const week = Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+  return { isoYear, week };
+}
+
+function getISOWeeksInYear(year) {
+  const dec28 = new Date(Date.UTC(year, 11, 28));
+  return getISOWeekInfo(dec28).week;
+}
+
+function getISOWeekStartDate(isoYear, week) {
+  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const monWeek1 = new Date(jan4);
+  monWeek1.setUTCDate(jan4.getUTCDate() - jan4Day + 1);
+  const mon = new Date(monWeek1);
+  mon.setUTCDate(monWeek1.getUTCDate() + ((week - 1) * 7));
+  return new Date(mon.getUTCFullYear(), mon.getUTCMonth(), mon.getUTCDate());
+}
+
+function createInsightsPeriodDraft(period, anchorDate) {
+  const anchor = anchorDate instanceof Date ? anchorDate : new Date();
+  if (period === "week") {
+    const info = getISOWeekInfo(anchor);
+    return { type: "week", year: info.isoYear, week: info.week };
+  }
+  if (period === "kwartaal") {
+    return {
+      type: "kwartaal",
+      year: anchor.getFullYear(),
+      quarter: Math.floor(anchor.getMonth() / 3) + 1
+    };
+  }
+  if (period === "jaar") {
+    return { type: "jaar", year: anchor.getFullYear() };
+  }
+  return {
+    type: "maand",
+    year: anchor.getFullYear(),
+    month: anchor.getMonth() + 1
+  };
+}
+
+function renderInsightsPeriodPicker(period, draft, anchorDate) {
+  if (!ui.isInsightsPeriodPickerOpen) return "";
+  const MONTH_NAMES = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+  const anchor = anchorDate instanceof Date ? anchorDate : new Date();
+  const yearCenter = Number(draft?.year) || anchor.getFullYear();
+  const years = [];
+  for (let y = yearCenter - 8; y <= yearCenter + 8; y++) years.push(y);
+
+  let controls = "";
+  if (period === "week") {
+    const selYear = Number(draft?.year) || yearCenter;
+    const maxWeeks = getISOWeeksInYear(selYear);
+    const selWeek = Math.max(1, Math.min(Number(draft?.week) || 1, maxWeeks));
+    controls = `
+      <div class="ins-picker-grid">
+        <label class="ins-picker-field">
+          <span>Jaar</span>
+          <select data-ins-picker-year>
+            ${years.map(y => `<option value="${y}"${y === selYear ? " selected" : ""}>${y}</option>`).join("")}
+          </select>
+        </label>
+        <label class="ins-picker-field">
+          <span>Week</span>
+          <select data-ins-picker-week>
+            ${Array.from({ length: maxWeeks }, (_, idx) => idx + 1)
+              .map(w => `<option value="${w}"${w === selWeek ? " selected" : ""}>Week ${w}</option>`).join("")}
+          </select>
+        </label>
+      </div>`;
+  } else if (period === "maand") {
+    const selYear = Number(draft?.year) || yearCenter;
+    const selMonth = Math.max(1, Math.min(Number(draft?.month) || 1, 12));
+    controls = `
+      <div class="ins-picker-grid">
+        <label class="ins-picker-field">
+          <span>Jaar</span>
+          <select data-ins-picker-year>
+            ${years.map(y => `<option value="${y}"${y === selYear ? " selected" : ""}>${y}</option>`).join("")}
+          </select>
+        </label>
+        <label class="ins-picker-field">
+          <span>Maand</span>
+          <select data-ins-picker-month>
+            ${MONTH_NAMES.map((m, idx) => `<option value="${idx + 1}"${(idx + 1) === selMonth ? " selected" : ""}>${esc(m)}</option>`).join("")}
+          </select>
+        </label>
+      </div>`;
+  } else if (period === "kwartaal") {
+    const selYear = Number(draft?.year) || yearCenter;
+    const selQuarter = Math.max(1, Math.min(Number(draft?.quarter) || 1, 4));
+    controls = `
+      <div class="ins-picker-grid">
+        <label class="ins-picker-field">
+          <span>Jaar</span>
+          <select data-ins-picker-year>
+            ${years.map(y => `<option value="${y}"${y === selYear ? " selected" : ""}>${y}</option>`).join("")}
+          </select>
+        </label>
+        <label class="ins-picker-field">
+          <span>Kwartaal</span>
+          <select data-ins-picker-quarter>
+            ${[1,2,3,4].map(q => `<option value="${q}"${q === selQuarter ? " selected" : ""}>Q${q}</option>`).join("")}
+          </select>
+        </label>
+      </div>`;
+  } else {
+    const selYear = Number(draft?.year) || yearCenter;
+    controls = `
+      <div class="ins-picker-grid ins-picker-grid--single">
+        <label class="ins-picker-field">
+          <span>Jaar</span>
+          <select data-ins-picker-year>
+            ${years.map(y => `<option value="${y}"${y === selYear ? " selected" : ""}>${y}</option>`).join("")}
+          </select>
+        </label>
+      </div>`;
+  }
+
+  return `
+    <div class="ins-picker-overlay" data-ins-picker-overlay>
+      <div class="ins-picker-sheet" role="dialog" aria-modal="true" aria-label="Periode kiezen">
+        <div class="ins-picker-controls">${controls}</div>
+        <div class="ins-picker-actions">
+          <button class="btn" type="button" data-ins-picker-cancel>Annuleren</button>
+          <button class="btn primary" type="button" data-ins-picker-confirm>Bevestigen</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 function getSettlementsForInsights(range) {
   return (state.settlements || []).filter(s => {
     if (!isSettlementCalculated(s)) return false;
@@ -3734,6 +3875,7 @@ function renderMeer(){
   const range = getInsightsPeriodRange(period, anchor);
   const mode = ui.insightsCustomersMode || "settlements";
   const panel = ui.meerPanel || "default";
+  const pickerDraft = ui.insightsPeriodPickerDraft || createInsightsPeriodDraft(period, anchor);
 
   // ISO week number helper
   function isoWeekNum(d) {
@@ -3871,20 +4013,30 @@ function renderMeer(){
 
       <div class="insights-nav">
         <button class="ins-nav-prev">&#8249;</button>
-        <span class="ins-nav-label">${esc(periodLabel)}</span>
+        <button class="ins-nav-label" type="button" aria-haspopup="dialog" aria-expanded="${ui.isInsightsPeriodPickerOpen ? "true" : "false"}">${esc(periodLabel)}</button>
         <button class="ins-nav-next">&#8250;</button>
       </div>
 
       ${mainContentHTML}
+      ${renderInsightsPeriodPicker(period, pickerDraft, anchor)}
     </div>
   `;
 
   el.querySelectorAll(".ipc-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       ui.insightsPeriod = btn.dataset.period;
+      if (ui.isInsightsPeriodPickerOpen) {
+        ui.insightsPeriodPickerDraft = createInsightsPeriodDraft(ui.insightsPeriod, ui.insightsAnchorDate);
+      }
       ui.workRhythmSelectedIdx = null;
       renderMeer();
     });
+  });
+
+  el.querySelector(".ins-nav-label")?.addEventListener("click", () => {
+    ui.insightsPeriodPickerDraft = createInsightsPeriodDraft(period, ui.insightsAnchorDate);
+    ui.isInsightsPeriodPickerOpen = true;
+    renderMeer();
   });
 
   el.querySelector(".ins-nav-prev").addEventListener("click", () => {
@@ -3908,6 +4060,63 @@ function renderMeer(){
     ui.workRhythmSelectedIdx = null;
     renderMeer();
   });
+
+  const pickerOverlay = el.querySelector("[data-ins-picker-overlay]");
+  if (pickerOverlay) {
+    pickerOverlay.addEventListener("click", (e) => {
+      if (e.target !== pickerOverlay) return;
+      ui.isInsightsPeriodPickerOpen = false;
+      ui.insightsPeriodPickerDraft = null;
+      renderMeer();
+    });
+    pickerOverlay.querySelector(".ins-picker-sheet")?.addEventListener("click", e => e.stopPropagation());
+    pickerOverlay.querySelector("[data-ins-picker-cancel]")?.addEventListener("click", () => {
+      ui.isInsightsPeriodPickerOpen = false;
+      ui.insightsPeriodPickerDraft = null;
+      renderMeer();
+    });
+
+    pickerOverlay.querySelectorAll("[data-ins-picker-year], [data-ins-picker-week], [data-ins-picker-month], [data-ins-picker-quarter]").forEach(ctrl => {
+      ctrl.addEventListener("change", () => {
+        const next = { ...(ui.insightsPeriodPickerDraft || pickerDraft) };
+        const yearEl = pickerOverlay.querySelector("[data-ins-picker-year]");
+        const weekEl = pickerOverlay.querySelector("[data-ins-picker-week]");
+        const monthEl = pickerOverlay.querySelector("[data-ins-picker-month]");
+        const quarterEl = pickerOverlay.querySelector("[data-ins-picker-quarter]");
+        if (yearEl) next.year = Number(yearEl.value);
+        if (weekEl) next.week = Number(weekEl.value);
+        if (monthEl) next.month = Number(monthEl.value);
+        if (quarterEl) next.quarter = Number(quarterEl.value);
+        ui.insightsPeriodPickerDraft = next;
+        renderMeer();
+      });
+    });
+
+    pickerOverlay.querySelector("[data-ins-picker-confirm]")?.addEventListener("click", () => {
+      const draft = ui.insightsPeriodPickerDraft || pickerDraft;
+      if (period === "week") {
+        const year = Number(draft?.year) || new Date().getFullYear();
+        const maxWeeks = getISOWeeksInYear(year);
+        const week = Math.max(1, Math.min(Number(draft?.week) || 1, maxWeeks));
+        ui.insightsAnchorDate = getISOWeekStartDate(year, week);
+      } else if (period === "maand") {
+        const year = Number(draft?.year) || new Date().getFullYear();
+        const month = Math.max(1, Math.min(Number(draft?.month) || 1, 12));
+        ui.insightsAnchorDate = new Date(year, month - 1, 15);
+      } else if (period === "kwartaal") {
+        const year = Number(draft?.year) || new Date().getFullYear();
+        const quarter = Math.max(1, Math.min(Number(draft?.quarter) || 1, 4));
+        ui.insightsAnchorDate = new Date(year, (quarter - 1) * 3, 15);
+      } else {
+        const year = Number(draft?.year) || new Date().getFullYear();
+        ui.insightsAnchorDate = new Date(year, 6, 1);
+      }
+      ui.isInsightsPeriodPickerOpen = false;
+      ui.insightsPeriodPickerDraft = null;
+      ui.workRhythmSelectedIdx = null;
+      renderMeer();
+    });
+  }
 
   // Mode switch: toggle without closing panel
   el.querySelectorAll(".cms-btn").forEach(btn => {
