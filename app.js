@@ -3528,6 +3528,194 @@ function renderCustomerInsightsDetail() {
   });
 }
 
+// ---------- Periode picker ----------
+function openInsightsPeriodPicker() {
+  const existing = document.getElementById("insightsPeriodPicker");
+  if (existing) existing.remove();
+
+  const period = ui.insightsPeriod || "maand";
+  const anchor = ui.insightsAnchorDate instanceof Date ? new Date(ui.insightsAnchorDate) : new Date();
+
+  // Local picker state
+  let draft = new Date(anchor);
+  let navYear = draft.getFullYear();
+  let navMonth = draft.getMonth();
+
+  const MONTH_NL = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+  const MONTH_NL_SHORT = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+
+  function _isoWeek(d) {
+    const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const day = tmp.getUTCDay() || 7;
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+    return Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+  }
+
+  function _weekStart(d) {
+    const dow = d.getDay();
+    const diff = dow === 0 ? -6 : 1 - dow;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+  }
+
+  function _fmtShort(d) {
+    return `${d.getDate()} ${MONTH_NL_SHORT[d.getMonth()]}`;
+  }
+
+  function _getPickerTitle() {
+    if (period === "week") return "Kies week";
+    if (period === "maand") return "Kies maand";
+    if (period === "kwartaal") return "Kies kwartaal";
+    return "Kies jaar";
+  }
+
+  function renderBody() {
+    if (period === "maand") {
+      const activeY = draft.getFullYear();
+      const activeM = draft.getMonth();
+      const cells = MONTH_NL_SHORT.map((name, i) => {
+        const isActive = navYear === activeY && i === activeM;
+        return `<button class="pp-cell${isActive ? " pp-cell-active" : ""}" data-action="month" data-value="${i}">${name}</button>`;
+      }).join("");
+      return `
+        <div class="pp-year-nav">
+          <button class="pp-yn-btn" data-action="year-prev">&#8249;</button>
+          <span class="pp-yn-label">${navYear}</span>
+          <button class="pp-yn-btn" data-action="year-next">&#8250;</button>
+        </div>
+        <div class="pp-month-grid">${cells}</div>`;
+    }
+
+    if (period === "kwartaal") {
+      const activeY = draft.getFullYear();
+      const activeQ = Math.floor(draft.getMonth() / 3) + 1;
+      const cells = [1, 2, 3, 4].map(q => {
+        const isActive = navYear === activeY && q === activeQ;
+        return `<button class="pp-cell pp-cell-q${isActive ? " pp-cell-active" : ""}" data-action="quarter" data-value="${q}">Q${q}</button>`;
+      }).join("");
+      return `
+        <div class="pp-year-nav">
+          <button class="pp-yn-btn" data-action="year-prev">&#8249;</button>
+          <span class="pp-yn-label">${navYear}</span>
+          <button class="pp-yn-btn" data-action="year-next">&#8250;</button>
+        </div>
+        <div class="pp-quarter-grid">${cells}</div>`;
+    }
+
+    if (period === "jaar") {
+      const activeY = draft.getFullYear();
+      const curY = new Date().getFullYear();
+      let rows = "";
+      for (let y = curY - 6; y <= curY + 2; y++) {
+        rows += `<button class="pp-year-row${y === activeY ? " pp-cell-active" : ""}" data-action="year" data-value="${y}">${y}</button>`;
+      }
+      return `<div class="pp-year-list">${rows}</div>`;
+    }
+
+    // week
+    const draftWS = _weekStart(draft).toDateString();
+    const overlapStart = new Date(navYear, navMonth, 1);
+    const overlapEnd = new Date(navYear, navMonth + 1, 0);
+    let w = _weekStart(new Date(navYear, navMonth, 1));
+    let rows = "";
+    for (let i = 0; i < 6; i++) {
+      const wEnd = new Date(w.getFullYear(), w.getMonth(), w.getDate() + 6);
+      if (w <= overlapEnd && wEnd >= overlapStart) {
+        const wNum = _isoWeek(w);
+        const isActive = w.toDateString() === draftWS;
+        const wKey = `${w.getFullYear()}-${String(w.getMonth()+1).padStart(2,"0")}-${String(w.getDate()).padStart(2,"0")}`;
+        rows += `<button class="pp-week-row${isActive ? " pp-cell-active" : ""}" data-action="week" data-value="${wKey}">
+          <span class="pp-week-num">week ${wNum}</span>
+          <span class="pp-week-range">${_fmtShort(w)}\u2013${_fmtShort(wEnd)}</span>
+        </button>`;
+      }
+      w = new Date(w.getFullYear(), w.getMonth(), w.getDate() + 7);
+    }
+    return `
+      <div class="pp-year-nav">
+        <button class="pp-yn-btn" data-action="month-prev">&#8249;</button>
+        <span class="pp-yn-label">${MONTH_NL[navMonth]} ${navYear}</span>
+        <button class="pp-yn-btn" data-action="month-next">&#8250;</button>
+      </div>
+      <div class="pp-week-list">${rows}</div>`;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.id = "insightsPeriodPicker";
+  overlay.className = "pp-backdrop";
+  overlay.innerHTML = `
+    <div class="pp-sheet">
+      <div class="pp-handle"></div>
+      <div class="pp-header">
+        <button class="pp-cancel-btn" data-action="cancel">Annuleer</button>
+        <div class="pp-title">${_getPickerTitle()}</div>
+        <button class="pp-confirm-btn" data-action="confirm">Klaar</button>
+      </div>
+      <div class="pp-body">${renderBody()}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  function updateBody() {
+    overlay.querySelector(".pp-body").innerHTML = renderBody();
+    bindBodyEvents();
+  }
+
+  function closePicker() {
+    overlay.classList.add("pp-closing");
+    setTimeout(() => overlay.remove(), 300);
+  }
+
+  function confirmPicker() {
+    ui.insightsAnchorDate = new Date(draft);
+    closePicker();
+    renderMeer();
+  }
+
+  function bindBodyEvents() {
+    overlay.querySelector(".pp-body").querySelectorAll("[data-action]").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        const value = btn.dataset.value;
+        if (action === "year-prev") { navYear--; updateBody(); return; }
+        if (action === "year-next") { navYear++; updateBody(); return; }
+        if (action === "month-prev") {
+          navMonth--; if (navMonth < 0) { navMonth = 11; navYear--; }
+          updateBody(); return;
+        }
+        if (action === "month-next") {
+          navMonth++; if (navMonth > 11) { navMonth = 0; navYear++; }
+          updateBody(); return;
+        }
+        if (action === "month") {
+          draft = new Date(navYear, parseInt(value), 1);
+          updateBody(); return;
+        }
+        if (action === "quarter") {
+          draft = new Date(navYear, (parseInt(value) - 1) * 3, 1);
+          updateBody(); return;
+        }
+        if (action === "year") {
+          draft = new Date(parseInt(value), draft.getMonth(), 1);
+          updateBody(); return;
+        }
+        if (action === "week") {
+          const parts = value.split("-");
+          draft = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+          updateBody(); return;
+        }
+      });
+    });
+  }
+
+  overlay.querySelector("[data-action='cancel']").addEventListener("click", closePicker);
+  overlay.querySelector("[data-action='confirm']").addEventListener("click", confirmPicker);
+  overlay.addEventListener("click", e => { if (e.target === overlay) closePicker(); });
+  bindBodyEvents();
+
+  requestAnimationFrame(() => overlay.classList.add("pp-open"));
+}
+
 // ---------- Meer tab ----------
 function renderMeer(){
   const el = $("#tab-meer");
@@ -3670,7 +3858,7 @@ function renderMeer(){
 
       <div class="insights-nav">
         <button class="ins-nav-prev">&#8249;</button>
-        <span class="ins-nav-label">${esc(periodLabel)}</span>
+        <button class="ins-nav-label">${esc(periodLabel)}<svg class="ins-nav-chevron" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 1l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="ins-nav-next">&#8250;</button>
       </div>
 
@@ -3683,6 +3871,10 @@ function renderMeer(){
       ui.insightsPeriod = btn.dataset.period;
       renderMeer();
     });
+  });
+
+  el.querySelector(".ins-nav-label").addEventListener("click", () => {
+    openInsightsPeriodPicker();
   });
 
   el.querySelector(".ins-nav-prev").addEventListener("click", () => {
