@@ -1705,7 +1705,8 @@ const ui = {
     qty: "1"
   },
   insightsPeriod: "maand",
-  insightsAnchorDate: new Date()
+  insightsAnchorDate: new Date(),
+  insightsCustomersMode: "settlements"
 };
 
 // Guardrail: keep state mutations inside actions + commit.
@@ -2135,6 +2136,7 @@ function viewTitle(viewState){
     return p ? (p.name || "Product") : "Product";
   }
   if (view === "newLog") return "Nieuwe werklog";
+  if (view === "customerInsights") return "Klantoverzicht";
   return "Tuinlog";
 }
 
@@ -3213,6 +3215,36 @@ function getTopCustomersByRevenue(range) {
     .sort((a, b) => b.amount - a.amount);
 }
 
+function getCustomerTimeShare(range) {
+  const logs = getLogsForInsights(range);
+  const map = new Map();
+  let totalMs = 0;
+  for (const l of logs) {
+    const cid = l.customerId;
+    if (!cid) continue;
+    const ms = sumWorkMs(l);
+    map.set(cid, (map.get(cid) || 0) + ms);
+    totalMs += ms;
+  }
+  return [...map.entries()]
+    .map(([cid, ms]) => {
+      const customer = (state.customers || []).find(c => c.id === cid);
+      const pct = totalMs > 0 ? round2((ms / totalMs) * 100) : 0;
+      return { customerId: cid, name: customer?.nickname || customer?.name || "?", timeMs: ms, pct };
+    })
+    .filter(x => x.timeMs > 0)
+    .sort((a, b) => b.timeMs - a.timeMs);
+}
+
+function getCustomerRevenueShare(range) {
+  const customers = getTopCustomersByRevenue(range);
+  const total = customers.reduce((s, c) => s + c.amount, 0);
+  return customers.map(c => ({
+    ...c,
+    pct: total > 0 ? round2((c.amount / total) * 100) : 0
+  }));
+}
+
 function getWorkRhythmSeries(range, period) {
   const logs = getLogsForInsights(range);
   const MONTH_NAMES = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
@@ -3363,19 +3395,130 @@ function renderWeekdayBarsSVG(totals) {
   return `<svg viewBox="0 0 ${totalW} ${H + 18}" class="weekday-svg">${bars}</svg>`;
 }
 
-function renderTopCustomerBars(customers) {
+// Palette voor klantenanalyse — neutrale blauw-grijze tinten, geen statuskleurenconflict
+const CUSTOMER_CHART_COLORS = [
+  "#8faec8","#6a8daa","#4d6f8c","#95b5c8","#3a5a78","#b8ccdc","#2e4860"
+];
+
+function fmtDurationShort(ms) {
+  const h = Math.floor(ms / 3600000);
+  const m = Math.round((ms % 3600000) / 60000);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}u`;
+  return `${h}u${m}m`;
+}
+
+function renderCustomerInsightsPreview(customers, mode) {
   if (!customers.length) {
-    return '<p class="insights-empty">Geen omzet in deze periode</p>';
+    const msg = mode === "logs" ? "Geen werkdata in deze periode" : "Geen omzet in deze periode";
+    return `<p class="insights-empty">${msg}</p>`;
   }
-  const maxAmt = customers[0].amount;
   return customers.map(c => {
-    const pct = maxAmt > 0 ? Math.max(4, (c.amount / maxAmt) * 100) : 4;
-    return `<div class="ins-bar-row" data-customer-id="${esc(c.customerId)}">
+    const barWidth = Math.max(3, c.pct);
+    const valueLabel = mode === "logs" ? durMsToHM(c.timeMs) : fmtMoney0(c.amount);
+    const pctLabel = `${Math.round(c.pct)}%`;
+    return `<div class="ins-bar-row">
   <span class="ins-bar-name">${esc(c.name)}</span>
-  <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${pct.toFixed(1)}%"></span></span>
-  <span class="ins-bar-amount">${fmtMoney0(c.amount)}</span>
+  <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%"></span></span>
+  <span class="ins-bar-amount">${esc(valueLabel)}</span>
+  <span class="ins-bar-pct">${esc(pctLabel)}</span>
 </div>`;
   }).join("");
+}
+
+function renderCustomerDonutChart(customers, mode) {
+  const CX = 70, CY = 70;
+  const rMid = 42;
+  const strokeW = 20;
+  const circumference = 2 * Math.PI * rMid;
+  const COLORS = CUSTOMER_CHART_COLORS;
+  let cumPct = 0;
+  const bgRing = `<circle cx="${CX}" cy="${CY}" r="${rMid}" fill="none" stroke="var(--border)" stroke-width="${strokeW}"/>`;
+  const segments = customers.map((c, i) => {
+    const dashLen = (c.pct / 100) * circumference;
+    const offset = -(cumPct / 100) * circumference;
+    cumPct += c.pct;
+    return `<circle cx="${CX}" cy="${CY}" r="${rMid}" fill="none" stroke="${COLORS[i % COLORS.length]}" stroke-width="${strokeW}" stroke-dasharray="${dashLen.toFixed(2)} ${circumference.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}" transform="rotate(-90 ${CX} ${CY})"/>`;
+  });
+  let centerLine1, centerLine2;
+  if (mode === "logs") {
+    centerLine1 = fmtDurationShort(customers.reduce((s, c) => s + c.timeMs, 0));
+    centerLine2 = "gewerkt";
+  } else {
+    centerLine1 = fmtMoney0(customers.reduce((s, c) => s + c.amount, 0));
+    centerLine2 = "verdiend";
+  }
+  return `<svg viewBox="0 0 ${CX * 2} ${CY * 2}" class="cust-donut-svg">
+    ${bgRing}${segments.join("")}
+    <text x="${CX}" y="${CY - 5}" text-anchor="middle" class="donut-center-value">${esc(centerLine1)}</text>
+    <text x="${CX}" y="${CY + 11}" text-anchor="middle" class="donut-center-sub">${esc(centerLine2)}</text>
+  </svg>`;
+}
+
+function renderCustomerInsightsDetail() {
+  const body = $("#sheetBody");
+  const period = ui.insightsPeriod || "maand";
+  const anchor = ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date();
+  const range = getInsightsPeriodRange(period, anchor);
+  const mode = ui.insightsCustomersMode || "settlements";
+  const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
+  const COLORS = CUSTOMER_CHART_COLORS;
+  const emptyMsg = mode === "logs" ? "Geen werkdata in deze periode" : "Geen omzet in deze periode";
+
+  const iconClock = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const iconCard = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="9" width="16" height="10" rx="2"/><path d="M7 9V6h7l3 3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14h4" stroke-linecap="round"/><path d="M15 14h2" stroke-linecap="round"/><path d="M8 19v-2h8v2" stroke-linecap="round"/></svg>`;
+
+  const modeSwitchHTML = `<div class="cust-mode-switch">
+    <button class="cms-btn${mode === "logs" ? " cms-active" : ""}" data-mode="logs" aria-label="Logboek">${iconClock}</button>
+    <button class="cms-btn${mode === "settlements" ? " cms-active" : ""}" data-mode="settlements" aria-label="Afrekening">${iconCard}</button>
+  </div>`;
+
+  let totalHTML = "";
+  if (customers.length) {
+    if (mode === "logs") {
+      totalHTML = `<div class="cust-detail-total">${esc(durMsToHM(customers.reduce((s, c) => s + c.timeMs, 0)))}</div>`;
+    } else {
+      totalHTML = `<div class="cust-detail-total">${esc(fmtMoney0(customers.reduce((s, c) => s + c.amount, 0)))}</div>`;
+    }
+  }
+
+  const chartHTML = customers.length ? renderCustomerDonutChart(customers, mode) : "";
+
+  const listHTML = customers.length
+    ? customers.map((c, i) => {
+        const valueLabel = mode === "logs" ? durMsToHM(c.timeMs) : fmtMoney0(c.amount);
+        const pctLabel = `${Math.round(c.pct)}%`;
+        const barWidth = Math.max(3, c.pct);
+        return `<div class="cust-detail-row">
+          <span class="cust-detail-legend" style="background:${COLORS[i % COLORS.length]}"></span>
+          <span class="cust-detail-name">${esc(c.name)}</span>
+          <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%;background:${COLORS[i % COLORS.length]}"></span></span>
+          <span class="cust-detail-value">${esc(valueLabel)}</span>
+          <span class="ins-bar-pct">${esc(pctLabel)}</span>
+        </div>`;
+      }).join("")
+    : `<p class="insights-empty">${emptyMsg}</p>`;
+
+  body.innerHTML = `
+    <div class="stack">
+      <div class="cust-detail-header">
+        ${modeSwitchHTML}
+        ${totalHTML}
+      </div>
+      ${chartHTML ? `<div class="cust-donut-wrap">${chartHTML}</div>` : ""}
+      <div class="cust-detail-list">
+        ${listHTML}
+      </div>
+    </div>
+  `;
+
+  body.querySelectorAll(".cms-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      ui.insightsCustomersMode = btn.dataset.mode;
+      renderCustomerInsightsDetail();
+    });
+  });
 }
 
 // ---------- Meer tab ----------
@@ -3384,9 +3527,10 @@ function renderMeer(){
   const period = ui.insightsPeriod || "maand";
   const anchor = ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date();
   const range = getInsightsPeriodRange(period, anchor);
+  const mode = ui.insightsCustomersMode || "settlements";
 
   const earnings = getEarningsSummary(range);
-  const topCustomers = getTopCustomersByRevenue(range);
+  const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
   const rhythmSeries = getWorkRhythmSeries(range, period);
   const logsInRange = getLogsForInsights(range);
   const totalWorkMs = logsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
@@ -3425,6 +3569,14 @@ function renderMeer(){
       </div>`
     : "";
 
+  const iconClock = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const iconCard = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="9" width="16" height="10" rx="2"/><path d="M7 9V6h7l3 3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14h4" stroke-linecap="round"/><path d="M15 14h2" stroke-linecap="round"/><path d="M8 19v-2h8v2" stroke-linecap="round"/></svg>`;
+
+  const modeSwitchHTML = `<div class="cust-mode-switch">
+    <button class="cms-btn${mode === "logs" ? " cms-active" : ""}" data-mode="logs" aria-label="Logboek">${iconClock}</button>
+    <button class="cms-btn${mode === "settlements" ? " cms-active" : ""}" data-mode="settlements" aria-label="Afrekening">${iconCard}</button>
+  </div>`;
+
   el.innerHTML = `
     <div class="stack meer-layout">
       <div class="insights-period-ctrl">
@@ -3447,10 +3599,13 @@ function renderMeer(){
         ${heroSplitHTML}
       </div>
 
-      <div class="insights-section">
-        <div class="insights-section-title">Klanten</div>
+      <div class="insights-section ins-cust-section">
+        <div class="insights-section-header">
+          <div class="insights-section-title">Klanten</div>
+          ${modeSwitchHTML}
+        </div>
         <div class="ins-bars-list">
-          ${renderTopCustomerBars(topCustomers)}
+          ${renderCustomerInsightsPreview(customers, mode)}
         </div>
       </div>
 
@@ -3491,14 +3646,23 @@ function renderMeer(){
     renderMeer();
   });
 
-  el.querySelectorAll(".ins-bar-row[data-customer-id]").forEach(row => {
-    row.addEventListener("click", () => {
-      const cid = row.dataset.customerId;
-      if (!cid) return;
-      if (ui.navStack.some(v => v.view === "customerDetail" && v.id === cid)) return;
-      pushView({ view: "customerDetail", id: cid });
+  // Mode switch: toggle without opening detail
+  el.querySelectorAll(".cms-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      ui.insightsCustomersMode = btn.dataset.mode;
+      renderMeer();
     });
   });
+
+  // Tap on klanten-sectie → open schermvullende analyse
+  const custSection = el.querySelector(".ins-cust-section");
+  if (custSection) {
+    custSection.addEventListener("click", () => {
+      if (ui.navStack.some(v => v.view === "customerInsights")) return;
+      pushView({ view: "customerInsights" });
+    });
+  }
 }
 
 // ---------- Sheet rendering ----------
@@ -3525,6 +3689,7 @@ function renderSheet(){
   if (active.view === "products") renderProductsSheet();
   if (active.view === "settings") renderSettingsSheet();
   if (active.view === "settlementListOptions") renderSettlementListOptionsSheet();
+  if (active.view === "customerInsights") renderCustomerInsightsDetail();
 }
 
 
