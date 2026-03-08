@@ -2458,6 +2458,24 @@ h2{
   padding-bottom: calc(var(--more-actionbar-height) + 24px);
 }
 
+/* Inline klantenanalyse state */
+.meer-layout--customers{
+  padding-bottom: calc(var(--more-actionbar-height) + 16px);
+}
+.meer-inline-customers{
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 4px;
+}
+.meer-inline-customers .cust-detail-row[data-customer-id]{
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.meer-inline-customers .cust-detail-row[data-customer-id]:active{
+  opacity: 0.6;
+}
+
 /* ====== Inzichten scherm ====== */
 
 /* Periode-selector */
