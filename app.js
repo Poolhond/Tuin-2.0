@@ -734,15 +734,15 @@ function ensureCurrentFixedQuarterSettlement(st, customer){
     type: "fixed_quarterly",
     status: "fixed",
     quarterKey: getQuarterKey(periodStart),
-    markedCalculated: false,
-    isCalculated: false,
-    calculatedAt: null,
+    markedCalculated: true,
+    isCalculated: true,
+    calculatedAt: now(),
     invoiceAmount: 0,
     cashAmount: 0,
-    invoicePaid: false,
-    cashPaid: false,
+    invoicePaid: true,
+    cashPaid: true,
     invoiceNumber: null,
-    invoiceLocked: false,
+    invoiceLocked: true,
     // Fixed-period metadata: behoud voor backward compat met bestaande functies
     kind: "fixed-period",
     fixedPeriodType: "quarter",
@@ -763,7 +763,7 @@ function ensureCurrentFixedQuarterSettlement(st, customer){
     fixedConfig: {
       periodType: "quarterly",
       autoInvoice: true,
-      autoPaid: false,
+      autoPaid: true,
       startsOn: periodStart,
       endsOn: periodEnd
     },
@@ -772,6 +772,9 @@ function ensureCurrentFixedQuarterSettlement(st, customer){
   };
 
   syncSettlementAmountsFromManualOverride(s, st);
+  if (Number(s.invoiceAmount || 0) > 0){
+    s.invoiceNumber = getNextInvoiceNumber(st.settlements || []);
+  }
   st.settlements.unshift(s);
   return s;
 }
