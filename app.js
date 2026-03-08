@@ -1707,7 +1707,8 @@ const ui = {
   insightsPeriod: "maand",
   insightsAnchorDate: new Date(),
   insightsCustomersMode: "settlements",
-  meerPanel: "default"
+  meerPanel: "default",
+  workRhythmSelectedIdx: null
 };
 
 // Guardrail: keep state mutations inside actions + commit.
@@ -2273,7 +2274,7 @@ $("#nav-meer").addEventListener("click", ()=>{
     popView();
     return;
   }
-  if (ui.meerPanel === "customers"){
+  if (ui.meerPanel !== "default"){
     ui.meerPanel = "default";
     renderMeer();
     return;
@@ -3318,6 +3319,104 @@ function getWorkRhythmSeries(range, period) {
   return { labels, values, period, startDate };
 }
 
+function getWorkRhythmBuckets(range, period) {
+  const logs = getLogsForInsights(range);
+  const settlements = getSettlementsForInsights(range);
+  const MONTH_NAMES = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+  const DAY_NAMES = ["Ma","Di","Wo","Do","Vr","Za","Zo"];
+
+  function bucketFromDay(dayStr, label) {
+    const dayLogs = logs.filter(l => l.date === dayStr);
+    const daySettlements = settlements.filter(s => s.date === dayStr);
+    const timeMs = dayLogs.reduce((sum, l) => sum + sumWorkMs(l), 0);
+    let invoice = 0, cash = 0;
+    for (const s of daySettlements) {
+      const amounts = getSettlementAmounts(s);
+      invoice += amounts.invoice || 0;
+      cash += amounts.cash || 0;
+    }
+    const custMap = new Map();
+    for (const l of dayLogs) {
+      if (!l.customerId) continue;
+      custMap.set(l.customerId, (custMap.get(l.customerId) || 0) + sumWorkMs(l));
+    }
+    const topCustId = [...custMap.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const topCust = topCustId ? (state.customers || []).find(c => c.id === topCustId) : null;
+    return {
+      label,
+      date: dayStr,
+      timeMs,
+      invoice: round2(invoice),
+      cash: round2(cash),
+      total: round2(invoice + cash),
+      topCustomerName: topCust ? (topCust.nickname || topCust.name) : null
+    };
+  }
+
+  if (period === "week") {
+    const startDate = parseLocalYMD(range.start);
+    if (!startDate) return [];
+    return Array.from({ length: 7 }, (_, i) => {
+      const day = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+      return bucketFromDay(formatLocalYMD(day), DAY_NAMES[i]);
+    });
+  }
+
+  if (period === "maand") {
+    const startDate = parseLocalYMD(range.start);
+    if (!startDate) return [];
+    const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const day = new Date(startDate.getFullYear(), startDate.getMonth(), i + 1);
+      return bucketFromDay(formatLocalYMD(day), String(i + 1));
+    });
+  }
+
+  // kwartaal or jaar: per maand
+  const startDate = parseLocalYMD(range.start);
+  const endDate = parseLocalYMD(range.end);
+  if (!startDate || !endDate) return [];
+  const buckets = [];
+  const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  while (cur < endDate) {
+    const year = cur.getFullYear();
+    const month = cur.getMonth();
+    const monthLogs = logs.filter(l => {
+      const d = parseLocalYMD(l.date);
+      return d && d.getFullYear() === year && d.getMonth() === month;
+    });
+    const monthSettlements = settlements.filter(s => {
+      const d = parseLocalYMD(s.date);
+      return d && d.getFullYear() === year && d.getMonth() === month;
+    });
+    const timeMs = monthLogs.reduce((sum, l) => sum + sumWorkMs(l), 0);
+    let invoice = 0, cash = 0;
+    for (const s of monthSettlements) {
+      const amounts = getSettlementAmounts(s);
+      invoice += amounts.invoice || 0;
+      cash += amounts.cash || 0;
+    }
+    const custMap = new Map();
+    for (const l of monthLogs) {
+      if (!l.customerId) continue;
+      custMap.set(l.customerId, (custMap.get(l.customerId) || 0) + sumWorkMs(l));
+    }
+    const topCustId = [...custMap.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const topCust = topCustId ? (state.customers || []).find(c => c.id === topCustId) : null;
+    buckets.push({
+      label: MONTH_NAMES[month],
+      date: `${year}-${String(month + 1).padStart(2, "0")}-01`,
+      timeMs,
+      invoice: round2(invoice),
+      cash: round2(cash),
+      total: round2(invoice + cash),
+      topCustomerName: topCust ? (topCust.nickname || topCust.name) : null
+    });
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  return buckets;
+}
+
 function getFavoriteWeekday(range) {
   const DAY_NAMES_LONG = ["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"];
   const logs = getLogsForInsights(range);
@@ -3528,6 +3627,105 @@ function renderCustomerInsightsDetail() {
   });
 }
 
+function getDefaultWorkRhythmIdx(buckets, mode) {
+  const values = buckets.map(b => mode === "logs" ? b.timeMs : b.total);
+  for (let i = values.length - 1; i >= 0; i--) {
+    if (values[i] > 0) return i;
+  }
+  return Math.max(0, values.length - 1);
+}
+
+function renderWorkRhythmExpandedHTML(buckets, mode, selectedIdx, period) {
+  const iconClock = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const iconCard = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="9" width="16" height="10" rx="2"/><path d="M7 9V6h7l3 3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14h4" stroke-linecap="round"/><path d="M15 14h2" stroke-linecap="round"/><path d="M8 19v-2h8v2" stroke-linecap="round"/></svg>`;
+
+  const modeSwitchHTML = `<div class="cust-mode-switch">
+    <button class="cms-btn${mode === "logs" ? " cms-active" : ""}" data-mode="logs" aria-label="Logboek">${iconClock}</button>
+    <button class="cms-btn${mode === "settlements" ? " cms-active" : ""}" data-mode="settlements" aria-label="Afrekening">${iconCard}</button>
+  </div>`;
+
+  const totalMs = buckets.reduce((s, b) => s + b.timeMs, 0);
+  const totalAmount = buckets.reduce((s, b) => s + b.total, 0);
+  const totalValue = mode === "logs" ? durMsToHM(totalMs) : fmtMoney0(totalAmount);
+
+  const values = buckets.map(b => mode === "logs" ? b.timeMs : b.total);
+  const maxVal = Math.max(...values, 1);
+  const hasData = values.some(v => v > 0);
+  const n = buckets.length;
+  const selBucket = (selectedIdx >= 0 && selectedIdx < n) ? buckets[selectedIdx] : null;
+
+  // Sideinfo
+  let sideInfoHTML = "";
+  if (!hasData) {
+    sideInfoHTML = `<div class="wr-sideinfo-empty insights-empty">Geen data</div>`;
+  } else if (selBucket) {
+    if (mode === "logs") {
+      const share = totalMs > 0 ? Math.round((selBucket.timeMs / totalMs) * 100) : 0;
+      sideInfoHTML = `
+        <div class="wr-sideinfo-label">${esc(selBucket.label)}</div>
+        <div class="wr-sideinfo-value">${esc(durMsToHM(selBucket.timeMs))}</div>
+        <div class="wr-sideinfo-pct">${share}%</div>
+        ${selBucket.topCustomerName ? `<div class="wr-sideinfo-cust">${esc(selBucket.topCustomerName)}</div>` : ""}
+      `;
+    } else {
+      const share = totalAmount > 0 ? Math.round((selBucket.total / totalAmount) * 100) : 0;
+      sideInfoHTML = `
+        <div class="wr-sideinfo-label">${esc(selBucket.label)}</div>
+        <div class="wr-sideinfo-value">${esc(fmtMoney0(selBucket.total))}</div>
+        <div class="wr-sideinfo-pct">${share}%</div>
+        ${(selBucket.invoice > 0 || selBucket.cash > 0) ? `
+          <div class="wr-sideinfo-breakdown"><span>factuur</span><span>${esc(fmtMoney0(selBucket.invoice))}</span></div>
+          <div class="wr-sideinfo-breakdown"><span>cash</span><span>${esc(fmtMoney0(selBucket.cash))}</span></div>
+        ` : ""}
+      `;
+    }
+  }
+
+  // Verticale bar chart (CSS-based)
+  const MAX_BAR_H = 126;
+  let barsHTML = "";
+  if (hasData) {
+    barsHTML = buckets.map((b, i) => {
+      const val = values[i];
+      const barH = val > 0 ? Math.max(2, Math.round((val / maxVal) * MAX_BAR_H)) : 0;
+      const isActive = i === selectedIdx;
+      let labelText = "";
+      if (period === "maand" && n > 12) {
+        const dayNum = parseInt(b.label, 10);
+        if (dayNum === 1 || dayNum === 8 || dayNum === 15 || dayNum === 22 || dayNum === 29) {
+          labelText = b.label;
+        }
+      } else {
+        labelText = b.label;
+      }
+      return `<div class="wr-bar-col${isActive ? " is-active" : ""}" data-idx="${i}" style="--h:${barH}px">
+        <div class="wr-bar-fill"></div>
+        <span class="wr-bar-lbl">${esc(labelText)}</span>
+      </div>`;
+    }).join("");
+  }
+
+  return `
+    <div class="work-rhythm-expanded">
+      <div class="wr-header">
+        ${modeSwitchHTML}
+        <div class="wr-total">${esc(totalValue)}</div>
+      </div>
+      <div class="wr-body">
+        <div class="wr-chart-area">
+          ${hasData
+            ? `<div class="wr-bars">${barsHTML}</div>`
+            : `<p class="insights-empty" style="padding-top:16px">Geen data in deze periode</p>`
+          }
+        </div>
+        <div class="wr-sideinfo">
+          ${sideInfoHTML}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // ---------- Meer tab ----------
 function renderMeer(){
   const el = $("#tab-meer");
@@ -3571,8 +3769,10 @@ function renderMeer(){
   </div>`;
 
   let mainContentHTML;
+  let layoutClass = "";
 
   if (panel === "customers") {
+    layoutClass = " meer-layout--customers";
     const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
     const COLORS = CUSTOMER_CHART_COLORS;
     const emptyMsg = mode === "logs" ? "Geen werkdata in deze periode" : "Geen omzet in deze periode";
@@ -3615,6 +3815,14 @@ function renderMeer(){
         </div>
       </div>
     `;
+  } else if (panel === "workRhythm") {
+    layoutClass = " meer-layout--work-rhythm";
+    const buckets = getWorkRhythmBuckets(range, period);
+    const defaultIdx = getDefaultWorkRhythmIdx(buckets, mode);
+    const selectedIdx = (ui.workRhythmSelectedIdx != null && ui.workRhythmSelectedIdx >= 0 && ui.workRhythmSelectedIdx < buckets.length)
+      ? ui.workRhythmSelectedIdx
+      : defaultIdx;
+    mainContentHTML = renderWorkRhythmExpandedHTML(buckets, mode, selectedIdx, period);
   } else {
     const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
     const earnings = getEarningsSummary(range);
@@ -3649,7 +3857,7 @@ function renderMeer(){
         </div>
       </div>
 
-      <div class="insights-section">
+      <div class="insights-section ins-rhythm-section">
         <div class="insights-section-header">
           <div class="insights-section-title">Werkritme</div>
           <div class="insights-section-meta">${esc(totalHoursLabel)}</div>
@@ -3660,7 +3868,7 @@ function renderMeer(){
   }
 
   el.innerHTML = `
-    <div class="stack meer-layout${panel === "customers" ? " meer-layout--customers" : ""}">
+    <div class="stack meer-layout${layoutClass}">
       <div class="insights-period-ctrl">
         <button class="ipc-btn${period === "week" ? " ipc-active" : ""}" data-period="week">Week</button>
         <button class="ipc-btn${period === "maand" ? " ipc-active" : ""}" data-period="maand">Maand</button>
@@ -3681,6 +3889,7 @@ function renderMeer(){
   el.querySelectorAll(".ipc-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       ui.insightsPeriod = btn.dataset.period;
+      ui.workRhythmSelectedIdx = null;
       renderMeer();
     });
   });
@@ -3692,6 +3901,7 @@ function renderMeer(){
     else if (period === "kwartaal") a.setMonth(a.getMonth() - 3);
     else a.setFullYear(a.getFullYear() - 1);
     ui.insightsAnchorDate = a;
+    ui.workRhythmSelectedIdx = null;
     renderMeer();
   });
 
@@ -3702,10 +3912,11 @@ function renderMeer(){
     else if (period === "kwartaal") a.setMonth(a.getMonth() + 3);
     else a.setFullYear(a.getFullYear() + 1);
     ui.insightsAnchorDate = a;
+    ui.workRhythmSelectedIdx = null;
     renderMeer();
   });
 
-  // Mode switch: toggle without opening/closing panel
+  // Mode switch: toggle without closing panel
   el.querySelectorAll(".cms-btn").forEach(btn => {
     btn.addEventListener("click", e => {
       e.stopPropagation();
@@ -3724,12 +3935,31 @@ function renderMeer(){
         pushView({ view: "customerDetail", id: customerId });
       });
     });
+  } else if (panel === "workRhythm") {
+    // Bar column: select bucket
+    el.querySelectorAll(".wr-bar-col").forEach(col => {
+      col.addEventListener("click", () => {
+        const idx = parseInt(col.dataset.idx, 10);
+        if (!isNaN(idx)) {
+          ui.workRhythmSelectedIdx = idx;
+          renderMeer();
+        }
+      });
+    });
   } else {
-    // Tap on klanten-sectie → expanded inline klantenanalyse
+    // Default: tap sections to expand inline
     const custSection = el.querySelector(".ins-cust-section");
     if (custSection) {
       custSection.addEventListener("click", () => {
         ui.meerPanel = "customers";
+        renderMeer();
+      });
+    }
+    const rhythmSection = el.querySelector(".ins-rhythm-section");
+    if (rhythmSection) {
+      rhythmSection.addEventListener("click", () => {
+        ui.meerPanel = "workRhythm";
+        ui.workRhythmSelectedIdx = null;
         renderMeer();
       });
     }
