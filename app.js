@@ -1704,7 +1704,8 @@ const ui = {
     productId: null,
     qty: "1"
   },
-  insightsPeriod: "maand"
+  insightsPeriod: "maand",
+  insightsAnchorDate: new Date()
 };
 
 // Guardrail: keep state mutations inside actions + commit.
@@ -3136,8 +3137,16 @@ function renderSettlements(){
 
 // ---------- Inzichten helpers ----------
 
-function getInsightsPeriodRange(period, now) {
-  const d = now instanceof Date ? now : new Date();
+function getInsightsPeriodRange(period, anchorDate) {
+  const d = anchorDate instanceof Date ? anchorDate : new Date();
+  if (period === "week") {
+    // Week starts on Monday
+    const dow = d.getDay(); // 0=Sun
+    const diffToMon = dow === 0 ? -6 : 1 - dow;
+    const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffToMon);
+    const nextMon = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 7);
+    return { start: formatLocalYMD(mon), end: formatLocalYMD(nextMon) };
+  }
   if (period === "kwartaal") {
     return { start: getQuarterStart(d), end: getQuarterEnd(d) };
   }
@@ -3201,18 +3210,37 @@ function getTopCustomersByRevenue(range) {
       };
     })
     .filter(x => x.amount > 0)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 4);
+    .sort((a, b) => b.amount - a.amount);
 }
 
 function getWorkRhythmSeries(range, period) {
   const logs = getLogsForInsights(range);
   const MONTH_NAMES = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+  const DAY_NAMES = ["Ma","Di","Wo","Do","Vr","Za","Zo"];
+
+  if (period === "week") {
+    // 7 punten: Ma t/m Zo
+    const startDate = parseLocalYMD(range.start);
+    if (!startDate) return { labels: [], values: [], period };
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      days.push(new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i));
+    }
+    const values = days.map(day =>
+      logs
+        .filter(l => {
+          const d = parseLocalYMD(l.date);
+          return d && d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate();
+        })
+        .reduce((sum, l) => sum + sumWorkMs(l), 0)
+    );
+    return { labels: DAY_NAMES, values, period };
+  }
 
   if (period === "kwartaal" || period === "jaar") {
     const startDate = parseLocalYMD(range.start);
     const endDate = parseLocalYMD(range.end);
-    if (!startDate || !endDate) return { labels: [], values: [] };
+    if (!startDate || !endDate) return { labels: [], values: [], period };
     const months = [];
     const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
     while (cur < endDate) {
@@ -3228,29 +3256,27 @@ function getWorkRhythmSeries(range, period) {
         })
         .reduce((sum, l) => sum + sumWorkMs(l), 0)
     );
-    return { labels, values };
+    return { labels, values, period };
   }
 
-  // maand: split into weeks of 7 days
+  // maand: 1 punt per dag
   const startDate = parseLocalYMD(range.start);
-  if (!startDate) return { labels: [], values: [] };
+  if (!startDate) return { labels: [], values: [], period };
   const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
-  const weeks = [];
-  for (let d = 1; d <= daysInMonth; d += 7) {
-    weeks.push({ from: d, to: Math.min(d + 6, daysInMonth) });
+  const labels = [];
+  const values = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    labels.push(String(day));
+    values.push(
+      logs
+        .filter(l => {
+          const d = parseLocalYMD(l.date);
+          return d && d.getFullYear() === startDate.getFullYear() && d.getMonth() === startDate.getMonth() && d.getDate() === day;
+        })
+        .reduce((sum, l) => sum + sumWorkMs(l), 0)
+    );
   }
-  const labels = weeks.map((_, i) => `W${i + 1}`);
-  const values = weeks.map(({ from, to }) =>
-    logs
-      .filter(l => {
-        const d = parseLocalYMD(l.date);
-        if (!d) return false;
-        const day = d.getDate();
-        return day >= from && day <= to;
-      })
-      .reduce((sum, l) => sum + sumWorkMs(l), 0)
-  );
-  return { labels, values };
+  return { labels, values, period, startDate };
 }
 
 function getFavoriteWeekday(range) {
@@ -3277,7 +3303,7 @@ function getAverageEarnedPerWorkday(range) {
 }
 
 function renderWorkRhythmSVG(series) {
-  const { labels, values } = series;
+  const { labels, values, period, startDate } = series;
   if (!labels.length || values.every(v => v === 0)) {
     return '<p class="insights-empty">Geen werkdata in deze periode</p>';
   }
@@ -3292,10 +3318,25 @@ function renderWorkRhythmSVG(series) {
   const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   const areaD = `${pathD} L${pts[pts.length - 1].x.toFixed(1)},${H} L${pts[0].x.toFixed(1)},${H} Z`;
 
-  const xLabels = labels.map((label, i) => {
-    const x = n === 1 ? W / 2 : (i / (n - 1)) * W;
-    return `<text x="${x.toFixed(1)}" y="${H + 15}" text-anchor="middle" class="rhythm-x-label">${esc(label)}</text>`;
-  }).join("");
+  let xLabels = "";
+  if (period === "maand" && startDate) {
+    // Tick voor elke dag, label alleen op maandagen
+    xLabels = labels.map((label, i) => {
+      const x = n === 1 ? W / 2 : (i / (n - 1)) * W;
+      const date = new Date(startDate.getFullYear(), startDate.getMonth(), i + 1);
+      const isMon = date.getDay() === 1;
+      const tick = `<line x1="${x.toFixed(1)}" y1="${H}" x2="${x.toFixed(1)}" y2="${(H + 4).toFixed(1)}" class="rhythm-tick"/>`;
+      const textEl = isMon
+        ? `<text x="${x.toFixed(1)}" y="${H + 14}" text-anchor="middle" class="rhythm-x-label">${esc(label)}</text>`
+        : "";
+      return tick + textEl;
+    }).join("");
+  } else {
+    xLabels = labels.map((label, i) => {
+      const x = n === 1 ? W / 2 : (i / (n - 1)) * W;
+      return `<text x="${x.toFixed(1)}" y="${H + 15}" text-anchor="middle" class="rhythm-x-label">${esc(label)}</text>`;
+    }).join("");
+  }
 
   return `<svg viewBox="0 0 ${W} ${H + 20}" class="rhythm-svg" preserveAspectRatio="none">
     <path d="${areaD}" class="rhythm-area"/>
@@ -3341,8 +3382,8 @@ function renderTopCustomerBars(customers) {
 function renderMeer(){
   const el = $("#tab-meer");
   const period = ui.insightsPeriod || "maand";
-  const now = new Date();
-  const range = getInsightsPeriodRange(period, now);
+  const anchor = ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date();
+  const range = getInsightsPeriodRange(period, anchor);
 
   const earnings = getEarningsSummary(range);
   const topCustomers = getTopCustomersByRevenue(range);
@@ -3350,10 +3391,31 @@ function renderMeer(){
   const logsInRange = getLogsForInsights(range);
   const totalWorkMs = logsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
   const totalHoursLabel = `${Math.round(totalWorkMs / 3600000)}u gewerkt`;
-  const favDay = getFavoriteWeekday(range);
-  const avgPerDay = getAverageEarnedPerWorkday(range);
 
-  const periodSubLabel = period === "maand" ? "laatste maand" : period === "kwartaal" ? "laatste kwartaal" : "laatste jaar";
+  // ISO week number helper
+  function isoWeekNum(d) {
+    const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const day = tmp.getUTCDay() || 7;
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+    return Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+  }
+
+  const MONTH_NL = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+
+  let periodLabel;
+  if (period === "week") {
+    const startDate = parseLocalYMD(range.start);
+    const wn = startDate ? isoWeekNum(startDate) : isoWeekNum(anchor);
+    periodLabel = `week ${wn} \u00b7 ${anchor.getFullYear()}`;
+  } else if (period === "maand") {
+    periodLabel = `${MONTH_NL[anchor.getMonth()]} ${anchor.getFullYear()}`;
+  } else if (period === "kwartaal") {
+    const q = Math.floor(anchor.getMonth() / 3) + 1;
+    periodLabel = `Q${q} ${anchor.getFullYear()}`;
+  } else {
+    periodLabel = `${anchor.getFullYear()}`;
+  }
 
   const heroSplitHTML = (earnings.invoice > 0 || earnings.cash > 0)
     ? `<div class="insights-hero-split">
@@ -3363,31 +3425,30 @@ function renderMeer(){
       </div>`
     : "";
 
-  const favDayHTML = favDay.dayName
-    ? `<div class="insights-stat-row">Meest gewerkt: <strong>${esc(favDay.dayName)}</strong></div>`
-    : `<div class="insights-stat-row insights-empty-inline">Geen werklogs in deze periode</div>`;
-
-  const avgHTML = avgPerDay > 0
-    ? `<div class="insights-stat-row">Gemiddeld per werkdag: <strong>${fmtMoney0(avgPerDay)}</strong></div>`
-    : "";
-
   el.innerHTML = `
     <div class="stack meer-layout">
       <div class="insights-period-ctrl">
+        <button class="ipc-btn${period === "week" ? " ipc-active" : ""}" data-period="week">Week</button>
         <button class="ipc-btn${period === "maand" ? " ipc-active" : ""}" data-period="maand">Maand</button>
         <button class="ipc-btn${period === "kwartaal" ? " ipc-active" : ""}" data-period="kwartaal">Kwartaal</button>
         <button class="ipc-btn${period === "jaar" ? " ipc-active" : ""}" data-period="jaar">Jaar</button>
       </div>
 
+      <div class="insights-nav">
+        <button class="ins-nav-prev">&#8249;</button>
+        <span class="ins-nav-label">${esc(periodLabel)}</span>
+        <button class="ins-nav-next">&#8250;</button>
+      </div>
+
       <div class="insights-hero">
         <div class="insights-hero-amount">${fmtMoney0(earnings.total)}</div>
         <div class="insights-hero-label">verdiend</div>
-        <div class="insights-hero-period">${esc(periodSubLabel)}</div>
+        <div class="insights-hero-period">${esc(periodLabel)}</div>
         ${heroSplitHTML}
       </div>
 
       <div class="insights-section">
-        <div class="insights-section-title">Top klanten</div>
+        <div class="insights-section-title">Klanten</div>
         <div class="ins-bars-list">
           ${renderTopCustomerBars(topCustomers)}
         </div>
@@ -3400,17 +3461,6 @@ function renderMeer(){
         </div>
         ${renderWorkRhythmSVG(rhythmSeries)}
       </div>
-
-      <div class="insights-section">
-        <div class="insights-section-title">Meest gewerkt</div>
-        <div class="insights-workstats">
-          ${favDayHTML}
-          ${avgHTML}
-        </div>
-        <div class="insights-weekday-chart">
-          ${renderWeekdayBarsSVG(favDay.totals)}
-        </div>
-      </div>
     </div>
   `;
 
@@ -3419,6 +3469,26 @@ function renderMeer(){
       ui.insightsPeriod = btn.dataset.period;
       renderMeer();
     });
+  });
+
+  el.querySelector(".ins-nav-prev").addEventListener("click", () => {
+    const a = new Date(ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date());
+    if (period === "week") a.setDate(a.getDate() - 7);
+    else if (period === "maand") a.setMonth(a.getMonth() - 1);
+    else if (period === "kwartaal") a.setMonth(a.getMonth() - 3);
+    else a.setFullYear(a.getFullYear() - 1);
+    ui.insightsAnchorDate = a;
+    renderMeer();
+  });
+
+  el.querySelector(".ins-nav-next").addEventListener("click", () => {
+    const a = new Date(ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date());
+    if (period === "week") a.setDate(a.getDate() + 7);
+    else if (period === "maand") a.setMonth(a.getMonth() + 1);
+    else if (period === "kwartaal") a.setMonth(a.getMonth() + 3);
+    else a.setFullYear(a.getFullYear() + 1);
+    ui.insightsAnchorDate = a;
+    renderMeer();
   });
 
   el.querySelectorAll(".ins-bar-row[data-customer-id]").forEach(row => {
