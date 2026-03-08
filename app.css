@@ -2489,6 +2489,36 @@ h2{
   box-shadow: 0 1px 3px rgba(0,0,0,.18);
 }
 
+/* Periode navigatie */
+.insights-nav{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+.ins-nav-prev,
+.ins-nav-next{
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 8px;
+}
+.ins-nav-prev:active,
+.ins-nav-next:active{
+  background: var(--surface);
+}
+.ins-nav-label{
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+}
+
 /* Hero blok */
 .insights-hero{
   text-align: center;
@@ -2619,6 +2649,10 @@ h2{
   font-size: 10px;
   fill: var(--muted);
   font-family: system-ui, -apple-system, sans-serif;
+}
+.rhythm-tick{
+  stroke: var(--border);
+  stroke-width: 1;
 }
 
 /* Meest gewerkt */
