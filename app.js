@@ -1706,7 +1706,8 @@ const ui = {
   },
   insightsPeriod: "maand",
   insightsAnchorDate: new Date(),
-  insightsCustomersMode: "settlements"
+  insightsCustomersMode: "settlements",
+  meerPanel: "default"
 };
 
 // Guardrail: keep state mutations inside actions + commit.
@@ -2236,6 +2237,7 @@ function renderTopbar(){
 function setTab(key){
   ui.navStack = [{ view: key }];
   ui.transition = null;
+  if (key !== "meer") ui.meerPanel = "default";
   render();
 }
 
@@ -2269,6 +2271,11 @@ $("#nav-settlements").addEventListener("click", ()=>setTab("settlements"));
 $("#nav-meer").addEventListener("click", ()=>{
   if (ui.navStack.length > 1){
     popView();
+    return;
+  }
+  if (ui.meerPanel === "customers"){
+    ui.meerPanel = "default";
+    renderMeer();
     return;
   }
   setTab("meer");
@@ -3528,13 +3535,7 @@ function renderMeer(){
   const anchor = ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date();
   const range = getInsightsPeriodRange(period, anchor);
   const mode = ui.insightsCustomersMode || "settlements";
-
-  const earnings = getEarningsSummary(range);
-  const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
-  const rhythmSeries = getWorkRhythmSeries(range, period);
-  const logsInRange = getLogsForInsights(range);
-  const totalWorkMs = logsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
-  const totalHoursLabel = `${Math.round(totalWorkMs / 3600000)}u gewerkt`;
+  const panel = ui.meerPanel || "default";
 
   // ISO week number helper
   function isoWeekNum(d) {
@@ -3561,14 +3562,6 @@ function renderMeer(){
     periodLabel = `${anchor.getFullYear()}`;
   }
 
-  const heroSplitHTML = (earnings.invoice > 0 || earnings.cash > 0)
-    ? `<div class="insights-hero-split">
-        <span>factuur ${fmtMoney0(earnings.invoice)}</span>
-        <span class="insights-hero-dot">·</span>
-        <span>cash ${fmtMoney0(earnings.cash)}</span>
-      </div>`
-    : "";
-
   const iconClock = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const iconCard = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="9" width="16" height="10" rx="2"/><path d="M7 9V6h7l3 3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14h4" stroke-linecap="round"/><path d="M15 14h2" stroke-linecap="round"/><path d="M8 19v-2h8v2" stroke-linecap="round"/></svg>`;
 
@@ -3577,21 +3570,68 @@ function renderMeer(){
     <button class="cms-btn${mode === "settlements" ? " cms-active" : ""}" data-mode="settlements" aria-label="Afrekening">${iconCard}</button>
   </div>`;
 
-  el.innerHTML = `
-    <div class="stack meer-layout">
-      <div class="insights-period-ctrl">
-        <button class="ipc-btn${period === "week" ? " ipc-active" : ""}" data-period="week">Week</button>
-        <button class="ipc-btn${period === "maand" ? " ipc-active" : ""}" data-period="maand">Maand</button>
-        <button class="ipc-btn${period === "kwartaal" ? " ipc-active" : ""}" data-period="kwartaal">Kwartaal</button>
-        <button class="ipc-btn${period === "jaar" ? " ipc-active" : ""}" data-period="jaar">Jaar</button>
-      </div>
+  let mainContentHTML;
 
-      <div class="insights-nav">
-        <button class="ins-nav-prev">&#8249;</button>
-        <span class="ins-nav-label">${esc(periodLabel)}</span>
-        <button class="ins-nav-next">&#8250;</button>
-      </div>
+  if (panel === "customers") {
+    const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
+    const COLORS = CUSTOMER_CHART_COLORS;
+    const emptyMsg = mode === "logs" ? "Geen werkdata in deze periode" : "Geen omzet in deze periode";
 
+    let totalHTML = "";
+    if (customers.length) {
+      if (mode === "logs") {
+        totalHTML = `<div class="cust-detail-total">${esc(durMsToHM(customers.reduce((s, c) => s + c.timeMs, 0)))}</div>`;
+      } else {
+        totalHTML = `<div class="cust-detail-total">${esc(fmtMoney0(customers.reduce((s, c) => s + c.amount, 0)))}</div>`;
+      }
+    }
+
+    const chartHTML = customers.length ? renderCustomerDonutChart(customers, mode) : "";
+
+    const listHTML = customers.length
+      ? customers.map((c, i) => {
+          const valueLabel = mode === "logs" ? durMsToHM(c.timeMs) : fmtMoney0(c.amount);
+          const pctLabel = `${Math.round(c.pct)}%`;
+          const barWidth = Math.max(3, c.pct);
+          return `<div class="cust-detail-row" data-customer-id="${esc(c.customerId)}">
+            <span class="cust-detail-legend" style="background:${COLORS[i % COLORS.length]}"></span>
+            <span class="cust-detail-name">${esc(c.name)}</span>
+            <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%;background:${COLORS[i % COLORS.length]}"></span></span>
+            <span class="cust-detail-value">${esc(valueLabel)}</span>
+            <span class="ins-bar-pct">${esc(pctLabel)}</span>
+          </div>`;
+        }).join("")
+      : `<p class="insights-empty">${emptyMsg}</p>`;
+
+    mainContentHTML = `
+      <div class="meer-inline-customers">
+        <div class="cust-detail-header">
+          ${modeSwitchHTML}
+          ${totalHTML}
+        </div>
+        ${chartHTML ? `<div class="cust-donut-wrap">${chartHTML}</div>` : ""}
+        <div class="cust-detail-list">
+          ${listHTML}
+        </div>
+      </div>
+    `;
+  } else {
+    const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
+    const earnings = getEarningsSummary(range);
+    const rhythmSeries = getWorkRhythmSeries(range, period);
+    const logsInRange = getLogsForInsights(range);
+    const totalWorkMs = logsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
+    const totalHoursLabel = `${Math.round(totalWorkMs / 3600000)}u gewerkt`;
+
+    const heroSplitHTML = (earnings.invoice > 0 || earnings.cash > 0)
+      ? `<div class="insights-hero-split">
+          <span>factuur ${fmtMoney0(earnings.invoice)}</span>
+          <span class="insights-hero-dot">·</span>
+          <span>cash ${fmtMoney0(earnings.cash)}</span>
+        </div>`
+      : "";
+
+    mainContentHTML = `
       <div class="insights-hero">
         <div class="insights-hero-amount">${fmtMoney0(earnings.total)}</div>
         <div class="insights-hero-label">verdiend</div>
@@ -3616,6 +3656,25 @@ function renderMeer(){
         </div>
         ${renderWorkRhythmSVG(rhythmSeries)}
       </div>
+    `;
+  }
+
+  el.innerHTML = `
+    <div class="stack meer-layout${panel === "customers" ? " meer-layout--customers" : ""}">
+      <div class="insights-period-ctrl">
+        <button class="ipc-btn${period === "week" ? " ipc-active" : ""}" data-period="week">Week</button>
+        <button class="ipc-btn${period === "maand" ? " ipc-active" : ""}" data-period="maand">Maand</button>
+        <button class="ipc-btn${period === "kwartaal" ? " ipc-active" : ""}" data-period="kwartaal">Kwartaal</button>
+        <button class="ipc-btn${period === "jaar" ? " ipc-active" : ""}" data-period="jaar">Jaar</button>
+      </div>
+
+      <div class="insights-nav">
+        <button class="ins-nav-prev">&#8249;</button>
+        <span class="ins-nav-label">${esc(periodLabel)}</span>
+        <button class="ins-nav-next">&#8250;</button>
+      </div>
+
+      ${mainContentHTML}
     </div>
   `;
 
@@ -3646,7 +3705,7 @@ function renderMeer(){
     renderMeer();
   });
 
-  // Mode switch: toggle without opening detail
+  // Mode switch: toggle without opening/closing panel
   el.querySelectorAll(".cms-btn").forEach(btn => {
     btn.addEventListener("click", e => {
       e.stopPropagation();
@@ -3655,13 +3714,25 @@ function renderMeer(){
     });
   });
 
-  // Tap on klanten-sectie → open schermvullende analyse
-  const custSection = el.querySelector(".ins-cust-section");
-  if (custSection) {
-    custSection.addEventListener("click", () => {
-      if (ui.navStack.some(v => v.view === "customerInsights")) return;
-      pushView({ view: "customerInsights" });
+  if (panel === "customers") {
+    // Customer row: navigate to customer detail
+    el.querySelectorAll(".cust-detail-row[data-customer-id]").forEach(row => {
+      row.addEventListener("click", () => {
+        const customerId = row.dataset.customerId;
+        if (!customerId) return;
+        if (ui.navStack.some(v => v.view === "customerDetail" && v.id === customerId)) return;
+        pushView({ view: "customerDetail", id: customerId });
+      });
     });
+  } else {
+    // Tap on klanten-sectie → expanded inline klantenanalyse
+    const custSection = el.querySelector(".ins-cust-section");
+    if (custSection) {
+      custSection.addEventListener("click", () => {
+        ui.meerPanel = "customers";
+        renderMeer();
+      });
+    }
   }
 }
 
