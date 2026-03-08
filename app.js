@@ -1969,10 +1969,33 @@ function toggleEditLog(logId){
       ui.logDateDraft[logId] = log.date || "";
     }
   } else {
+    const log = state.logs.find(item => item.id === logId);
+
+    // Auto-commit pending date draft (als gebruiker datum aanpaste maar vinkje niet klikte)
+    const pendingDate = ui.logDateDraft[logId];
+    if (log && pendingDate && pendingDate !== ui.logDateEditSnapshot[logId]) {
+      if (pendingDate <= formatLocalYMD(new Date())) {
+        setLogDay(log, pendingDate);
+      }
+    }
+
+    // Auto-commit pending segment drafts (als gebruiker tijden aanpaste maar vinkje niet klikte)
+    if (log) {
+      (log.segments || []).forEach(s => {
+        const draft = ui.segmentDrafts[s.id];
+        if (!draft) return;
+        const nextStart = parseLogTimeToMs(log.date, draft.start);
+        const nextEnd = parseLogTimeToMs(log.date, draft.end);
+        if (nextStart != null && nextEnd != null && nextEnd > nextStart) {
+          s.start = nextStart;
+          s.end = nextEnd;
+        }
+        delete ui.segmentDrafts[s.id];
+      });
+    }
+
     delete ui.logDateEditSnapshot[logId];
     delete ui.logDateDraft[logId];
-    const log = state.logs.find(item => item.id === logId);
-    if (log) (log.segments || []).forEach(s => delete ui.segmentDrafts[s.id]);
   }
   actions.setEditLog(logId);
 }
