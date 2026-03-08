@@ -2593,12 +2593,10 @@ h2{
 }
 .ins-bar-row{
   display: grid;
-  grid-template-columns: 90px 1fr 54px;
+  grid-template-columns: 85px 1fr 52px 30px;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 6px 0;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
   border-radius: 6px;
 }
 .ins-bar-name{
@@ -2622,6 +2620,131 @@ h2{
   min-width: 4px;
 }
 .ins-bar-amount{
+  font-size: 13px;
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Percentage kolom in klantenrijen */
+.ins-bar-pct{
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+  align-self: center;
+  white-space: nowrap;
+}
+
+/* Klanten-sectie op Meer-tab: tappable voor detail */
+.ins-cust-section{
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 10px;
+  transition: background 0.12s;
+}
+.ins-cust-section:active{
+  background: var(--surface);
+}
+
+/* Mode switch (klok / kaart) in klanten-sectie */
+.cust-mode-switch{
+  display: flex;
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--border);
+}
+.cms-btn{
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 7px;
+  padding: 5px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.cms-btn .icon{
+  width: 17px;
+  height: 17px;
+}
+.cms-btn.cms-active{
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+
+/* Donut chart in klantenanalyse */
+.cust-donut-wrap{
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+.cust-donut-svg{
+  display: block;
+  width: 140px;
+  height: 140px;
+}
+.donut-center-value{
+  font-size: 16px;
+  font-weight: 700;
+  fill: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+.donut-center-sub{
+  font-size: 10px;
+  fill: var(--muted);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Klantenanalyse detail header */
+.cust-detail-header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 2px;
+}
+.cust-detail-total{
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rijen in klantenanalyse detail */
+.cust-detail-list{
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.cust-detail-row{
+  display: grid;
+  grid-template-columns: 8px 80px 1fr 52px 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.cust-detail-legend{
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.cust-detail-name{
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cust-detail-value{
   font-size: 13px;
   color: var(--text);
   text-align: right;
@@ -2710,6 +2833,12 @@ body[data-theme="day"] .ipc-btn.ipc-active{
 }
 body[data-theme="day"] .rhythm-area{
   fill: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+body[data-theme="day"] .cms-btn.cms-active{
+  box-shadow: 0 1px 3px rgba(24,33,49,.12);
+}
+body[data-theme="day"] .ins-cust-section:active{
+  background: var(--surface2);
 }
 
 /* Settlement new-afrekening button on Geld tab */
