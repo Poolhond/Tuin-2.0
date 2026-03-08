@@ -2531,10 +2531,75 @@ h2{
   background: var(--surface);
 }
 .ins-nav-label{
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding: 6px 12px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
   text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.ins-nav-label:active{
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.ins-picker-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.32);
+  display: flex;
+  align-items: flex-end;
+  z-index: 1100;
+}
+.ins-picker-sheet{
+  width: 100%;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -12px 30px rgba(0,0,0,.32);
+}
+.ins-picker-controls{
+  margin-bottom: 12px;
+}
+.ins-picker-grid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.ins-picker-grid--single{
+  grid-template-columns: 1fr;
+}
+.ins-picker-field{
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ins-picker-field > span{
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.ins-picker-field select{
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+.ins-picker-actions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* Hero blok */
