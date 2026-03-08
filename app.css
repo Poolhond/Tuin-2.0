@@ -2531,20 +2531,37 @@ h2{
   background: var(--surface);
 }
 .ins-nav-label{
-  border: 1px solid transparent;
-  background: transparent;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.02);
   border-radius: 999px;
+  min-height: 34px;
   padding: 6px 12px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   text-align: center;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.ins-nav-label-text{
+  line-height: 1;
+}
+.ins-nav-label-caret{
+  font-size: 10px;
+  color: var(--muted);
+  transform: translateY(1px);
 }
 .ins-nav-label:active{
   background: var(--surface);
   border-color: var(--border);
+}
+.ins-nav-label:focus-visible{
+  outline: none;
+  border-color: var(--accent);
 }
 
 .ins-picker-overlay{
