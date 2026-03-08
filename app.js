@@ -444,7 +444,18 @@ function isSettlementEditing(settlementId){
 
 function toggleEditSettlement(settlementId){
   const isLeavingEdit = state.ui.editSettlementId === settlementId;
-  if (isLeavingEdit) delete ui.settlementDateDraft[settlementId];
+  if (isLeavingEdit) {
+    // Auto-commit pending date draft (als gebruiker datum aanpaste maar vinkje niet klikte)
+    const pendingDate = ui.settlementDateDraft[settlementId];
+    if (pendingDate) {
+      actions.editSettlement(settlementId, (draft) => {
+        draft.dateOverride = pendingDate;
+        draft.date = pendingDate;
+        if (!draft.invoiceLocked) draft.invoiceDate = pendingDate;
+      });
+    }
+    delete ui.settlementDateDraft[settlementId];
+  }
   actions.setEditSettlement(settlementId);
 }
 
