@@ -3811,19 +3811,16 @@ function renderMeer(){
     const totalWorkMs = logsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
     const totalHoursLabel = `${Math.round(totalWorkMs / 3600000)}u gewerkt`;
 
-    const heroSplitHTML = (earnings.invoice > 0 || earnings.cash > 0)
-      ? `<div class="insights-hero-split">
-          <span>factuur ${fmtMoney0(earnings.invoice)}</span>
-          <span class="insights-hero-dot">·</span>
-          <span>cash ${fmtMoney0(earnings.cash)}</span>
-        </div>`
-      : "";
+    const heroSplitHTML = `<div class="insights-hero-split">
+        <span>factuur ${fmtMoney0(earnings.invoice)}</span>
+        <span class="insights-hero-dot">·</span>
+        <span>cash ${fmtMoney0(earnings.cash)}</span>
+      </div>`;
 
     mainContentHTML = `
       <div class="insights-hero">
         <div class="insights-hero-amount">${fmtMoney0(earnings.total)}</div>
-        <div class="insights-hero-label">verdiend</div>
-        <div class="insights-hero-period">${esc(periodLabel)}</div>
+        <div class="insights-hero-worked">${esc(totalHoursLabel)}</div>
         ${heroSplitHTML}
       </div>
 
