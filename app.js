@@ -163,18 +163,9 @@ function formatDateNoWeekday(isoDate){
   const yy = String(y).slice(-2);
   return `${d} ${monthNames[m - 1]} ${yy}`;
 }
-function formatLogDatePretty(isoDate){
-  return formatDatePretty(isoDate);
-}
-function formatMoneyEUR(amount){
-  return fmtMoney(amount);
-}
-function formatMoneyEUR0(amount){
-  return fmtMoney0(amount);
-}
 function moneyOrBlank(amount){
   const v = Number(amount || 0);
-  return v === 0 ? "" : formatMoneyEUR(v);
+  return v === 0 ? "" : fmtMoney(v);
 }
 function fmtTimeInput(ms){
   if (!Number.isFinite(ms)) return "";
@@ -593,8 +584,6 @@ function loadState(){
     if (!l.date) l.date = todayISO();
   }
 
-  ensureUIPreferences(st);
-
   // Fixed quarter settlements: ensure + sync for all active templates at load time
   try {
     syncAllFixedQuarterSettlements(st);
@@ -648,10 +637,6 @@ function ensureStateSafetyAfterMutations(st){
   if (active.view === "customerDetail" && !st.customers.some(c => c.id === active.id)) popView();
   if (active.view === "productDetail" && !st.products.some(p => p.id === active.id)) popView();
   if (active.view === "settlementDetail" && !st.settlements.some(x => x.id === active.id)) popView();
-}
-
-function settlementTotals(settlement){
-  return getSettlementTotals(settlement);
 }
 
 function getDefaultSettlementManualOverride(){
@@ -1187,8 +1172,7 @@ function getSettlementTotals(settlement){
 function settlementHasInvoiceComponent(settlement, totals = getSettlementTotals(settlement || {})){
   return (
     Number(settlement?.invoiceAmount ?? 0) > 0 ||
-    Number(totals?.invoiceTotal ?? 0) > 0 ||
-    Number(settlement?.cardAmount ?? 0) > 0
+    Number(totals?.invoiceTotal ?? 0) > 0
   );
 }
 
@@ -1387,11 +1371,8 @@ function isLogLinkedElsewhere(logId, currentSettlementId){
     (s.logIds || []).includes(logId)
   );
 }
-function getWorkLogStatus(logId){
-  return logStatus(logId);
-}
 function renderLogCard(log){
-  const st = getWorkLogStatus(log.id);
+  const st = logStatus(log.id);
   const cls = statusClassFromStatus(st);
   const startTime = getStartTime(log);
   const workDuration = getTotalWorkDuration(log);
@@ -1404,7 +1385,7 @@ function renderLogCard(log){
       <div class="item-main">
         <div class="item-title">${esc(cname(log.customerId))}</div>
         <div class="meta-text" style="margin-top:2px;">
-          <span>${esc(formatLogDatePretty(log.date))}</span> · <span>Start ${esc(startTime)}</span> · <span>${esc(workDuration)}</span>${extraLabel ? ` · ${extraLabel}` : ""}
+          <span>${esc(formatDatePretty(log.date))}</span> · <span>Start ${esc(startTime)}</span> · <span>${esc(workDuration)}</span>${extraLabel ? ` · ${extraLabel}` : ""}
         </div>
       </div>
       <div class="amount-prominent">${esc(totalWorkLabel)}</div>
@@ -1515,10 +1496,6 @@ function computeSettlementFromLogsInState(sourceState, customerId, logIds){
   }
 
   return { workMs, hours, lines };
-}
-
-function computeSettlementFromLogs(customerId, logIds){
-  return computeSettlementFromLogsInState(state, customerId, logIds);
 }
 
 // ---------- Allocation helpers (bron van waarheid = logs) ----------
@@ -2641,7 +2618,7 @@ function getPeriodStart(period){
 }
 
 function getStatusKey(logId){
-  const status = getWorkLogStatus(logId);
+  const status = logStatus(logId);
   if (status === "calculated") return "calculated";
   if (status === "paid") return "paid";
   if (status === "fixed") return "fixed";
@@ -3132,7 +3109,7 @@ function renderSettlements(){
         // Vaste kwartaalafrekening: toon paars, vaste bedragen, geen betaal-toggles.
         const quarterLabel = s.quarterKey || getQuarterKey(s.date || s.periodStart);
         const fixedAmt = Number(s.invoiceAmount || 0) + Number(s.cashAmount || 0);
-        const fixedAmtDisplay = fixedAmt > 0 ? formatMoneyEUR0(fixedAmt) : "";
+        const fixedAmtDisplay = fixedAmt > 0 ? fmtMoney0(fixedAmt) : "";
         const detailItems = [
           esc(formatDateNoWeekday(s.date || s.periodStart)),
           `${(s.logIds||[]).length} logs`,
@@ -3188,8 +3165,8 @@ function renderSettlements(){
               </div>
 
               <div class="amtGroup settlement-amount-group">
-                <div class="amt invoice mono tabular ${flags.invoicePaid ? "is-paid" : "is-open"}" ${invoiceToggleAttrs}>${showInvoice ? formatMoneyEUR0(invoiceAmt) : ""}</div>
-                <div class="amt cash mono tabular ${flags.cashPaid ? "is-paid" : "is-open"}" ${cashToggleAttrs}>${showCash ? formatMoneyEUR0(cashAmt) : ""}</div>
+                <div class="amt invoice mono tabular ${flags.invoicePaid ? "is-paid" : "is-open"}" ${invoiceToggleAttrs}>${showInvoice ? fmtMoney0(invoiceAmt) : ""}</div>
+                <div class="amt cash mono tabular ${flags.cashPaid ? "is-paid" : "is-open"}" ${cashToggleAttrs}>${showCash ? fmtMoney0(cashAmt) : ""}</div>
               </div>
             </div>
             <div class="meta-text settlement-meta-row">${detailItems.join(" · ")}</div>
@@ -3217,7 +3194,7 @@ function renderSettlements(){
         <div class="settlement-header-totals">
           ${headerTotals.map((total)=>`
             <span class="settlement-outstanding-col" data-total-kind="${total.key}">
-              <span class="settlement-outstanding-content">${total.icon}<span>${formatMoneyEUR0(total.amount)}</span></span>
+              <span class="settlement-outstanding-content">${total.icon}<span>${fmtMoney0(total.amount)}</span></span>
             </span>
           `).join("")}
         </div>
@@ -4539,7 +4516,7 @@ function renderCustomerSheet(id){
         <div class="item-title">Werklogs</div>
         <div class="list">
           ${logs.slice(0,20).map(l=>{
-            const cls = statusClassFromStatus(getWorkLogStatus(l.id));
+            const cls = statusClassFromStatus(logStatus(l.id));
             return `
               <div class="item ${cls}" data-open-log="${l.id}">
                 <div class="item-main">
@@ -4565,7 +4542,7 @@ function renderCustomerSheet(id){
               <div class="item ${cls}" data-open-settlement="${s.id}">
                 <div class="item-main">
                   <div class="item-title">${esc(formatDatePretty(s.date))}</div>
-                  <div class="item-sub mono tabular">logs ${(s.logIds||[]).length} • totaal ${formatMoneyEUR(grand)}</div>
+                  <div class="item-sub mono tabular">logs ${(s.logIds||[]).length} • totaal ${fmtMoney(grand)}</div>
                 </div>
               </div>
             `;
@@ -4979,7 +4956,7 @@ function renderLogSheet(id){
   }
 
   function renderLogHeader(currentLog, editing){
-    const prettyDate = formatLogDatePretty(currentLog.date || "");
+    const prettyDate = formatDatePretty(currentLog.date || "");
     const startTime = getStartTime(currentLog);
     const dateInputValue = formatLocalYMD(new Date(currentLog.date));
     const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
@@ -5574,7 +5551,7 @@ function renderSettlementLogOverviewSheet(settlementId){
         const itemRows = (log.items || []).map(item=>{
           const qty = round2(Number(item.qty) || 0);
           const unitPrice = round2(Number(item.unitPrice) || 0);
-          return `<div class="overview-item-row"><span>${esc(pname(item.productId))}</span><span>${qty} × ${formatMoneyEUR(unitPrice)}</span><span>${formatMoneyEUR(qty * unitPrice)}</span></div>`;
+          return `<div class="overview-item-row"><span>${esc(pname(item.productId))}</span><span>${qty} × ${fmtMoney(unitPrice)}</span><span>${fmtMoney(qty * unitPrice)}</span></div>`;
         }).join('') || `<div class="small">Geen producten</div>`;
 
         return `
@@ -5582,7 +5559,7 @@ function renderSettlementLogOverviewSheet(settlementId){
             <div class="settlement-log-cols mono tabular flat-row">
               <span class="log-col-date">${esc(formatDatePretty(log.date))}</span>
               <span class="log-col-time">${formatDurationCompact(workMinutes)}</span>
-              <span class="log-col-price">${formatMoneyEUR(sumItemsAmount(log))}</span>
+              <span class="log-col-price">${fmtMoney(sumItemsAmount(log))}</span>
               <span class="log-col-products">${countExtraProducts(log)}</span>
             </div>
             <div class="overview-item-list">${itemRows}</div>
@@ -5594,8 +5571,8 @@ function renderSettlementLogOverviewSheet(settlementId){
         <h2>Totalen</h2>
         <div class="overview-totals-grid mono tabular">
           <span>Totaal werktijd</span><strong>${formatMinutesAsDuration(totalWorkMinutes)}</strong>
-          <span>Totaal producten</span><strong>${formatMoneyEUR(totalProductCost)}</strong>
-          <span>Totaal</span><strong>${formatMoneyEUR(totalAmount)}</strong>
+          <span>Totaal producten</span><strong>${fmtMoney(totalProductCost)}</strong>
+          <span>Totaal</span><strong>${fmtMoney(totalAmount)}</strong>
         </div>
       </div>
     </div>
@@ -6000,7 +5977,7 @@ function renderSettlementSheet(id){
 
 function renderLinesTable(settlement, bucket, { readOnly = false } = {}){
   const lines = (settlement.lines||[]).filter(l => (l.bucket||'invoice')===bucket);
-  const totals = settlementTotals(settlement);
+  const totals = getSettlementTotals(settlement);
   const workQuickLine = findSettlementQuickLine(lines, bucket, "work");
   const greenQuickLine = findSettlementQuickLine(lines, bucket, "green");
   const quickLineIds = new Set([workQuickLine?.id, greenQuickLine?.id].filter(Boolean));
@@ -6017,7 +5994,7 @@ function renderLinesTable(settlement, bucket, { readOnly = false } = {}){
         <div class="summary-row">
           <div>
             <div class="label">${productLabel}</div>
-            ${showMeta ? `<div class="summary-sub mono">${qty > 0 ? qty : '—'} × ${formatMoneyEUR(unitPrice)}</div>` : ''}
+            ${showMeta ? `<div class="summary-sub mono">${qty > 0 ? qty : '—'} × ${fmtMoney(unitPrice)}</div>` : ''}
           </div>
           <div class="num mono">${moneyOrBlank(rowTotal)}</div>
         </div>
