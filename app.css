@@ -98,6 +98,22 @@ body{
 .topbar-right{
   gap:10px;
 }
+.topbar-period-host{
+  flex:1;
+  max-width:420px;
+  padding-top: env(safe-area-inset-top);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.topbar--period-only{
+  justify-content:center;
+}
+.topbar-period-selector{
+  width:100%;
+  margin:0;
+}
+
 .topbar-right-info{
   text-align:right;
   font-size:12px;
@@ -2481,6 +2497,8 @@ h2{
 /* Periode-selector */
 .insights-period-ctrl{
   display: flex;
+  width: min(100%, 420px);
+  margin: 0 auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
