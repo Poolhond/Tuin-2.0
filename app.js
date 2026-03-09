@@ -413,7 +413,7 @@ function ensureUIPreferences(st){
   } else {
     st.logbook.statusFilter = legacyLogStatus;
   }
-  if (!("isFilterSheetOpen" in st.logbook)) st.logbook.isFilterSheetOpen = false;
+  st.logbook.isFilterSheetOpen = false;  // tijdelijke UI-state: altijd gesloten na reload
   if (!("period" in st.logbook)){
     const legacyMap = { "7d": "30d", "30d": "30d", "90d": "quarter", "all": "all" };
     st.logbook.period = legacyMap[st.ui.logPeriod] || "all";
@@ -431,12 +431,10 @@ function ensureUIPreferences(st){
   if (!["date", "invoiceNumber"].includes(st.settlementList.sortKey)) st.settlementList.sortKey = SETTLEMENT_LIST_DEFAULTS.sortKey;
   if (!["desc", "asc"].includes(st.settlementList.sortDir)) st.settlementList.sortDir = SETTLEMENT_LIST_DEFAULTS.sortDir;
 
-  if (!("editLogId" in st.ui)) st.ui.editLogId = null;
-  if (!("editSettlementId" in st.ui)) st.ui.editSettlementId = null;
-  if (st.ui.settlementEditModes && !st.ui.editSettlementId){
-    const activeId = Object.entries(st.ui.settlementEditModes).find(([, isEditing]) => Boolean(isEditing))?.[0] || null;
-    st.ui.editSettlementId = activeId;
-  }
+  // Tijdelijke UI-state: altijd resetten bij laden.
+  // Na een reload mag de gebruiker nooit onverwacht in bewerkingsmodus landen.
+  st.ui.editLogId = null;
+  st.ui.editSettlementId = null;
   delete st.ui.settlementEditModes;
   delete st.ui.logFilter;
   delete st.ui.showLogFilters;
@@ -528,7 +526,24 @@ function loadState(){
   ensureUniqueCustomerNicknames(st);
   ensureCoreProducts(st);
 
-  // settlement status default
+  // ── Settlement veld-categorieën ──────────────────────────────────────────────
+  // PERSISTENT (bron van waarheid, nooit overschrijven zonder gebruikersactie):
+  //   id, customerId, type, kind, status, logIds, lines, allocations,
+  //   invoicePaid, cashPaid, invoiceNumber, invoiceDate, dateOverride,
+  //   markedCalculated, calculatedAt, invoiceLocked, manualOverride,
+  //   periodStart, periodEnd, quarterKey, createdAt, note
+  //
+  // AFGELEID (bij laden altijd herberekenen uit canonieke bronnen):
+  //   isCalculated  ← markedCalculated || status || calculatedAt
+  //   date          ← logIds-datums via syncSettlementDatesFromLogs
+  //   invoiceAmount ← allocations/lines via syncSettlementAmounts
+  //   cashAmount    ← allocations/lines via syncSettlementAmounts
+  //
+  // TIJDELIJKE UI-STATE (nooit persisteren, altijd resetten bij laden):
+  //   state.ui.editLogId, state.ui.editSettlementId,
+  //   state.logbook.isFilterSheetOpen
+  // ─────────────────────────────────────────────────────────────────────────────
+
   for (const s of st.settlements){
     // Backward compat: bestaande settlements zonder type zijn "normal"
     if (!s.type){
@@ -547,7 +562,9 @@ function loadState(){
     if (!s.lines) s.lines = [];
     if (!s.logIds) s.logIds = [];
     if (!("markedCalculated" in s)) s.markedCalculated = s.status === "calculated";
-    if (!("isCalculated" in s)) s.isCalculated = Boolean(s.markedCalculated || s.status === "calculated" || s.status === "paid" || s.calculatedAt);
+    // Afgeleid: altijd herberekenen — een verouderde opgeslagen waarde mag nooit
+    // afwijken van de canonieke bronnen (markedCalculated, status, calculatedAt).
+    s.isCalculated = Boolean(s.markedCalculated || s.status === "calculated" || s.status === "paid" || s.calculatedAt);
     if (!("calculatedAt" in s)) s.calculatedAt = s.isCalculated ? (s.createdAt || now()) : null;
     if (!("invoicePaid" in s)) s.invoicePaid = false;
     if (!("cashPaid" in s)) s.cashPaid = false;
