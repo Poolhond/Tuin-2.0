@@ -8,6 +8,8 @@
   --border:rgba(233,238,246,.10);
   --line:var(--border);
   --accent:#00a05a;
+  --blue-muted:#7ba7c4;
+  --rose-muted:#b98baa;
   --danger:#ff4d4d;
   --chrome-bg: #0b0f14;
   --topbar-bg: rgba(11,15,20,.92);
@@ -2692,7 +2694,7 @@ h2{
 .ins-bar-fill{
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--insights-accent-color, var(--accent));
   border-radius: 3px;
   min-width: 4px;
 }
@@ -2723,7 +2725,7 @@ h2{
   transition: background 0.12s;
 }
 .ins-cust-section:active{
-  background: var(--surface);
+  background: color-mix(in srgb, var(--insights-accent-color, var(--surface)) 12%, var(--surface));
 }
 
 /* Mode switch (klok / kaart) in klanten-sectie */
@@ -2760,19 +2762,19 @@ h2{
 
 /* Globale dashboard mode kleuren */
 #tab-meer.insights-mode-logs{
-  --insights-mode-accent: #7ba7c4;
+  --insights-accent-color: var(--blue-muted);
 }
 #tab-meer.insights-mode-settlements{
-  --insights-mode-accent: #b98baa;
+  --insights-accent-color: var(--rose-muted);
 }
 #tab-meer .cms-btn.cms-active{
-  color: var(--insights-mode-accent, var(--text));
+  color: var(--insights-accent-color, var(--text));
 }
 #tab-meer .rhythm-area{
-  fill: color-mix(in srgb, var(--insights-mode-accent, var(--accent)) 12%, transparent);
+  fill: color-mix(in srgb, var(--insights-accent-color, var(--accent)) 12%, transparent);
 }
 #tab-meer .rhythm-line{
-  stroke: var(--insights-mode-accent, var(--accent));
+  stroke: var(--insights-accent-color, var(--accent));
 }
 
 /* Donut chart in klantenanalyse */
