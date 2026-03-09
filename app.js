@@ -1404,6 +1404,56 @@ function settlementPaymentState(settlement){
   return { invoiceTotals, cashTotals, invoiceTotal, cashTotal, hasInvoice, hasCash, isPaid };
 }
 
+function getSettlementListTotals(settlements){
+  let notCalculatedExVat = 0;
+  let invoiceOutstanding = 0;
+  let cashOutstanding = 0;
+  for (const settlement of settlements){
+    if (isFixedQuarterlySettlement(settlement)) continue;
+    if (!isSettlementCalculated(settlement)){
+      const totals = getSettlementTotals(settlement);
+      notCalculatedExVat += Number(totals.invoiceTotal || 0) + Number(totals.cashTotal || 0);
+    } else {
+      const flags = getSettlementPaymentFlags(settlement);
+      const pay = settlementPaymentState(settlement);
+      if (!flags.invoicePaid && (Number(pay.invoiceTotal) || 0) > 0){
+        invoiceOutstanding += Number(pay.invoiceTotal || 0);
+      }
+      if (!flags.cashPaid && (Number(pay.cashTotal) || 0) > 0){
+        cashOutstanding += Number(pay.cashTotal || 0);
+      }
+    }
+  }
+  return {
+    notCalculatedExVat: round2(notCalculatedExVat),
+    invoiceOutstanding: round2(invoiceOutstanding),
+    cashOutstanding: round2(cashOutstanding),
+  };
+}
+
+function getLogStatusPillClass(state){
+  if (state === "paid") return "pill-paid";
+  if (state === "calculated") return "pill-calc";
+  if (state === "linked") return "pill-open";
+  if (state === "fixed") return "pill-fixed";
+  return "pill-neutral";
+}
+
+function getLogStatusLabel(state){
+  if (state === "free") return "vrij";
+  if (state === "linked") return "gekoppeld";
+  if (state === "calculated") return "berekend";
+  if (state === "fixed") return "vaste klant";
+  return "betaald";
+}
+
+function parseInvoiceNumber(value){
+  const digits = String(value || "").match(/(\d+)/g);
+  if (!digits || !digits.length) return null;
+  const parsed = Number(digits.join(""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function syncSettlementStatus(settlement){
   if (!settlement) return;
   // Vaste kwartaalafrekeningen gebruiken nooit de normale draft/calculated/paid flow.
@@ -1417,6 +1467,45 @@ function syncSettlementStatus(settlement){
     settlement.status = settlement.isCalculated ? "calculated" : "draft";
   }
   syncSettlementAmounts(settlement);
+}
+
+function buildSettlementAllocationRows(s, manual, isManualMode, greenProduct){
+  const workIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="7"/><path d="M12 8.6v3.8l2.7 1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const greenIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 15c2.2-6.2 8.4-8.7 14-9-1.1 5.7-3 11.8-9 14-4 1.4-7-1.3-5-5Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 14.5c2 .2 4.6-.4 7.5-2.4" stroke-linecap="round"/></svg>`;
+  const rows = [];
+  if (isManualMode){
+    rows.push({ key: 'manual-hours', icon: workIcon, label: 'Werk', invoiceQty: manual.hoursInvoice, cashQty: manual.hoursCash });
+    rows.push({ key: 'manual-groen', icon: greenIcon, label: 'Groen', invoiceQty: manual.groenInvoice, cashQty: manual.groenCash });
+  } else {
+    const allocs = s.allocations || {};
+    if (allocs.work){
+      rows.push({
+        key: 'work', icon: workIcon, label: allocs.work.name || 'Werk',
+        invoiceQty: allocs.work.invoiceQty || 0, cashQty: allocs.work.cashQty || 0,
+        baseQty: allocs.work.baseQty || 0
+      });
+    }
+    // Producten: groen eerst, dan andere
+    const productEntries = Object.entries(allocs).filter(([k]) => k !== 'work');
+    productEntries.sort(([, a], [, b]) => {
+      const aG = a.productId && greenProduct && a.productId === greenProduct.id;
+      const bG = b.productId && greenProduct && b.productId === greenProduct.id;
+      if (aG && !bG) return -1;
+      if (!aG && bG) return 1;
+      return 0;
+    });
+    for (const [key, alloc] of productEntries){
+      const prod = alloc.productId ? getProduct(alloc.productId) : null;
+      const isGreen = prod ? isGreenProduct(prod) : false;
+      rows.push({
+        key, icon: isGreen ? greenIcon : null,
+        label: alloc.name || prod?.name || 'Product',
+        invoiceQty: alloc.invoiceQty || 0, cashQty: alloc.cashQty || 0,
+        baseQty: alloc.baseQty || 0
+      });
+    }
+  }
+  return rows;
 }
 
 function computeSettlementFromLogsInState(sourceState, customerId, logIds){
@@ -2990,40 +3079,11 @@ function renderSettlements(){
     ...(state.settlementList || {})
   };
   const fallbackDateDesc = (a, b)=> String(b?.date || "").localeCompare(String(a?.date || ""));
-  const parseInvoiceNumber = (value)=> {
-    const digits = String(value || "").match(/(\d+)/g);
-    if (!digits || !digits.length) return null;
-    const parsed = Number(digits.join(""));
-    return Number.isFinite(parsed) ? parsed : null;
-  };
   const invoiceIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"></rect><path d="M2.5 10h19" stroke-linecap="round"></path><path d="M7 14.5h4" stroke-linecap="round"></path></svg>`;
   const cashIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="8.5" cy="12" r="3.5"></circle><circle cx="15.5" cy="12" r="3.5"></circle><path d="M12 8.5v7" stroke-linecap="round"></path></svg>`;
   const notCalculatedIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="5" y="3.5" width="14" height="17" rx="2.5"></rect><path d="M8.5 8h7" stroke-linecap="round"></path><circle cx="9" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="9" cy="15.5" r="1"></circle><circle cx="12" cy="15.5" r="1"></circle><circle cx="15" cy="15.5" r="1"></circle></svg>`;
 
-  const totalNotCalculatedExVat = round2(state.settlements.reduce((sum, settlement)=>{
-    if (isFixedQuarterlySettlement(settlement)) return sum;
-    if (isSettlementCalculated(settlement)) return sum;
-    const totals = getSettlementTotals(settlement);
-    return sum + Number(totals.invoiceTotal || 0) + Number(totals.cashTotal || 0);
-  }, 0));
-  const totalInvoiceOutstanding = round2(state.settlements.reduce((sum, settlement)=>{
-    if (isFixedQuarterlySettlement(settlement)) return sum;
-    if (!isSettlementCalculated(settlement)) return sum;
-    const flags = getSettlementPaymentFlags(settlement);
-    if (flags.invoicePaid) return sum;
-    const pay = settlementPaymentState(settlement);
-    if ((Number(pay.invoiceTotal) || 0) <= 0) return sum;
-    return sum + Number(pay.invoiceTotal || 0);
-  }, 0));
-  const totalCashOutstanding = round2(state.settlements.reduce((sum, settlement)=>{
-    if (isFixedQuarterlySettlement(settlement)) return sum;
-    if (!isSettlementCalculated(settlement)) return sum;
-    const flags = getSettlementPaymentFlags(settlement);
-    if (flags.cashPaid) return sum;
-    const pay = settlementPaymentState(settlement);
-    if ((Number(pay.cashTotal) || 0) <= 0) return sum;
-    return sum + Number(pay.cashTotal || 0);
-  }, 0));
+  const { notCalculatedExVat: totalNotCalculatedExVat, invoiceOutstanding: totalInvoiceOutstanding, cashOutstanding: totalCashOutstanding } = getSettlementListTotals(state.settlements);
 
   const list = [...state.settlements]
     .filter((s)=>{
@@ -4846,8 +4906,8 @@ function renderLogSheet(id){
   const settlementOptions = buildSettlementSelectOptions(log.customerId, af?.id);
 
   const visual = getLogVisualState(log);
-  const statusPillClass = visual.state === "paid" ? "pill-paid" : visual.state === "calculated" ? "pill-calc" : visual.state === "linked" ? "pill-open" : visual.state === "fixed" ? "pill-fixed" : "pill-neutral";
-  const statusLabel = visual.state === "free" ? "vrij" : visual.state === "linked" ? "gekoppeld" : visual.state === "calculated" ? "berekend" : visual.state === "fixed" ? "vaste klant" : "betaald";
+  const statusPillClass = getLogStatusPillClass(visual.state);
+  const statusLabel = getLogStatusLabel(visual.state);
   const isEditing = state.ui.editLogId === log.id;
 
   function renderSegments(currentLog, editing){
@@ -5547,12 +5607,6 @@ function renderSettlementLogOverviewSheet(settlementId){
 function renderSettlementSheet(id){
   const s = state.settlements.find(x => x.id === id);
   if (!s){ closeSheet(); return; }
-  if (!("invoicePaid" in s)) s.invoicePaid = false;
-  if (!("cashPaid" in s)) s.cashPaid = false;
-  if (!("markedCalculated" in s)) s.markedCalculated = s.status === "calculated";
-  if (!("isCalculated" in s)) s.isCalculated = isSettlementCalculated(s);
-  if (!("calculatedAt" in s)) s.calculatedAt = s.isCalculated ? (s.createdAt || now()) : null;
-  if (!("invoiceLocked" in s)) s.invoiceLocked = Boolean(s.isCalculated);
   syncSettlementDatesFromLogs(s);
   ensureSettlementInvoiceDefaults(s);
   // Verwijder ensureDefaultSettlementLines — allocations zijn bron van waarheid
@@ -5592,46 +5646,10 @@ function renderSettlementSheet(id){
   const invoiceNumberReadOnly = s.status === "paid";
   const logbookTotals = settlementLogbookTotals(s);
 
-  // Bouw allocation-rijen vanuit s.allocations (bron van waarheid)
-  const workIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="7"/><path d="M12 8.6v3.8l2.7 1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const greenIcon = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 15c2.2-6.2 8.4-8.7 14-9-1.1 5.7-3 11.8-9 14-4 1.4-7-1.3-5-5Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 14.5c2 .2 4.6-.4 7.5-2.4" stroke-linecap="round"/></svg>`;
   const leafIconSmall = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 15c2.2-6.2 8.4-8.7 14-9-1.1 5.7-3 11.8-9 14-4 1.4-7-1.3-5-5Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 14.5c2 .2 4.6-.4 7.5-2.4" stroke-linecap="round"/></svg>`;
   const boxIconSmall = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m4 8 8-4 8 4-8 4-8-4Z" stroke-linejoin="round"/><path d="M4 8v8l8 4 8-4V8" stroke-linejoin="round"/><path d="M12 12v8" stroke-linecap="round"/></svg>`;
   const greenProduct = findGreenProduct();
-  const allocationRows = [];
-
-  if (isManualMode){
-    allocationRows.push({ key: 'manual-hours', icon: workIcon, label: 'Werk', invoiceQty: manual.hoursInvoice, cashQty: manual.hoursCash });
-    allocationRows.push({ key: 'manual-groen', icon: greenIcon, label: 'Groen', invoiceQty: manual.groenInvoice, cashQty: manual.groenCash });
-  } else {
-    const allocs = s.allocations || {};
-    if (allocs.work){
-      allocationRows.push({
-        key: 'work', icon: workIcon, label: allocs.work.name || 'Werk',
-        invoiceQty: allocs.work.invoiceQty || 0, cashQty: allocs.work.cashQty || 0,
-        baseQty: allocs.work.baseQty || 0
-      });
-    }
-    // Producten: groen eerst, dan andere
-    const productEntries = Object.entries(allocs).filter(([k]) => k !== 'work');
-    productEntries.sort(([, a], [, b]) => {
-      const aG = a.productId && greenProduct && a.productId === greenProduct.id;
-      const bG = b.productId && greenProduct && b.productId === greenProduct.id;
-      if (aG && !bG) return -1;
-      if (!aG && bG) return 1;
-      return 0;
-    });
-    for (const [key, alloc] of productEntries){
-      const prod = alloc.productId ? getProduct(alloc.productId) : null;
-      const isGreen = prod ? isGreenProduct(prod) : false;
-      allocationRows.push({
-        key, icon: isGreen ? greenIcon : null,
-        label: alloc.name || prod?.name || 'Product',
-        invoiceQty: alloc.invoiceQty || 0, cashQty: alloc.cashQty || 0,
-        baseQty: alloc.baseQty || 0
-      });
-    }
-  }
+  const allocationRows = buildSettlementAllocationRows(s, manual, isManualMode, greenProduct);
 
   // Render helpers voor de matrix
   const renderAllocationControls = ({ key, bucket, qty })=>{
