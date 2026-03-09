@@ -3882,7 +3882,7 @@ function renderMeer(){
     <div class="stack meer-layout${panel === "customers" ? " meer-layout--customers" : ""}">
       <div class="insights-nav">
         <button class="ins-nav-prev">&#8249;</button>
-        <button class="ins-nav-label">${esc(periodLabel)}<svg class="ins-nav-chevron" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 1l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="ins-nav-label">${esc(periodLabel)}</button>
         <button class="ins-nav-next">&#8250;</button>
       </div>
 
