@@ -2959,6 +2959,14 @@ function _attachSettingsHandlers(){
     $("#backupImportInput")?.click();
   };
 
+  $("#backupExportActionBtn").onclick = ()=>{
+    $("#backupExportBtn")?.click();
+  };
+
+  $("#backupImportActionBtn").onclick = ()=>{
+    $("#backupImportBtn")?.click();
+  };
+
   $("#backupImportInput").onchange = async (event)=>{
     const file = event.target.files?.[0];
     if (!file) return;
@@ -4235,6 +4243,20 @@ function renderSettingsSheet(){
   const body = $("#sheetBody");
   const user = state.settings?.user || {};
   const hasLogo = Boolean(user.logoBase64);
+
+  setDetailActionBar({
+    className: "settings-detail-actionbar",
+    html: `
+      <button class="settings-detail-action-btn" id="backupExportActionBtn" type="button" aria-label="Backup exporteren" title="Backup exporteren">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4" stroke-linecap="round"/><path d="M8 8l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="16" width="16" height="4" rx="1"/></svg>
+      </button>
+      <button class="settings-detail-action-btn" id="backupImportActionBtn" type="button" aria-label="Backup importeren" title="Backup importeren">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12" stroke-linecap="round"/><path d="M16 12l-4 4-4-4" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="16" width="16" height="4" rx="1"/></svg>
+      </button>
+    `
+  });
+  body.style.paddingBottom = "calc(var(--detail-actionbar-height) + 18px)";
+
   body.innerHTML = `
     <div class="stack">
       <div class="card stack">
