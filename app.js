@@ -1730,7 +1730,7 @@ const ui = {
   },
   insightsPeriod: "maand",
   insightsAnchorDate: new Date(),
-  insightsCustomersMode: "settlements",
+  insightsDashboardMode: "settlements",
   meerPanel: "default"
 };
 
@@ -3434,6 +3434,74 @@ function getWorkRhythmSeries(range, period) {
   return { labels, values, period, startDate };
 }
 
+function getInsightsDashboardMode() {
+  return ui.insightsDashboardMode || "settlements";
+}
+
+function getWorkRhythmSeriesRevenue(range, period) {
+  const settlements = getSettlementsForInsights(range);
+  const MONTH_NAMES = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+  const DAY_NAMES = ["Ma","Di","Wo","Do","Vr","Za","Zo"];
+
+  function sumOnDate(dateStr) {
+    return settlements
+      .filter(s => s.date === dateStr)
+      .reduce((sum, s) => {
+        const amounts = getSettlementAmounts(s);
+        return sum + (amounts.invoice || 0) + (amounts.cash || 0);
+      }, 0);
+  }
+
+  if (period === "week") {
+    const startDate = parseLocalYMD(range.start);
+    if (!startDate) return { labels: [], values: [], period };
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      days.push(new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i));
+    }
+    const values = days.map(day => sumOnDate(formatLocalYMD(day)));
+    return { labels: DAY_NAMES, values, period };
+  }
+
+  if (period === "kwartaal" || period === "jaar") {
+    const startDate = parseLocalYMD(range.start);
+    const endDate = parseLocalYMD(range.end);
+    if (!startDate || !endDate) return { labels: [], values: [], period };
+    const months = [];
+    const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    while (cur < endDate) {
+      months.push({ year: cur.getFullYear(), month: cur.getMonth() });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    const labels = months.map(m => MONTH_NAMES[m.month]);
+    const values = months.map(({ year, month }) =>
+      settlements
+        .filter(s => {
+          const d = parseLocalYMD(s.date);
+          return d && d.getFullYear() === year && d.getMonth() === month;
+        })
+        .reduce((sum, s) => {
+          const amounts = getSettlementAmounts(s);
+          return sum + (amounts.invoice || 0) + (amounts.cash || 0);
+        }, 0)
+    );
+    return { labels, values, period };
+  }
+
+  // maand: 1 punt per dag
+  const startDate = parseLocalYMD(range.start);
+  if (!startDate) return { labels: [], values: [], period };
+  const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+  const labels = [];
+  const values = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dayStr = formatLocalYMD(new Date(startDate.getFullYear(), startDate.getMonth(), day));
+    labels.push(String(day));
+    values.push(sumOnDate(dayStr));
+  }
+  return { labels, values, period, startDate };
+}
+
 function getFavoriteWeekday(range) {
   const DAY_NAMES_LONG = ["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"];
   const logs = getLogsForInsights(range);
@@ -3457,10 +3525,10 @@ function getAverageEarnedPerWorkday(range) {
   return round2(earned.total / uniqueDays.size);
 }
 
-function renderWorkRhythmSVG(series) {
+function renderWorkRhythmSVG(series, emptyMsg) {
   const { labels, values, period, startDate } = series;
   if (!labels.length || values.every(v => v === 0)) {
-    return '<p class="insights-empty">Geen werkdata in deze periode</p>';
+    return `<p class="insights-empty">${emptyMsg || "Geen werkdata in deze periode"}</p>`;
   }
   const W = 280, H = 56;
   const maxVal = Math.max(...values, 1);
@@ -3583,18 +3651,10 @@ function renderCustomerInsightsDetail() {
   const period = ui.insightsPeriod || "maand";
   const anchor = ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date();
   const range = getInsightsPeriodRange(period, anchor);
-  const mode = ui.insightsCustomersMode || "settlements";
+  const mode = getInsightsDashboardMode();
   const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
   const COLORS = CUSTOMER_CHART_COLORS;
   const emptyMsg = mode === "logs" ? "Geen werkdata in deze periode" : "Geen omzet in deze periode";
-
-  const iconClock = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  const iconCard = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="9" width="16" height="10" rx="2"/><path d="M7 9V6h7l3 3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14h4" stroke-linecap="round"/><path d="M15 14h2" stroke-linecap="round"/><path d="M8 19v-2h8v2" stroke-linecap="round"/></svg>`;
-
-  const modeSwitchHTML = `<div class="cust-mode-switch">
-    <button class="cms-btn${mode === "logs" ? " cms-active" : ""}" data-mode="logs" aria-label="Logboek">${iconClock}</button>
-    <button class="cms-btn${mode === "settlements" ? " cms-active" : ""}" data-mode="settlements" aria-label="Afrekening">${iconCard}</button>
-  </div>`;
 
   let totalHTML = "";
   if (customers.length) {
@@ -3624,24 +3684,13 @@ function renderCustomerInsightsDetail() {
 
   body.innerHTML = `
     <div class="stack">
-      <div class="cust-detail-header">
-        ${modeSwitchHTML}
-        ${totalHTML}
-      </div>
+      ${totalHTML ? `<div class="cust-detail-header">${totalHTML}</div>` : ""}
       ${chartHTML ? `<div class="cust-donut-wrap">${chartHTML}</div>` : ""}
       <div class="cust-detail-list">
         ${listHTML}
       </div>
     </div>
   `;
-
-  body.querySelectorAll(".cms-btn").forEach(btn => {
-    btn.addEventListener("click", e => {
-      e.stopPropagation();
-      ui.insightsCustomersMode = btn.dataset.mode;
-      renderCustomerInsightsDetail();
-    });
-  });
 }
 
 // ---------- Periode picker ----------
@@ -3838,7 +3887,7 @@ function renderMeer(){
   const period = ui.insightsPeriod || "maand";
   const anchor = ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date();
   const range = getInsightsPeriodRange(period, anchor);
-  const mode = ui.insightsCustomersMode || "settlements";
+  const mode = getInsightsDashboardMode();
   const panel = ui.meerPanel || "default";
 
   // ISO week number helper
@@ -3909,10 +3958,7 @@ function renderMeer(){
 
     mainContentHTML = `
       <div class="meer-inline-customers">
-        <div class="cust-detail-header">
-          ${modeSwitchHTML}
-          ${totalHTML}
-        </div>
+        ${totalHTML ? `<div class="cust-detail-header">${totalHTML}</div>` : ""}
         ${chartHTML ? `<div class="cust-donut-wrap">${chartHTML}</div>` : ""}
         <div class="cust-detail-list">
           ${listHTML}
@@ -3922,28 +3968,54 @@ function renderMeer(){
   } else {
     const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
     const earnings = getEarningsSummary(range);
-    const rhythmSeries = getWorkRhythmSeries(range, period);
     const logsInRange = getLogsForInsights(range);
     const totalWorkMs = logsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
-    const totalHoursLabel = `${Math.round(totalWorkMs / 3600000)}u gewerkt`;
+    const totalHoursLabel = `${fmtDurationShort(totalWorkMs)} gewerkt`;
 
-    const heroSplitHTML = `<div class="insights-hero-split">
-        <span>factuur ${fmtMoney0(earnings.invoice)}</span>
-        <span class="insights-hero-dot">·</span>
-        <span>cash ${fmtMoney0(earnings.cash)}</span>
-      </div>`;
+    // Hero: dual mode
+    let heroHTML;
+    if (mode === "logs") {
+      const workedDays = new Set(logsInRange.filter(l => sumWorkMs(l) > 0).map(l => l.date)).size;
+      const daysLabel = workedDays === 1 ? "1 werkdag" : `${workedDays} werkdagen`;
+      heroHTML = `
+        <div class="insights-hero">
+          <div class="insights-hero-amount">${esc(fmtDurationShort(totalWorkMs))}</div>
+          <div class="insights-hero-worked">${esc(daysLabel)}</div>
+        </div>
+      `;
+    } else {
+      const heroSplitHTML = `<div class="insights-hero-split">
+          <span>factuur ${fmtMoney0(earnings.invoice)}</span>
+          <span class="insights-hero-dot">·</span>
+          <span>cash ${fmtMoney0(earnings.cash)}</span>
+        </div>`;
+      heroHTML = `
+        <div class="insights-hero">
+          <div class="insights-hero-amount">${fmtMoney0(earnings.total)}</div>
+          <div class="insights-hero-worked">${esc(totalHoursLabel)}</div>
+          ${heroSplitHTML}
+        </div>
+      `;
+    }
+
+    // Werkritme: dual mode
+    let rhythmMeta, rhythmChart;
+    if (mode === "logs") {
+      const series = getWorkRhythmSeries(range, period);
+      rhythmMeta = totalHoursLabel;
+      rhythmChart = renderWorkRhythmSVG(series, "Geen werkdata in deze periode");
+    } else {
+      const series = getWorkRhythmSeriesRevenue(range, period);
+      rhythmMeta = `${fmtMoney0(earnings.total)} verdiend`;
+      rhythmChart = renderWorkRhythmSVG(series, "Geen omzet in deze periode");
+    }
 
     mainContentHTML = `
-      <div class="insights-hero">
-        <div class="insights-hero-amount">${fmtMoney0(earnings.total)}</div>
-        <div class="insights-hero-worked">${esc(totalHoursLabel)}</div>
-        ${heroSplitHTML}
-      </div>
+      ${heroHTML}
 
       <div class="insights-section ins-cust-section">
         <div class="insights-section-header">
           <div class="insights-section-title">Klanten</div>
-          ${modeSwitchHTML}
         </div>
         <div class="ins-bars-list">
           ${renderCustomerInsightsPreview(customers, mode)}
@@ -3953,9 +4025,9 @@ function renderMeer(){
       <div class="insights-section">
         <div class="insights-section-header">
           <div class="insights-section-title">Werkritme</div>
-          <div class="insights-section-meta">${esc(totalHoursLabel)}</div>
+          <div class="insights-section-meta">${esc(rhythmMeta)}</div>
         </div>
-        ${renderWorkRhythmSVG(rhythmSeries)}
+        ${rhythmChart}
       </div>
     `;
   }
@@ -3963,14 +4035,20 @@ function renderMeer(){
   el.innerHTML = `
     <div class="stack meer-layout${panel === "customers" ? " meer-layout--customers" : ""}">
       <div class="insights-nav">
-        <button class="ins-nav-prev">&#8249;</button>
-        <button class="ins-nav-label">${esc(periodLabel)}</button>
-        <button class="ins-nav-next">&#8250;</button>
+        <div class="insights-nav-period">
+          <button class="ins-nav-prev">&#8249;</button>
+          <button class="ins-nav-label">${esc(periodLabel)}</button>
+          <button class="ins-nav-next">&#8250;</button>
+        </div>
+        ${modeSwitchHTML}
       </div>
 
       ${mainContentHTML}
     </div>
   `;
+
+  el.classList.toggle("insights-mode-logs", mode === "logs");
+  el.classList.toggle("insights-mode-settlements", mode === "settlements");
 
   el.querySelector(".ins-nav-label").addEventListener("click", () => {
     openInsightsPeriodPicker();
@@ -3996,11 +4074,11 @@ function renderMeer(){
     renderMeer();
   });
 
-  // Mode switch: toggle without opening/closing panel
+  // Globale dashboard mode switch
   el.querySelectorAll(".cms-btn").forEach(btn => {
     btn.addEventListener("click", e => {
       e.stopPropagation();
-      ui.insightsCustomersMode = btn.dataset.mode;
+      ui.insightsDashboardMode = btn.dataset.mode;
       renderMeer();
     });
   });

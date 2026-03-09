@@ -2556,6 +2556,10 @@ h2{
   justify-content: space-between;
   padding: 2px 0;
 }
+.insights-nav-period{
+  display: flex;
+  align-items: center;
+}
 .ins-nav-prev,
 .ins-nav-next{
   border: none;
@@ -2752,6 +2756,23 @@ h2{
   background: var(--bg-elevated);
   color: var(--text);
   box-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+
+/* Globale dashboard mode kleuren */
+#tab-meer.insights-mode-logs{
+  --insights-mode-accent: #7ba7c4;
+}
+#tab-meer.insights-mode-settlements{
+  --insights-mode-accent: #b98baa;
+}
+#tab-meer .cms-btn.cms-active{
+  color: var(--insights-mode-accent, var(--text));
+}
+#tab-meer .rhythm-area{
+  fill: color-mix(in srgb, var(--insights-mode-accent, var(--accent)) 12%, transparent);
+}
+#tab-meer .rhythm-line{
+  stroke: var(--insights-mode-accent, var(--accent));
 }
 
 /* Donut chart in klantenanalyse */
