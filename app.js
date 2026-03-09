@@ -229,10 +229,6 @@ window.addEventListener("DOMContentLoaded", syncThemeColorWithChromeBg);
 function confirmDelete(label){
   return confirm(`Zeker verwijderen?\n\n${label}\n\nDit kan niet ongedaan gemaakt worden.`);
 }
-function confirmAction(label){
-  return confirm(label);
-}
-
 function ensureModalRoot(){
   let root = document.getElementById("appModalRoot");
   if (root) return root;
@@ -694,10 +690,6 @@ function getCustomerFixedTemplate(customer){
 }
 
 // ---------- Fixed-period quarter settlement helpers ----------
-// A fixed-period settlement is identified by metadata, not by inference from dates or notes.
-function isFixedPeriodSettlement(settlement){
-  return settlement?.kind === "fixed-period";
-}
 // Central type check for fixed quarterly settlements.
 // Covers both the new explicit type field and the legacy kind field for backward compat.
 function isFixedQuarterlySettlement(settlement){
@@ -819,7 +811,7 @@ function syncSettlementAmountsFromManualOverride(settlement, sourceState){
 // Idempotent: produces the same result regardless of how many times called.
 // Only syncs current quarter; historical quarters are left untouched.
 function syncFixedQuarterSettlementLogs(settlement, st){
-  if (!isFixedPeriodSettlement(settlement)) return;
+  if (!isFixedQuarterlySettlement(settlement)) return;
   if (!settlement.periodStart || !settlement.periodEnd) return;
 
   const customerId = settlement.templateCustomerId || settlement.customerId;
@@ -1042,8 +1034,7 @@ function findSettlementQuickLine(lines, bucket, kind){
   }) || null;
 }
 function formatQuickQty(value){
-  const rounded = round2(Number(value) || 0);
-  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+  return String(round2(Number(value) || 0));
 }
 function adjustSettlementQuickQty(settlementId, bucket, kind, delta){
   actions.editSettlement(settlementId, (draft)=>{
@@ -1320,12 +1311,6 @@ function getSettlementVisualState(settlement){
   }
   return { state: "draft", accentClass: "card-accent--open", navClass: "nav--linked" };
 }
-function isSettlementPaid(settlement){
-  return getSettlementVisualState(settlement).state === "paid";
-}
-function settlementColorClass(settlement){
-  return getSettlementVisualState(settlement).accentClass;
-}
 function settlementForLog(logId){
   return state.settlements.find(a => (a.logIds||[]).includes(logId)) || null;
 }
@@ -1353,13 +1338,6 @@ function getLinkedAfrekeningIdForLog(log){
 function getAfrekeningById(id){
   if (!id) return null;
   return (state.settlements || []).find(settlement => settlement.id === id) || null;
-}
-function settlementVisualState(settlement){
-  const visual = getSettlementVisualState(settlement);
-  if (visual.state === "paid") return "paid";
-  if (visual.state === "calculated") return "calculated";
-  if (visual.state === "fixed") return "fixed";
-  return "linked";
 }
 function logStatus(logId){
   const log = state.logs.find(item => item.id === logId);
@@ -1580,7 +1558,7 @@ function runGreenAllocationUnitPriceSanityCheck(sourceState = state){
  */
 function buildAllocationsFromLogs(settlement, sourceState = state){
   // Guard: fixed-period settlements use manual override, never rebuild allocations from logs
-  if (isFixedPeriodSettlement(settlement)) return settlement.allocations || {};
+  if (isFixedQuarterlySettlement(settlement)) return settlement.allocations || {};
   const { baseWorkHours, baseDate, productMap } = computeBaseTotals(settlement, sourceState);
   const labourProduct = sourceState.products.find(p => {
     const n = (p.name || "").toLowerCase();
@@ -2696,23 +2674,10 @@ function renderLogs(){
     `;
   } else {
     const totals = customerMinutesLastYear();
-    const favorites = state.customers.filter(c => c.favorite);
-    const autoSorted = [...state.customers].sort((a, b) => (totals.get(b.id) || 0) - (totals.get(a.id) || 0));
-
-    let selected;
-    if (favorites.length > 0){
-      selected = [...favorites];
-      for (const customer of autoSorted){
-        if (selected.some(item => item.id === customer.id)) continue;
-        selected.push(customer);
-        if (selected.length >= START_TOP_LIMIT) break;
-      }
-    } else {
-      selected = autoSorted.slice(0, START_TOP_LIMIT);
-    }
-
-    selected.sort((a, b) => (totals.get(b.id) || 0) - (totals.get(a.id) || 0));
-    const cloud = selected.slice(0, START_TOP_LIMIT).map(c => `
+    const selected = [...state.customers]
+      .sort((a, b) => (totals.get(b.id) || 0) - (totals.get(a.id) || 0))
+      .slice(0, START_TOP_LIMIT);
+    const cloud = selected.map(c => `
       <button class="cloud-chip" data-start-customer="${esc(c.id)}">
         ${esc(c.nickname || c.name || "Klant")}
       </button>
@@ -2897,7 +2862,7 @@ function _attachSettingsHandlers(){
   };
 
   $("#resetAllBtn").onclick = ()=>{
-    if (!confirmAction("Reset alles? Dit wist alle lokale data.")) return;
+    if (!confirm("Reset alles? Dit wist alle lokale data.")) return;
     localStorage.removeItem(STORAGE_KEY);
     location.reload();
   };
@@ -4534,7 +4499,7 @@ function renderCustomerSheet(id){
         <div class="item-title">Afrekeningen</div>
         <div class="list">
           ${settlements.slice(0,20).map(s=>{
-            const cls = settlementColorClass(s);
+            const cls = getSettlementVisualState(s).accentClass;
             const totInv = bucketTotals(s.lines,"invoice");
             const totCash = bucketTotals(s.lines,"cash");
             const grand = round2(totInv.total + totCash.subtotal);
@@ -5374,7 +5339,7 @@ function buildSettlementSelectOptions(customerId, currentSettlementId){
   const options = [];
   options.push(`<option value="none"${!currentSettlementId?" selected":""}>Niet gekoppeld</option>`);
   const list = state.settlements
-    .filter(s => s.customerId === customerId && (s.id === currentSettlementId || !isSettlementPaid(s)))
+    .filter(s => s.customerId === customerId && (s.id === currentSettlementId || getSettlementVisualState(s).state !== "paid"))
     .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   for (const s of list){
     const label = `${fmtDateShort(s.date)} — ${statusLabelNL(s.status)} — logs ${(s.logIds||[]).length}`;
