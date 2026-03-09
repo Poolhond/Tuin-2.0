@@ -328,7 +328,23 @@ function openTextConfirmModal({ title, message, expectedText, confirmText = "Def
 function defaultState(){
   return {
     schemaVersion: 1,
-    settings: { hourlyRate: 38, vatRate: 0.21, theme: "night" },
+    settings: {
+      hourlyRate: 38,
+      vatRate: 0.21,
+      theme: "night",
+      user: {
+        name: "",
+        street: "",
+        postalCity: "",
+        btwNummer: "",
+        iban: "",
+        bic: "",
+        rpr: "",
+        email: "",
+        gsm: "",
+        logoBase64: ""
+      }
+    },
     customers: [
       { id: uid(), nickname:"Jules", name:"", address:"Heverlee, Leuven", createdAt: now() },
       { id: uid(), nickname:"Noor", name:"", address:"Kessel-Lo, Leuven", createdAt: now() },
@@ -379,6 +395,8 @@ function migrateState(st){
   }
 
   if (!Number.isInteger(st.schemaVersion) || st.schemaVersion < 1) st.schemaVersion = 1;
+  if (!st.settings || typeof st.settings !== "object" || Array.isArray(st.settings)) st.settings = {};
+  if (!st.settings.user) st.settings.user = {};
   return st;
 }
 
@@ -390,6 +408,7 @@ function validateAndRepairState(st){
   if (!Array.isArray(st.settlements)) st.settlements = [];
   if (!Array.isArray(st.products)) st.products = [];
   if (!st.settings || typeof st.settings !== "object" || Array.isArray(st.settings)) st.settings = {};
+  if (!st.settings.user || typeof st.settings.user !== "object" || Array.isArray(st.settings.user)) st.settings.user = {};
   if (!st.ui || typeof st.ui !== "object" || Array.isArray(st.ui)) st.ui = {};
 
   return st;
@@ -493,6 +512,11 @@ function loadState(){
   if (!("hourlyRate" in st.settings)) st.settings.hourlyRate = 38;
   if (!("vatRate" in st.settings)) st.settings.vatRate = 0.21;
   if (!("theme" in st.settings)) st.settings.theme = "night";
+  if (!st.settings.user || typeof st.settings.user !== "object" || Array.isArray(st.settings.user)) st.settings.user = {};
+  const userFields = ["name", "street", "postalCity", "btwNummer", "iban", "bic", "rpr", "email", "gsm", "logoBase64"];
+  for (const field of userFields){
+    if (!(field in st.settings.user)) st.settings.user[field] = "";
+  }
   st.settings.theme = normalizeTheme(st.settings.theme);
   if (!st.customers) st.customers = [];
   if (!st.products) st.products = [];
@@ -1911,6 +1935,22 @@ const actions = {
     state.settings.theme = normalizeTheme(theme);
     commit();
   },
+  saveUserProfile(profile){
+    const current = state.settings.user && typeof state.settings.user === "object" ? state.settings.user : {};
+    state.settings.user = {
+      ...current,
+      name: String(profile?.name || "").trim(),
+      street: String(profile?.street || "").trim(),
+      postalCity: String(profile?.postalCity || "").trim(),
+      btwNummer: String(profile?.btwNummer || "").trim(),
+      iban: String(profile?.iban || "").trim(),
+      bic: String(profile?.bic || "").trim(),
+      rpr: String(profile?.rpr || "").trim(),
+      email: String(profile?.email || "").trim(),
+      gsm: String(profile?.gsm || "").trim()
+    };
+    commit();
+  },
   setTheme(theme){
     state.settings.theme = normalizeTheme(theme);
     commit();
@@ -2835,6 +2875,40 @@ function _attachSettingsHandlers(){
     const missing = required.filter((key)=> !(key in payload.data));
     if (missing.length) return `Ongeldige backup: ontbrekende velden (${missing.join(", ")}).`;
     return "";
+  };
+
+  $("#saveUserProfile").onclick = ()=>{
+    actions.saveUserProfile({
+      name: $("#userName")?.value,
+      street: $("#userStreet")?.value,
+      postalCity: $("#userPostalCity")?.value,
+      btwNummer: $("#userBtwNummer")?.value,
+      iban: $("#userIban")?.value,
+      bic: $("#userBic")?.value,
+      rpr: $("#userRpr")?.value,
+      email: $("#userEmail")?.value,
+      gsm: $("#userGsm")?.value,
+    });
+    alert("Mijn gegevens opgeslagen.");
+  };
+
+  $("#companyLogoInput").onchange = (event)=>{
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const base64 = String(reader.result || "");
+      const current = state.settings.user && typeof state.settings.user === "object" ? state.settings.user : {};
+      state.settings.user = { ...current, logoBase64: base64 };
+      commit();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  $("#removeCompanyLogo").onclick = ()=>{
+    const current = state.settings.user && typeof state.settings.user === "object" ? state.settings.user : {};
+    state.settings.user = { ...current, logoBase64: "" };
+    commit();
   };
 
   $("#saveSettings").onclick = ()=>{
@@ -4159,8 +4233,58 @@ function renderProductsSheet(){
 
 function renderSettingsSheet(){
   const body = $("#sheetBody");
+  const user = state.settings?.user || {};
+  const hasLogo = Boolean(user.logoBase64);
   body.innerHTML = `
     <div class="stack">
+      <div class="card stack">
+        <div class="item-title">Mijn gegevens</div>
+        <div>
+          <label>Naam</label>
+          <input id="userName" value="${esc(user.name || "")}" />
+        </div>
+        <div>
+          <label>Straat</label>
+          <input id="userStreet" value="${esc(user.street || "")}" />
+        </div>
+        <div>
+          <label>Postcode + stad</label>
+          <input id="userPostalCity" value="${esc(user.postalCity || "")}" />
+        </div>
+        <div>
+          <label>BTW-nummer</label>
+          <input id="userBtwNummer" value="${esc(user.btwNummer || "")}" />
+        </div>
+        <div>
+          <label>IBAN</label>
+          <input id="userIban" value="${esc(user.iban || "")}" />
+        </div>
+        <div>
+          <label>BIC</label>
+          <input id="userBic" value="${esc(user.bic || "")}" />
+        </div>
+        <div>
+          <label>RPR</label>
+          <input id="userRpr" value="${esc(user.rpr || "")}" />
+        </div>
+        <div>
+          <label>E-mail</label>
+          <input id="userEmail" inputmode="email" value="${esc(user.email || "")}" />
+        </div>
+        <div>
+          <label>GSM</label>
+          <input id="userGsm" inputmode="tel" value="${esc(user.gsm || "")}" />
+        </div>
+        <button class="btn primary" id="saveUserProfile">Opslaan</button>
+      </div>
+
+      <div class="card stack">
+        <div class="item-title">Bedrijfslogo</div>
+        <img id="companyLogoPreview" src="${esc(user.logoBase64 || "")}" alt="Bedrijfslogo" style="max-width:220px; max-height:120px; object-fit:contain; border-radius:8px; ${hasLogo ? "" : "display:none;"}" />
+        <input id="companyLogoInput" type="file" accept="image/png,image/jpeg" />
+        <button class="btn" id="removeCompanyLogo" ${hasLogo ? "" : "style='display:none;'"}>Verwijder logo</button>
+      </div>
+
       <div class="card stack">
         <div class="item-title">Algemeen</div>
         <div class="row">
