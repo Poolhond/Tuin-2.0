@@ -2141,6 +2141,32 @@ function viewTitle(viewState){
   return "Tuinlog";
 }
 
+function renderInsightsTopbarPeriodSelector(active){
+  const host = $("#topbarPeriodHost");
+  if (!host) return;
+  const show = ui.navStack.length === 1 && active.view === "meer";
+  host.classList.toggle("hidden", !show);
+  if (!show){
+    host.innerHTML = "";
+    return;
+  }
+  const period = ui.insightsPeriod || "maand";
+  host.innerHTML = `
+    <div class="insights-period-ctrl topbar-period-selector" role="tablist" aria-label="Periode selector">
+      <button class="ipc-btn${period === "week" ? " ipc-active" : ""}" data-period="week">Week</button>
+      <button class="ipc-btn${period === "maand" ? " ipc-active" : ""}" data-period="maand">Maand</button>
+      <button class="ipc-btn${period === "kwartaal" ? " ipc-active" : ""}" data-period="kwartaal">Kwartaal</button>
+      <button class="ipc-btn${period === "jaar" ? " ipc-active" : ""}" data-period="jaar">Jaar</button>
+    </div>
+  `;
+  host.querySelectorAll('.ipc-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      ui.insightsPeriod = btn.dataset.period;
+      renderMeer();
+    });
+  });
+}
+
 function renderTopbar(){
   const active = currentView();
   const topbar = document.querySelector(".topbar");
@@ -2148,8 +2174,10 @@ function renderTopbar(){
   const metricEl = $("#topbarMetric");
   const btnNew = $("#btnNewLog");
   const rightInfoEl = $("#topbarRightInfo");
+  const topbarLeft = topbar.querySelector(".topbar-left");
+  const topbarRight = topbar.querySelector(".topbar-right");
   let linkedCustomerId = "";
-  topbar.classList.remove("nav--free", "nav--linked", "nav--calculated", "nav--paid", "nav--fixed");
+  topbar.classList.remove("nav--free", "nav--linked", "nav--calculated", "nav--paid", "nav--fixed", "topbar--period-only");
   subtitleEl.classList.add("hidden");
   subtitleEl.textContent = "";
   metricEl.classList.add("hidden");
@@ -2198,6 +2226,12 @@ function renderTopbar(){
   } else {
     $("#topbarTitle").textContent = viewTitle(active);
   }
+
+  renderInsightsTopbarPeriodSelector(active);
+  const isMeerRoot = ui.navStack.length === 1 && active.view === "meer";
+  topbar.classList.toggle("topbar--period-only", isMeerRoot);
+  topbarLeft?.classList.toggle("hidden", isMeerRoot);
+  topbarRight?.classList.toggle("hidden", isMeerRoot);
 
   if (ui.navStack.length === 1 && active.view === "logs"){
     const pillLabel = getFilterPillLabel(state.logbook || {});
@@ -3846,13 +3880,6 @@ function renderMeer(){
 
   el.innerHTML = `
     <div class="stack meer-layout${panel === "customers" ? " meer-layout--customers" : ""}">
-      <div class="insights-period-ctrl">
-        <button class="ipc-btn${period === "week" ? " ipc-active" : ""}" data-period="week">Week</button>
-        <button class="ipc-btn${period === "maand" ? " ipc-active" : ""}" data-period="maand">Maand</button>
-        <button class="ipc-btn${period === "kwartaal" ? " ipc-active" : ""}" data-period="kwartaal">Kwartaal</button>
-        <button class="ipc-btn${period === "jaar" ? " ipc-active" : ""}" data-period="jaar">Jaar</button>
-      </div>
-
       <div class="insights-nav">
         <button class="ins-nav-prev">&#8249;</button>
         <button class="ins-nav-label">${esc(periodLabel)}<svg class="ins-nav-chevron" viewBox="0 0 10 6" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 1l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -3862,13 +3889,6 @@ function renderMeer(){
       ${mainContentHTML}
     </div>
   `;
-
-  el.querySelectorAll(".ipc-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      ui.insightsPeriod = btn.dataset.period;
-      renderMeer();
-    });
-  });
 
   el.querySelector(".ins-nav-label").addEventListener("click", () => {
     openInsightsPeriodPicker();
@@ -3923,6 +3943,8 @@ function renderMeer(){
       });
     }
   }
+
+  renderTopbar();
 }
 
 // ---------- Sheet rendering ----------
