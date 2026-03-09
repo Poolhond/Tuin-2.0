@@ -3675,7 +3675,7 @@ function renderCustomerInsightsDetail() {
         return `<div class="cust-detail-row">
           <span class="cust-detail-legend" style="background:${COLORS[i % COLORS.length]}"></span>
           <span class="cust-detail-name">${esc(c.name)}</span>
-          <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%;background:${COLORS[i % COLORS.length]}"></span></span>
+          <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%"></span></span>
           <span class="cust-detail-value">${esc(valueLabel)}</span>
           <span class="ins-bar-pct">${esc(pctLabel)}</span>
         </div>`;
@@ -3949,7 +3949,7 @@ function renderMeer(){
           return `<div class="cust-detail-row" data-customer-id="${esc(c.customerId)}">
             <span class="cust-detail-legend" style="background:${COLORS[i % COLORS.length]}"></span>
             <span class="cust-detail-name">${esc(c.name)}</span>
-            <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%;background:${COLORS[i % COLORS.length]}"></span></span>
+            <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%"></span></span>
             <span class="cust-detail-value">${esc(valueLabel)}</span>
             <span class="ins-bar-pct">${esc(pctLabel)}</span>
           </div>`;
