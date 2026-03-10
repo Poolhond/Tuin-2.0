@@ -432,9 +432,11 @@ function ensureUIPreferences(st){
   if (!["desc", "asc"].includes(st.settlementList.sortDir)) st.settlementList.sortDir = SETTLEMENT_LIST_DEFAULTS.sortDir;
 
   // Tijdelijke UI-state: altijd resetten bij laden.
-  // Na een reload mag de gebruiker nooit onverwacht in bewerkingsmodus landen.
+  // Na een reload mag de gebruiker nooit onverwacht in bewerkingsmodus landen
+  // of een verouderd feedbackbericht zien.
   st.ui.editLogId = null;
   st.ui.editSettlementId = null;
+  delete st.ui.backupFeedback;
   delete st.ui.settlementEditModes;
   delete st.ui.logFilter;
   delete st.ui.showLogFilters;
@@ -2070,12 +2072,7 @@ const actions = {
     Object.assign(p, patch);
     commit();
   },
-  deleteProduct(productId){ state.products = state.products.filter(x => x.id !== productId); commit(); },
-  setBackupFeedback(type, text){
-    state.ui = state.ui || {};
-    state.ui.backupFeedback = { type, text };
-    commit();
-  }
+  deleteProduct(productId){ state.products = state.products.filter(x => x.id !== productId); commit(); }
 };
 
 function toggleEditLog(logId){
@@ -4497,8 +4494,8 @@ function renderCustomerSheet(id){
 
   $("#sheetTitle").textContent = "Klant";
 
-  const logs = state.logs.filter(l => l.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  const settlements = state.settlements.filter(s => s.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const logs = (state.logs || []).filter(l => l.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const settlements = (state.settlements || []).filter(s => s.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 
   $("#sheetActions").innerHTML = "";
 
@@ -4782,8 +4779,8 @@ function renderProductSheet(id){
   });
   $("#sheetBody").style.paddingBottom = "calc(var(--detail-actionbar-height) + 18px)";
 
-  const usedInLogs = state.logs.filter(l => (l.items||[]).some(it => it.productId === p.id)).slice(0,10);
-  const usedInSet = state.settlements.filter(s => (s.lines||[]).some(li => li.productId === p.id)).slice(0,10);
+  const usedInLogs = (state.logs || []).filter(l => (l.items||[]).some(it => it.productId === p.id)).slice(0,10);
+  const usedInSet = (state.settlements || []).filter(s => (s.lines||[]).some(li => li.productId === p.id)).slice(0,10);
 
   $("#sheetBody").innerHTML = `
     <div class="stack product-detail-view">
