@@ -3778,13 +3778,15 @@ function renderWorkRhythmSVGInteractive(series, selectedKey, emptyMsg) {
     return `<rect x="${left.toFixed(1)}" y="0" width="${width.toFixed(1)}" height="${(H + 4).toFixed(1)}" fill="transparent" class="rhythm-hit${isSelected ? " rhythm-hit--active" : ""}" data-rhythm-key="${esc(p.key)}"/>`;
   }).join("");
 
-  return `<svg viewBox="0 0 ${W} ${H + 20}" class="rhythm-svg" preserveAspectRatio="none">
+  const ptsJSON = JSON.stringify(pts.map(p => ({ key: p.key, x: p.x, y: p.y })));
+
+  return `<div class="rhythm-scrub-zone"><svg viewBox="0 0 ${W} ${H + 20}" class="rhythm-svg" preserveAspectRatio="none" data-rhythm-pts='${ptsJSON}'>
     <path d="${areaD}" class="rhythm-area"/>
     <path d="${pathD}" class="rhythm-line"/>
     ${selectedDot}
     ${xLabels}
     ${hitAreas}
-  </svg>`;
+  </svg></div>`;
 }
 
 function getWorkRhythmBucketDetails(range, period, mode, bucketKey) {
@@ -4365,7 +4367,7 @@ function renderMeer(){
         ${rhythmChart}
       </div>
 
-      ${detailBlockHTML}
+      <div class="rhythm-detail-container">${detailBlockHTML}</div>
 
       <div class="insights-section ins-cust-section">
         <div class="insights-section-header">
@@ -4442,16 +4444,76 @@ function renderMeer(){
       });
     });
   } else {
-    // Tap on werkritmegrafiek bucket → selecteer / deselecteer
-    el.querySelectorAll(".rhythm-hit").forEach(hit => {
-      hit.addEventListener("click", e => {
-        e.stopPropagation();
-        const key = hit.dataset.rhythmKey;
-        if (!key) return;
-        ui.workRhythmSelectedKey = ui.workRhythmSelectedKey === key ? null : key;
-        renderMeer();
+    // Scrubbare werkritmegrafiek: pointer/touch interactie
+    const scrubZone = el.querySelector(".rhythm-scrub-zone");
+    const rhythmSvg = scrubZone && scrubZone.querySelector(".rhythm-svg");
+    if (scrubZone && rhythmSvg) {
+      const ptsData = JSON.parse(rhythmSvg.dataset.rhythmPts || "[]");
+      let scrubActive = false;
+      let scrubRAF = null;
+      let lastScrubX = null;
+
+      function getClosestRhythmKey(clientX) {
+        const rect = scrubZone.getBoundingClientRect();
+        const relX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        const svgX = relX * 280;
+        let minDist = Infinity, closestKey = null;
+        for (const p of ptsData) {
+          const d = Math.abs(p.x - svgX);
+          if (d < minDist) { minDist = d; closestKey = p.key; }
+        }
+        return closestKey;
+      }
+
+      function applyRhythmScrub(clientX) {
+        const key = getClosestRhythmKey(clientX);
+        if (!key || key === ui.workRhythmSelectedKey) return;
+        ui.workRhythmSelectedKey = key;
+
+        // Update selected dot in SVG zonder full re-render
+        const selPt = ptsData.find(p => p.key === key);
+        if (selPt) {
+          let dot = rhythmSvg.querySelector(".rhythm-selected-dot");
+          if (!dot) {
+            dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            dot.setAttribute("class", "rhythm-selected-dot");
+            rhythmSvg.appendChild(dot);
+          }
+          dot.setAttribute("cx", selPt.x.toFixed(1));
+          dot.setAttribute("cy", selPt.y.toFixed(1));
+          dot.setAttribute("r", "4.5");
+        }
+
+        // Update detail block
+        const detailCont = el.querySelector(".rhythm-detail-container");
+        if (detailCont) {
+          const selBucket = rhythmSeries.buckets.find(b => b.key === key);
+          if (selBucket) {
+            const details = getWorkRhythmBucketDetails(range, period, mode, key);
+            detailCont.innerHTML = renderWorkRhythmDetailBlock(details, mode, selBucket.detailLabel);
+          }
+        }
+      }
+
+      scrubZone.addEventListener("pointerdown", e => {
+        scrubActive = true;
+        scrubZone.setPointerCapture(e.pointerId);
+        applyRhythmScrub(e.clientX);
       });
-    });
+
+      scrubZone.addEventListener("pointermove", e => {
+        if (!scrubActive) return;
+        lastScrubX = e.clientX;
+        if (scrubRAF) return;
+        scrubRAF = requestAnimationFrame(() => {
+          scrubRAF = null;
+          if (lastScrubX !== null) applyRhythmScrub(lastScrubX);
+        });
+      });
+
+      scrubZone.addEventListener("pointerup", () => { scrubActive = false; });
+      scrubZone.addEventListener("pointercancel", () => { scrubActive = false; });
+    }
 
     // Tap on klanten-sectie → expanded inline klantenanalyse
     const custSection = el.querySelector(".ins-cust-section");
