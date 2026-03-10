@@ -1731,7 +1731,8 @@ const ui = {
   insightsPeriod: "maand",
   insightsAnchorDate: new Date(),
   insightsDashboardMode: "logs",
-  meerPanel: "default"
+  meerPanel: "default",
+  workRhythmSelectedKey: null
 };
 
 function normalizeInsightsDashboardMode(mode){
@@ -3519,6 +3520,141 @@ function getWorkRhythmSeriesRevenue(range, period) {
   return { labels, values, period, startDate };
 }
 
+function getWorkRhythmInteractiveSeries(range, period, mode) {
+  const MONTH_NAMES = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+  const MONTH_NAMES_LONG = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+  const DAY_NAMES = ["Ma","Di","Wo","Do","Vr","Za","Zo"];
+  const DAY_NAMES_LONG = ["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"];
+
+  if (mode === "settlements") {
+    const settlements = getSettlementsForInsights(range);
+
+    function sumSettlementsOnDate(dateStr) {
+      return settlements
+        .filter(s => s.date === dateStr)
+        .reduce((sum, s) => {
+          const amounts = getSettlementAmounts(s);
+          return sum + (amounts.invoice || 0) + (amounts.cash || 0);
+        }, 0);
+    }
+
+    if (period === "week") {
+      const startDate = parseLocalYMD(range.start);
+      if (!startDate) return { buckets: [], period };
+      const buckets = [];
+      for (let i = 0; i < 7; i++) {
+        const day = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+        const key = formatLocalYMD(day);
+        const detailLabel = `${DAY_NAMES_LONG[day.getDay()]} ${day.getDate()} ${MONTH_NAMES[day.getMonth()]}`;
+        buckets.push({ key, label: DAY_NAMES[i], detailLabel, value: sumSettlementsOnDate(key) });
+      }
+      return { buckets, period };
+    }
+
+    if (period === "kwartaal" || period === "jaar") {
+      const startDate = parseLocalYMD(range.start);
+      const endDate = parseLocalYMD(range.end);
+      if (!startDate || !endDate) return { buckets: [], period };
+      const buckets = [];
+      const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (cur < endDate) {
+        const year = cur.getFullYear();
+        const month = cur.getMonth();
+        const key = `${year}-${pad2(month + 1)}`;
+        const value = settlements
+          .filter(s => {
+            const d = parseLocalYMD(s.date);
+            return d && d.getFullYear() === year && d.getMonth() === month;
+          })
+          .reduce((sum, s) => {
+            const amounts = getSettlementAmounts(s);
+            return sum + (amounts.invoice || 0) + (amounts.cash || 0);
+          }, 0);
+        buckets.push({ key, label: MONTH_NAMES[month], detailLabel: `${MONTH_NAMES_LONG[month]} ${year}`, value });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      return { buckets, period };
+    }
+
+    // maand
+    const startDate = parseLocalYMD(range.start);
+    if (!startDate) return { buckets: [], period };
+    const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+    const buckets = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayDate = new Date(startDate.getFullYear(), startDate.getMonth(), day);
+      const key = formatLocalYMD(dayDate);
+      const detailLabel = `${day} ${MONTH_NAMES_LONG[startDate.getMonth()]}`;
+      buckets.push({ key, label: String(day), detailLabel, value: sumSettlementsOnDate(key) });
+    }
+    return { buckets, period, startDate };
+
+  } else {
+    // logs mode
+    const logs = getLogsForInsights(range);
+
+    if (period === "week") {
+      const startDate = parseLocalYMD(range.start);
+      if (!startDate) return { buckets: [], period };
+      const buckets = [];
+      for (let i = 0; i < 7; i++) {
+        const day = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+        const key = formatLocalYMD(day);
+        const value = logs
+          .filter(l => {
+            const d = parseLocalYMD(l.date);
+            return d && d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate();
+          })
+          .reduce((sum, l) => sum + sumWorkMs(l), 0);
+        const detailLabel = `${DAY_NAMES_LONG[day.getDay()]} ${day.getDate()} ${MONTH_NAMES[day.getMonth()]}`;
+        buckets.push({ key, label: DAY_NAMES[i], detailLabel, value });
+      }
+      return { buckets, period };
+    }
+
+    if (period === "kwartaal" || period === "jaar") {
+      const startDate = parseLocalYMD(range.start);
+      const endDate = parseLocalYMD(range.end);
+      if (!startDate || !endDate) return { buckets: [], period };
+      const buckets = [];
+      const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (cur < endDate) {
+        const year = cur.getFullYear();
+        const month = cur.getMonth();
+        const key = `${year}-${pad2(month + 1)}`;
+        const value = logs
+          .filter(l => {
+            const d = parseLocalYMD(l.date);
+            return d && d.getFullYear() === year && d.getMonth() === month;
+          })
+          .reduce((sum, l) => sum + sumWorkMs(l), 0);
+        buckets.push({ key, label: MONTH_NAMES[month], detailLabel: `${MONTH_NAMES_LONG[month]} ${year}`, value });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      return { buckets, period };
+    }
+
+    // maand
+    const startDate = parseLocalYMD(range.start);
+    if (!startDate) return { buckets: [], period };
+    const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+    const buckets = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayDate = new Date(startDate.getFullYear(), startDate.getMonth(), day);
+      const key = formatLocalYMD(dayDate);
+      const value = logs
+        .filter(l => {
+          const d = parseLocalYMD(l.date);
+          return d && d.getFullYear() === startDate.getFullYear() && d.getMonth() === startDate.getMonth() && d.getDate() === day;
+        })
+        .reduce((sum, l) => sum + sumWorkMs(l), 0);
+      const detailLabel = `${day} ${MONTH_NAMES_LONG[startDate.getMonth()]}`;
+      buckets.push({ key, label: String(day), detailLabel, value });
+    }
+    return { buckets, period, startDate };
+  }
+}
+
 function getFavoriteWeekday(range) {
   const DAY_NAMES_LONG = ["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"];
   const logs = getLogsForInsights(range);
@@ -3583,6 +3719,191 @@ function renderWorkRhythmSVG(series, emptyMsg) {
     <path d="${pathD}" class="rhythm-line"/>
     ${xLabels}
   </svg>`;
+}
+
+function renderWorkRhythmSVGInteractive(series, selectedKey, emptyMsg) {
+  const { buckets, period, startDate } = series;
+  if (!buckets.length || buckets.every(b => b.value === 0)) {
+    return `<p class="insights-empty">${emptyMsg || "Geen werkdata in deze periode"}</p>`;
+  }
+
+  const W = 280, H = 56;
+  const maxVal = Math.max(...buckets.map(b => b.value), 1);
+  const n = buckets.length;
+
+  const pts = buckets.map((b, i) => ({
+    x: n === 1 ? W / 2 : (i / (n - 1)) * W,
+    y: H - Math.max(0, (b.value / maxVal) * (H - 8)) - 4,
+    key: b.key
+  }));
+
+  const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const areaD = `${pathD} L${pts[pts.length - 1].x.toFixed(1)},${H} L${pts[0].x.toFixed(1)},${H} Z`;
+
+  let xLabels = "";
+  if (period === "maand" && startDate) {
+    xLabels = buckets.map((b, i) => {
+      const x = pts[i].x;
+      const date = new Date(startDate.getFullYear(), startDate.getMonth(), i + 1);
+      const isMon = date.getDay() === 1;
+      const tick = `<line x1="${x.toFixed(1)}" y1="${H}" x2="${x.toFixed(1)}" y2="${(H + 4).toFixed(1)}" class="rhythm-tick"/>`;
+      const textEl = isMon
+        ? `<text x="${x.toFixed(1)}" y="${H + 14}" text-anchor="middle" class="rhythm-x-label">${esc(b.label)}</text>`
+        : "";
+      return tick + textEl;
+    }).join("");
+  } else {
+    xLabels = pts.map((p, i) => {
+      return `<text x="${p.x.toFixed(1)}" y="${H + 15}" text-anchor="middle" class="rhythm-x-label">${esc(buckets[i].label)}</text>`;
+    }).join("");
+  }
+
+  // Selected dot indicator
+  let selectedDot = "";
+  if (selectedKey) {
+    const selIdx = pts.findIndex(p => p.key === selectedKey);
+    if (selIdx >= 0) {
+      selectedDot = `<circle cx="${pts[selIdx].x.toFixed(1)}" cy="${pts[selIdx].y.toFixed(1)}" r="4" class="rhythm-selected-dot"/>`;
+    }
+  }
+
+  // Hit areas: transparent vertical strips covering the full chart height
+  const hitAreas = pts.map((p, i) => {
+    const prevX = i > 0 ? pts[i - 1].x : 0;
+    const nextX = i < n - 1 ? pts[i + 1].x : W;
+    const left = i === 0 ? 0 : (p.x + prevX) / 2;
+    const right = i === n - 1 ? W : (p.x + nextX) / 2;
+    const width = right - left;
+    const isSelected = p.key === selectedKey;
+    return `<rect x="${left.toFixed(1)}" y="0" width="${width.toFixed(1)}" height="${(H + 4).toFixed(1)}" fill="transparent" class="rhythm-hit${isSelected ? " rhythm-hit--active" : ""}" data-rhythm-key="${esc(p.key)}"/>`;
+  }).join("");
+
+  return `<svg viewBox="0 0 ${W} ${H + 20}" class="rhythm-svg" preserveAspectRatio="none">
+    <path d="${areaD}" class="rhythm-area"/>
+    <path d="${pathD}" class="rhythm-line"/>
+    ${selectedDot}
+    ${xLabels}
+    ${hitAreas}
+  </svg>`;
+}
+
+function getWorkRhythmBucketDetails(range, period, mode, bucketKey) {
+  if (!bucketKey) return null;
+
+  if (mode === "settlements") {
+    const allSettlements = getSettlementsForInsights(range);
+    const bucketSettlements = (period === "week" || period === "maand")
+      ? allSettlements.filter(s => s.date === bucketKey)
+      : allSettlements.filter(s => (s.date || "").startsWith(bucketKey + "-"));
+
+    const totalAmount = bucketSettlements.reduce((sum, s) => {
+      const a = getSettlementAmounts(s);
+      return sum + (a.invoice || 0) + (a.cash || 0);
+    }, 0);
+    const totalInvoice = bucketSettlements.reduce((sum, s) => sum + (getSettlementAmounts(s).invoice || 0), 0);
+    const totalCash = bucketSettlements.reduce((sum, s) => sum + (getSettlementAmounts(s).cash || 0), 0);
+
+    const allTotal = allSettlements.reduce((sum, s) => {
+      const a = getSettlementAmounts(s);
+      return sum + (a.invoice || 0) + (a.cash || 0);
+    }, 0);
+    const pct = allTotal > 0 ? Math.round((totalAmount / allTotal) * 100) : 0;
+
+    const custMap = new Map();
+    for (const s of bucketSettlements) {
+      const cid = s.customerId || "__unknown__";
+      const a = getSettlementAmounts(s);
+      custMap.set(cid, (custMap.get(cid) || 0) + (a.invoice || 0) + (a.cash || 0));
+    }
+    const customers = [...custMap.entries()]
+      .map(([cid, amount]) => {
+        const c = (state.customers || []).find(c => c.id === cid);
+        return {
+          name: c?.nickname || c?.name || "?",
+          amount: round2(amount),
+          pct: totalAmount > 0 ? Math.round((amount / totalAmount) * 100) : 0
+        };
+      })
+      .filter(c => c.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+
+    return { totalAmount, totalInvoice, totalCash, pct, customers, count: bucketSettlements.length };
+
+  } else {
+    const allLogs = getLogsForInsights(range);
+    const bucketLogs = (period === "week" || period === "maand")
+      ? allLogs.filter(l => l.date === bucketKey)
+      : allLogs.filter(l => (l.date || "").startsWith(bucketKey + "-"));
+
+    const totalMs = bucketLogs.reduce((sum, l) => sum + sumWorkMs(l), 0);
+    const allTotalMs = allLogs.reduce((sum, l) => sum + sumWorkMs(l), 0);
+    const pct = allTotalMs > 0 ? Math.round((totalMs / allTotalMs) * 100) : 0;
+
+    const custMap = new Map();
+    for (const l of bucketLogs) {
+      const cid = l.customerId || "__unknown__";
+      custMap.set(cid, (custMap.get(cid) || 0) + sumWorkMs(l));
+    }
+    const customers = [...custMap.entries()]
+      .map(([cid, ms]) => {
+        const c = (state.customers || []).find(c => c.id === cid);
+        return {
+          name: c?.nickname || c?.name || "?",
+          timeMs: ms,
+          pct: totalMs > 0 ? Math.round((ms / totalMs) * 100) : 0
+        };
+      })
+      .filter(c => c.timeMs > 0)
+      .sort((a, b) => b.timeMs - a.timeMs);
+
+    return { totalMs, pct, customers, count: bucketLogs.length };
+  }
+}
+
+function renderWorkRhythmDetailBlock(details, mode, detailLabel) {
+  if (!details) return "";
+
+  let headerHTML, metaHTML, customersHTML;
+
+  if (mode === "settlements") {
+    const { totalAmount, totalInvoice, totalCash, pct, customers } = details;
+    headerHTML = `<div class="rhythm-detail-header">
+      <span class="rhythm-detail-label">${esc(detailLabel)}</span>
+      <span class="rhythm-detail-value">${fmtMoney0(totalAmount)}</span>
+    </div>`;
+    const splitParts = [];
+    if (totalInvoice > 0) splitParts.push(`factuur ${fmtMoney0(totalInvoice)}`);
+    if (totalCash > 0) splitParts.push(`cash ${fmtMoney0(totalCash)}`);
+    metaHTML = `<div class="rhythm-detail-meta"><span>${pct}% van totaal</span>${splitParts.length ? `<span class="rhythm-detail-dot">·</span><span>${splitParts.join(" · ")}</span>` : ""}</div>`;
+    customersHTML = customers.length
+      ? customers.map(c => `<div class="rhythm-detail-cust-row">
+        <span class="rhythm-detail-cust-name">${esc(c.name)}</span>
+        <span class="rhythm-detail-cust-value">${fmtMoney0(c.amount)}</span>
+        ${customers.length > 1 ? `<span class="rhythm-detail-cust-pct">${c.pct}%</span>` : ""}
+      </div>`).join("")
+      : `<p class="insights-empty" style="margin:0">Geen klanten</p>`;
+
+  } else {
+    const { totalMs, pct, customers, count } = details;
+    headerHTML = `<div class="rhythm-detail-header">
+      <span class="rhythm-detail-label">${esc(detailLabel)}</span>
+      <span class="rhythm-detail-value">${esc(durMsToHM(totalMs))}</span>
+    </div>`;
+    metaHTML = `<div class="rhythm-detail-meta"><span>${pct}% van totaal</span><span class="rhythm-detail-dot">·</span><span>${count} ${count === 1 ? "log" : "logs"}</span></div>`;
+    customersHTML = customers.length
+      ? customers.map(c => `<div class="rhythm-detail-cust-row">
+        <span class="rhythm-detail-cust-name">${esc(c.name)}</span>
+        <span class="rhythm-detail-cust-value">${esc(durMsToHM(c.timeMs))}</span>
+        ${customers.length > 1 ? `<span class="rhythm-detail-cust-pct">${c.pct}%</span>` : ""}
+      </div>`).join("")
+      : `<p class="insights-empty" style="margin:0">Geen klanten</p>`;
+  }
+
+  return `<div class="rhythm-detail-block">
+    ${headerHTML}
+    ${metaHTML}
+    <div class="rhythm-detail-custs">${customersHTML}</div>
+  </div>`;
 }
 
 function renderWeekdayBarsSVG(totals) {
@@ -4015,14 +4336,26 @@ function renderMeer(){
       `;
     }
 
-    // Werkritme: dual mode
-    let rhythmChart;
-    if (mode === "logs") {
-      const series = getWorkRhythmSeries(range, period);
-      rhythmChart = renderWorkRhythmSVG(series, "Geen werkdata in deze periode");
-    } else {
-      const series = getWorkRhythmSeriesRevenue(range, period);
-      rhythmChart = renderWorkRhythmSVG(series, "Geen omzet in deze periode");
+    // Werkritme: interactief, dual mode
+    const rhythmSeries = getWorkRhythmInteractiveSeries(range, period, mode);
+    const rhythmEmptyMsg = mode === "logs" ? "Geen werkdata in deze periode" : "Geen omzet in deze periode";
+
+    // Valideer geselecteerde key: als die niet meer in de serie zit, reset naar null
+    if (ui.workRhythmSelectedKey) {
+      const keyStillValid = rhythmSeries.buckets.some(b => b.key === ui.workRhythmSelectedKey);
+      if (!keyStillValid) ui.workRhythmSelectedKey = null;
+    }
+
+    const rhythmChart = renderWorkRhythmSVGInteractive(rhythmSeries, ui.workRhythmSelectedKey, rhythmEmptyMsg);
+
+    // Detailblok: alleen zichtbaar als een bucket geselecteerd is
+    let detailBlockHTML = "";
+    if (ui.workRhythmSelectedKey) {
+      const selectedBucket = rhythmSeries.buckets.find(b => b.key === ui.workRhythmSelectedKey);
+      if (selectedBucket) {
+        const details = getWorkRhythmBucketDetails(range, period, mode, ui.workRhythmSelectedKey);
+        detailBlockHTML = renderWorkRhythmDetailBlock(details, mode, selectedBucket.detailLabel);
+      }
     }
 
     mainContentHTML = `
@@ -4031,6 +4364,8 @@ function renderMeer(){
       <div class="insights-section">
         ${rhythmChart}
       </div>
+
+      ${detailBlockHTML}
 
       <div class="insights-section ins-cust-section">
         <div class="insights-section-header">
@@ -4107,6 +4442,17 @@ function renderMeer(){
       });
     });
   } else {
+    // Tap on werkritmegrafiek bucket → selecteer / deselecteer
+    el.querySelectorAll(".rhythm-hit").forEach(hit => {
+      hit.addEventListener("click", e => {
+        e.stopPropagation();
+        const key = hit.dataset.rhythmKey;
+        if (!key) return;
+        ui.workRhythmSelectedKey = ui.workRhythmSelectedKey === key ? null : key;
+        renderMeer();
+      });
+    });
+
     // Tap on klanten-sectie → expanded inline klantenanalyse
     const custSection = el.querySelector(".ins-cust-section");
     if (custSection) {
