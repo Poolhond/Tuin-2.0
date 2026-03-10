@@ -4448,13 +4448,12 @@ function renderMeer(){
     const scrubZone = el.querySelector(".rhythm-scrub-zone");
     const rhythmSvg = scrubZone && scrubZone.querySelector(".rhythm-svg");
     if (scrubZone && rhythmSvg) {
-      const ptsData = JSON.parse(rhythmSvg.dataset.rhythmPts || "[]");
-      let scrubActive = false;
-      let scrubRAF = null;
-      let lastScrubX = null;
+      const ptsData = JSON.parse(rhythmSvg.getAttribute("data-rhythm-pts") || "[]");
 
       function getClosestRhythmKey(clientX) {
-        const rect = scrubZone.getBoundingClientRect();
+        const curZone = el.querySelector(".rhythm-scrub-zone");
+        if (!curZone) return null;
+        const rect = curZone.getBoundingClientRect();
         const relX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
         const svgX = relX * 280;
         let minDist = Infinity, closestKey = null;
@@ -4465,54 +4464,40 @@ function renderMeer(){
         return closestKey;
       }
 
-      function applyRhythmScrub(clientX) {
-        const key = getClosestRhythmKey(clientX);
-        if (!key || key === ui.workRhythmSelectedKey) return;
-        ui.workRhythmSelectedKey = key;
-
-        // Update selected dot in SVG zonder full re-render
-        const selPt = ptsData.find(p => p.key === key);
-        if (selPt) {
-          let dot = rhythmSvg.querySelector(".rhythm-selected-dot");
-          if (!dot) {
-            dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            dot.setAttribute("class", "rhythm-selected-dot");
-            rhythmSvg.appendChild(dot);
-          }
-          dot.setAttribute("cx", selPt.x.toFixed(1));
-          dot.setAttribute("cy", selPt.y.toFixed(1));
-          dot.setAttribute("r", "4.5");
-        }
-
-        // Update detail block
-        const detailCont = el.querySelector(".rhythm-detail-container");
-        if (detailCont) {
-          const selBucket = rhythmSeries.buckets.find(b => b.key === key);
-          if (selBucket) {
-            const details = getWorkRhythmBucketDetails(range, period, mode, key);
-            detailCont.innerHTML = renderWorkRhythmDetailBlock(details, mode, selBucket.detailLabel);
-          }
-        }
-      }
-
       scrubZone.addEventListener("pointerdown", e => {
-        scrubActive = true;
-        scrubZone.setPointerCapture(e.pointerId);
-        applyRhythmScrub(e.clientX);
-      });
+        let scrubRAF = null;
+        let lastX = e.clientX;
 
-      scrubZone.addEventListener("pointermove", e => {
-        if (!scrubActive) return;
-        lastScrubX = e.clientX;
-        if (scrubRAF) return;
-        scrubRAF = requestAnimationFrame(() => {
-          scrubRAF = null;
-          if (lastScrubX !== null) applyRhythmScrub(lastScrubX);
-        });
-      });
+        const onMove = moveEvent => {
+          lastX = moveEvent.clientX;
+          if (scrubRAF) return;
+          scrubRAF = requestAnimationFrame(() => {
+            scrubRAF = null;
+            const key = getClosestRhythmKey(lastX);
+            if (key && key !== ui.workRhythmSelectedKey) {
+              ui.workRhythmSelectedKey = key;
+              renderMeer();
+            }
+          });
+        };
 
-      scrubZone.addEventListener("pointerup", () => { scrubActive = false; });
-      scrubZone.addEventListener("pointercancel", () => { scrubActive = false; });
+        const onUp = () => {
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onUp);
+          document.removeEventListener("pointercancel", onUp);
+        };
+
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+        document.addEventListener("pointercancel", onUp);
+
+        // Directe selectie bij aanraken
+        const key = getClosestRhythmKey(e.clientX);
+        if (key && key !== ui.workRhythmSelectedKey) {
+          ui.workRhythmSelectedKey = key;
+          renderMeer();
+        }
+      });
     }
 
     // Tap on klanten-sectie → expanded inline klantenanalyse
