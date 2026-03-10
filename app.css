@@ -2893,6 +2893,90 @@ h2{
   stroke-width: 1;
 }
 
+/* Interactieve werkritmegrafiek */
+.rhythm-hit{
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.rhythm-selected-dot{
+  fill: var(--insights-accent-color, var(--accent));
+  stroke: var(--bg);
+  stroke-width: 1.5;
+}
+
+/* Detailblok onder werkritmegrafiek */
+.rhythm-detail-block{
+  padding: 10px 0 12px;
+  border-top: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.rhythm-detail-header{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.rhythm-detail-label{
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.rhythm-detail-value{
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.rhythm-detail-meta{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.rhythm-detail-dot{
+  opacity: 0.45;
+}
+.rhythm-detail-custs{
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.rhythm-detail-cust-row{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.rhythm-detail-cust-name{
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rhythm-detail-cust-value{
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.rhythm-detail-cust-pct{
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.7;
+  flex-shrink: 0;
+  min-width: 28px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Meest gewerkt */
 .insights-workstats{
   display: flex;
