@@ -2358,12 +2358,20 @@ function popViewInstant(){
 $("#nav-logs").addEventListener("click", ()=>setTab("logs"));
 $("#nav-settlements").addEventListener("click", ()=>setTab("settlements"));
 $("#nav-meer").addEventListener("click", ()=>{
+  const active = currentView();
+  const isMeerRoot = ui.navStack.length === 1 && active.view === "meer";
   if (ui.navStack.length > 1){
     popView();
     return;
   }
   if (ui.meerPanel === "customers"){
     ui.meerPanel = "default";
+    if (isMeerRoot && ui.workRhythmSelectedKey !== null) ui.workRhythmSelectedKey = null;
+    renderMeer();
+    return;
+  }
+  if (isMeerRoot && ui.workRhythmSelectedKey !== null){
+    ui.workRhythmSelectedKey = null;
     renderMeer();
     return;
   }
