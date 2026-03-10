@@ -694,6 +694,25 @@ body:not([data-view="meer"]) #moreActionBar{
   border-bottom-color:var(--fg);
 }
 
+.customer-inline{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding:6px 0;
+}
+
+.customer-name{
+  font-size:17px;
+  font-weight:500;
+}
+
+.customer-address{
+  font-size:15px;
+  opacity:0.7;
+  text-align:right;
+}
+
 .more-actionbar-inner{
   width:min(760px, 100%);
   margin:0 auto;
