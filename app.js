@@ -4529,23 +4529,29 @@ function renderCustomerSheet(id){
   $("#sheetBody").innerHTML = `
     <div class="stack client-detail-view">
       <div class="card stack">
-        <div class="item-title">Gegevens</div>
         ${isEditing ? `
           <div>
             <label>Bijnaam</label>
             <input id="cNick" value="${esc(draft.nickname)}" />
           </div>
         ` : ""}
-        <div class="row">
-          <div style="flex:1; min-width:220px;">
-            <label>Naam</label>
-            ${isEditing ? `<input id="cName" value="${esc(draft.name)}" />` : `<div class="item-sub">${esc(c.name || "-")}</div>`}
+        ${isEditing ? `
+          <div class="row">
+            <div style="flex:1; min-width:220px;">
+              <label>Naam</label>
+              <input id="cName" value="${esc(draft.name)}" />
+            </div>
           </div>
-        </div>
-        <div>
-          <label>Adres</label>
-          ${isEditing ? `<input id="cAddr" value="${esc(draft.address)}" />` : `<div class="item-sub">${esc(c.address || "-")}</div>`}
-        </div>
+          <div>
+            <label>Adres</label>
+            <input id="cAddr" value="${esc(draft.address)}" />
+          </div>
+        ` : `
+          <div class="customer-inline">
+            <div class="customer-name">${esc(c.name || "-")}</div>
+            ${c.address ? `<div class="customer-address">${esc(c.address)}</div>` : ""}
+          </div>
+        `}
       </div>
 
       <div class="card stack">
