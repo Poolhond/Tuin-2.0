@@ -2893,6 +2893,15 @@ h2{
   stroke-width: 1;
 }
 
+/* Scrubbare werkritmegrafiek zone */
+.rhythm-scrub-zone{
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+}
+
 /* Interactieve werkritmegrafiek */
 .rhythm-hit{
   cursor: pointer;
@@ -2901,7 +2910,8 @@ h2{
 .rhythm-selected-dot{
   fill: var(--insights-accent-color, var(--accent));
   stroke: var(--bg);
-  stroke-width: 1.5;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 2.5px color-mix(in srgb, var(--insights-accent-color, var(--accent)) 55%, transparent));
 }
 
 /* Detailblok onder werkritmegrafiek */
