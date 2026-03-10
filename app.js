@@ -1730,9 +1730,23 @@ const ui = {
   },
   insightsPeriod: "maand",
   insightsAnchorDate: new Date(),
-  insightsDashboardMode: "settlements",
+  insightsDashboardMode: "logs",
   meerPanel: "default"
 };
+
+function normalizeInsightsDashboardMode(mode){
+  return ["logs", "settlements"].includes(mode) ? mode : null;
+}
+
+function resolveInitialInsightsDashboardMode(){
+  const storedMode = normalizeInsightsDashboardMode(state?.ui?.insightsDashboardMode);
+  if (storedMode) return storedMode;
+  const legacyMode = normalizeInsightsDashboardMode(state?.ui?.insightsCustomersMode);
+  if (legacyMode) return legacyMode;
+  return "logs";
+}
+
+ui.insightsDashboardMode = resolveInitialInsightsDashboardMode();
 
 // Guardrail: keep state mutations inside actions + commit.
 function commit(){
@@ -3435,7 +3449,10 @@ function getWorkRhythmSeries(range, period) {
 }
 
 function getInsightsDashboardMode() {
-  return ui.insightsDashboardMode || "settlements";
+  const normalized = normalizeInsightsDashboardMode(ui.insightsDashboardMode);
+  if (normalized) return normalized;
+  ui.insightsDashboardMode = "logs";
+  return "logs";
 }
 
 function getWorkRhythmSeriesRevenue(range, period) {
@@ -3999,19 +4016,21 @@ function renderMeer(){
     }
 
     // Werkritme: dual mode
-    let rhythmMeta, rhythmChart;
+    let rhythmChart;
     if (mode === "logs") {
       const series = getWorkRhythmSeries(range, period);
-      rhythmMeta = totalHoursLabel;
       rhythmChart = renderWorkRhythmSVG(series, "Geen werkdata in deze periode");
     } else {
       const series = getWorkRhythmSeriesRevenue(range, period);
-      rhythmMeta = `${fmtMoney0(earnings.total)} verdiend`;
       rhythmChart = renderWorkRhythmSVG(series, "Geen omzet in deze periode");
     }
 
     mainContentHTML = `
       ${heroHTML}
+
+      <div class="insights-section">
+        ${rhythmChart}
+      </div>
 
       <div class="insights-section ins-cust-section">
         <div class="insights-section-header">
@@ -4020,14 +4039,6 @@ function renderMeer(){
         <div class="ins-bars-list">
           ${renderCustomerInsightsPreview(customers, mode)}
         </div>
-      </div>
-
-      <div class="insights-section">
-        <div class="insights-section-header">
-          <div class="insights-section-title">Werkritme</div>
-          <div class="insights-section-meta">${esc(rhythmMeta)}</div>
-        </div>
-        ${rhythmChart}
       </div>
     `;
   }
@@ -4079,6 +4090,8 @@ function renderMeer(){
     btn.addEventListener("click", e => {
       e.stopPropagation();
       ui.insightsDashboardMode = btn.dataset.mode;
+      state.ui.insightsDashboardMode = ui.insightsDashboardMode;
+      saveState(state);
       renderMeer();
     });
   });
