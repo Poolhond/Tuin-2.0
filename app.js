@@ -2364,12 +2364,6 @@ $("#nav-meer").addEventListener("click", ()=>{
     popView();
     return;
   }
-  if (ui.meerPanel === "customers"){
-    ui.meerPanel = "default";
-    if (isMeerRoot && ui.workRhythmSelectedKey !== null) ui.workRhythmSelectedKey = null;
-    renderMeer();
-    return;
-  }
   if (isMeerRoot && ui.workRhythmSelectedKey !== null){
     ui.workRhythmSelectedKey = null;
     renderMeer();
@@ -3956,7 +3950,7 @@ function renderCustomerInsightsPreview(customers, mode) {
     const barWidth = Math.max(3, c.pct);
     const valueLabel = mode === "logs" ? durMsToHM(c.timeMs) : fmtMoney0(c.amount);
     const pctLabel = `${Math.round(c.pct)}%`;
-    return `<div class="ins-bar-row">
+    return `<div class="ins-bar-row" data-customer-id="${esc(c.customerId)}">
   <span class="ins-bar-name">${esc(c.name)}</span>
   <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%"></span></span>
   <span class="ins-bar-amount">${esc(valueLabel)}</span>
@@ -4236,8 +4230,6 @@ function renderMeer(){
   const anchor = ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date();
   const range = getInsightsPeriodRange(period, anchor);
   const mode = getInsightsDashboardMode();
-  const panel = ui.meerPanel || "default";
-
   // ISO week number helper
   function isoWeekNum(d) {
     const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -4273,47 +4265,7 @@ function renderMeer(){
 
   let mainContentHTML;
 
-  if (panel === "customers") {
-    const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
-    const COLORS = CUSTOMER_CHART_COLORS;
-    const emptyMsg = mode === "logs" ? "Geen werkdata in deze periode" : "Geen omzet in deze periode";
-
-    let totalHTML = "";
-    if (customers.length) {
-      if (mode === "logs") {
-        totalHTML = `<div class="cust-detail-total">${esc(durMsToHM(customers.reduce((s, c) => s + c.timeMs, 0)))}</div>`;
-      } else {
-        totalHTML = `<div class="cust-detail-total">${esc(fmtMoney0(customers.reduce((s, c) => s + c.amount, 0)))}</div>`;
-      }
-    }
-
-    const chartHTML = customers.length ? renderCustomerDonutChart(customers, mode) : "";
-
-    const listHTML = customers.length
-      ? customers.map((c, i) => {
-          const valueLabel = mode === "logs" ? durMsToHM(c.timeMs) : fmtMoney0(c.amount);
-          const pctLabel = `${Math.round(c.pct)}%`;
-          const barWidth = Math.max(3, c.pct);
-          return `<div class="cust-detail-row" data-customer-id="${esc(c.customerId)}">
-            <span class="cust-detail-legend" style="background:${COLORS[i % COLORS.length]}"></span>
-            <span class="cust-detail-name">${esc(c.name)}</span>
-            <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%"></span></span>
-            <span class="cust-detail-value">${esc(valueLabel)}</span>
-            <span class="ins-bar-pct">${esc(pctLabel)}</span>
-          </div>`;
-        }).join("")
-      : `<p class="insights-empty">${emptyMsg}</p>`;
-
-    mainContentHTML = `
-      <div class="meer-inline-customers">
-        ${totalHTML ? `<div class="cust-detail-header">${totalHTML}</div>` : ""}
-        ${chartHTML ? `<div class="cust-donut-wrap">${chartHTML}</div>` : ""}
-        <div class="cust-detail-list">
-          ${listHTML}
-        </div>
-      </div>
-    `;
-  } else {
+  {
     const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
     const earnings = getEarningsSummary(range);
     const logsInRange = getLogsForInsights(range);
@@ -4389,7 +4341,7 @@ function renderMeer(){
   }
 
   el.innerHTML = `
-    <div class="stack meer-layout${panel === "customers" ? " meer-layout--customers" : ""}">
+    <div class="stack meer-layout">
       <div class="insights-nav">
         <div class="insights-nav-period">
           <button class="ins-nav-prev">&#8249;</button>
@@ -4441,82 +4393,71 @@ function renderMeer(){
     });
   });
 
-  if (panel === "customers") {
-    // Customer row: navigate to customer detail
-    el.querySelectorAll(".cust-detail-row[data-customer-id]").forEach(row => {
-      row.addEventListener("click", () => {
-        const customerId = row.dataset.customerId;
-        if (!customerId) return;
-        if (ui.navStack.some(v => v.view === "customerDetail" && v.id === customerId)) return;
-        pushView({ view: "customerDetail", id: customerId });
-      });
-    });
-  } else {
-    // Scrubbare werkritmegrafiek: pointer/touch interactie
-    const scrubZone = el.querySelector(".rhythm-scrub-zone");
-    const rhythmSvg = scrubZone && scrubZone.querySelector(".rhythm-svg");
-    if (scrubZone && rhythmSvg) {
-      const ptsData = JSON.parse(rhythmSvg.getAttribute("data-rhythm-pts") || "[]");
+  // Scrubbare werkritmegrafiek: pointer/touch interactie
+  const scrubZone = el.querySelector(".rhythm-scrub-zone");
+  const rhythmSvg = scrubZone && scrubZone.querySelector(".rhythm-svg");
+  if (scrubZone && rhythmSvg) {
+    const ptsData = JSON.parse(rhythmSvg.getAttribute("data-rhythm-pts") || "[]");
 
-      function getClosestRhythmKey(clientX) {
-        const curZone = el.querySelector(".rhythm-scrub-zone");
-        if (!curZone) return null;
-        const rect = curZone.getBoundingClientRect();
-        const relX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-        const svgX = relX * 280;
-        let minDist = Infinity, closestKey = null;
-        for (const p of ptsData) {
-          const d = Math.abs(p.x - svgX);
-          if (d < minDist) { minDist = d; closestKey = p.key; }
-        }
-        return closestKey;
+    function getClosestRhythmKey(clientX) {
+      const curZone = el.querySelector(".rhythm-scrub-zone");
+      if (!curZone) return null;
+      const rect = curZone.getBoundingClientRect();
+      const relX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const svgX = relX * 280;
+      let minDist = Infinity, closestKey = null;
+      for (const p of ptsData) {
+        const d = Math.abs(p.x - svgX);
+        if (d < minDist) { minDist = d; closestKey = p.key; }
       }
-
-      scrubZone.addEventListener("pointerdown", e => {
-        let scrubRAF = null;
-        let lastX = e.clientX;
-
-        const onMove = moveEvent => {
-          lastX = moveEvent.clientX;
-          if (scrubRAF) return;
-          scrubRAF = requestAnimationFrame(() => {
-            scrubRAF = null;
-            const key = getClosestRhythmKey(lastX);
-            if (key && key !== ui.workRhythmSelectedKey) {
-              ui.workRhythmSelectedKey = key;
-              renderMeer();
-            }
-          });
-        };
-
-        const onUp = () => {
-          document.removeEventListener("pointermove", onMove);
-          document.removeEventListener("pointerup", onUp);
-          document.removeEventListener("pointercancel", onUp);
-        };
-
-        document.addEventListener("pointermove", onMove);
-        document.addEventListener("pointerup", onUp);
-        document.addEventListener("pointercancel", onUp);
-
-        // Directe selectie bij aanraken
-        const key = getClosestRhythmKey(e.clientX);
-        if (key && key !== ui.workRhythmSelectedKey) {
-          ui.workRhythmSelectedKey = key;
-          renderMeer();
-        }
-      });
+      return closestKey;
     }
 
-    // Tap on klanten-sectie → expanded inline klantenanalyse
-    const custSection = el.querySelector(".ins-cust-section");
-    if (custSection) {
-      custSection.addEventListener("click", () => {
-        ui.meerPanel = "customers";
+    scrubZone.addEventListener("pointerdown", e => {
+      let scrubRAF = null;
+      let lastX = e.clientX;
+
+      const onMove = moveEvent => {
+        lastX = moveEvent.clientX;
+        if (scrubRAF) return;
+        scrubRAF = requestAnimationFrame(() => {
+          scrubRAF = null;
+          const key = getClosestRhythmKey(lastX);
+          if (key && key !== ui.workRhythmSelectedKey) {
+            ui.workRhythmSelectedKey = key;
+            renderMeer();
+          }
+        });
+      };
+
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.removeEventListener("pointercancel", onUp);
+      };
+
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+      document.addEventListener("pointercancel", onUp);
+
+      // Directe selectie bij aanraken
+      const key = getClosestRhythmKey(e.clientX);
+      if (key && key !== ui.workRhythmSelectedKey) {
+        ui.workRhythmSelectedKey = key;
         renderMeer();
-      });
-    }
+      }
+    });
   }
+
+  // Klant-rijen in de klantenlijst: tik opent klantdetail
+  el.querySelectorAll(".ins-bar-row[data-customer-id]").forEach(row => {
+    row.addEventListener("click", () => {
+      const customerId = row.dataset.customerId;
+      if (!customerId) return;
+      if (ui.navStack.some(v => v.view === "customerDetail" && v.id === customerId)) return;
+      pushView({ view: "customerDetail", id: customerId });
+    });
+  });
 
   renderTopbar();
 }
