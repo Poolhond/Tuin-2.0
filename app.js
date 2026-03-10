@@ -1731,7 +1731,8 @@ const ui = {
   insightsPeriod: "maand",
   insightsAnchorDate: new Date(),
   insightsDashboardMode: "logs",
-  meerPanel: "default"
+  meerPanel: "default",
+  workRhythmSelectedBucketKey: null
 };
 
 function normalizeInsightsDashboardMode(mode){
@@ -2361,7 +2362,7 @@ $("#nav-meer").addEventListener("click", ()=>{
     popView();
     return;
   }
-  if (ui.meerPanel === "customers"){
+  if (ui.meerPanel === "customers" || ui.meerPanel === "workRhythm"){
     ui.meerPanel = "default";
     renderMeer();
     return;
@@ -3585,6 +3586,162 @@ function renderWorkRhythmSVG(series, emptyMsg) {
   </svg>`;
 }
 
+// ---------- Werkritme expanded helpers ----------
+
+function getWorkRhythmExpandedBuckets(range, period, mode) {
+  const MONTH_NAMES = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+  const DAY_NAMES = ["Ma","Di","Wo","Do","Vr","Za","Zo"];
+
+  if (mode === "logs") {
+    const series = getWorkRhythmSeries(range, period);
+    return series.labels.map((label, i) => ({
+      key: String(i),
+      label,
+      value: series.values[i] || 0
+    }));
+  }
+
+  // settlements mode — include invoice/cash split per bucket
+  const settlements = getSettlementsForInsights(range);
+
+  function sumBucket(list) {
+    let invoice = 0, cash = 0;
+    for (const s of list) {
+      const a = getSettlementAmounts(s);
+      invoice += a.invoice || 0;
+      cash += a.cash || 0;
+    }
+    return { invoice, cash, value: invoice + cash };
+  }
+
+  if (period === "week") {
+    const startDate = parseLocalYMD(range.start);
+    if (!startDate) return [];
+    return Array.from({ length: 7 }, (_, i) => {
+      const day = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+      const dayStr = formatLocalYMD(day);
+      const { invoice, cash, value } = sumBucket(settlements.filter(s => s.date === dayStr));
+      return { key: String(i), label: DAY_NAMES[i], value, invoice, cash };
+    });
+  }
+
+  if (period === "kwartaal" || period === "jaar") {
+    const startDate = parseLocalYMD(range.start);
+    const endDate = parseLocalYMD(range.end);
+    if (!startDate || !endDate) return [];
+    const months = [];
+    const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    while (cur < endDate) {
+      months.push({ year: cur.getFullYear(), month: cur.getMonth() });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return months.map((m, i) => {
+      const list = settlements.filter(s => {
+        const d = parseLocalYMD(s.date);
+        return d && d.getFullYear() === m.year && d.getMonth() === m.month;
+      });
+      const { invoice, cash, value } = sumBucket(list);
+      return { key: String(i), label: MONTH_NAMES[m.month], value, invoice, cash };
+    });
+  }
+
+  // maand: 1 per dag
+  const startDate = parseLocalYMD(range.start);
+  if (!startDate) return [];
+  const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+  return Array.from({ length: daysInMonth }, (_, i) => {
+    const day = i + 1;
+    const dayStr = formatLocalYMD(new Date(startDate.getFullYear(), startDate.getMonth(), day));
+    const { invoice, cash, value } = sumBucket(settlements.filter(s => s.date === dayStr));
+    return { key: String(i), label: String(day), value, invoice, cash };
+  });
+}
+
+function getDefaultSelectedWorkRhythmBucket(buckets) {
+  for (let i = buckets.length - 1; i >= 0; i--) {
+    if (buckets[i].value > 0) return buckets[i].key;
+  }
+  return buckets.length > 0 ? buckets[buckets.length - 1].key : null;
+}
+
+function renderWorkRhythmExpandedHTML(range, period, mode) {
+  const buckets = getWorkRhythmExpandedBuckets(range, period, mode);
+  if (!buckets.length) {
+    return `<p class="insights-empty">Geen data in deze periode</p>`;
+  }
+
+  const maxVal = Math.max(...buckets.map(b => b.value), 1);
+  const totalValue = buckets.reduce((s, b) => s + b.value, 0);
+
+  const storedKey = ui.workRhythmSelectedBucketKey;
+  const selectedKey = storedKey != null && buckets.some(b => b.key === storedKey)
+    ? storedKey
+    : getDefaultSelectedWorkRhythmBucket(buckets);
+
+  const selectedBucket = buckets.find(b => b.key === selectedKey);
+
+  // Totaal blok
+  let totalHTML;
+  if (mode === "logs") {
+    totalHTML = `<div class="wr-total">${esc(fmtDurationShort(totalValue))}</div>
+      <div class="wr-total-sub">gewerkt in deze periode</div>`;
+  } else {
+    totalHTML = `<div class="wr-total">${fmtMoney0(totalValue)}</div>
+      <div class="wr-total-sub">verdiend in deze periode</div>`;
+  }
+
+  // Grafiek buckets — verticale lijn, horizontale positie = ratio * beschikbare ruimte
+  const barsHTML = buckets.map(b => {
+    const ratio = b.value > 0 ? b.value / maxVal : 0;
+    const isSelected = b.key === selectedKey;
+    return `<div class="wr-bucket${isSelected ? " wr-bucket--selected" : ""}" data-bucket-key="${esc(b.key)}">
+      <div class="wr-line-zone">
+        <div class="wr-line${b.value === 0 ? " wr-line--empty" : ""}" style="--wr-ratio:${ratio.toFixed(4)}"></div>
+      </div>
+      <div class="wr-bucket-label">${esc(b.label)}</div>
+    </div>`;
+  }).join("");
+
+  // Detail zone
+  let detailHTML;
+  if (!selectedBucket) {
+    detailHTML = `<div class="wr-detail-empty">Selecteer een periode</div>`;
+  } else if (selectedBucket.value === 0) {
+    const emptyVal = mode === "logs" ? "Niet gewerkt" : "Geen omzet";
+    detailHTML = `<div class="wr-detail-label">${esc(selectedBucket.label)}</div>
+      <div class="wr-detail-empty-val">${emptyVal}</div>`;
+  } else {
+    const pct = totalValue > 0 ? Math.round((selectedBucket.value / totalValue) * 100) : 0;
+    if (mode === "logs") {
+      detailHTML = `
+        <div class="wr-detail-label">${esc(selectedBucket.label)}</div>
+        <div class="wr-detail-value">${esc(fmtDurationShort(selectedBucket.value))}</div>
+        <div class="wr-detail-pct">${pct}% van totaal</div>`;
+    } else {
+      detailHTML = `
+        <div class="wr-detail-label">${esc(selectedBucket.label)}</div>
+        <div class="wr-detail-value">${fmtMoney0(selectedBucket.value)}</div>
+        <div class="wr-detail-sub">factuur ${fmtMoney0(selectedBucket.invoice || 0)}</div>
+        <div class="wr-detail-sub">cash ${fmtMoney0(selectedBucket.cash || 0)}</div>
+        <div class="wr-detail-pct">${pct}% van totaal</div>`;
+    }
+  }
+
+  return `<div class="meer-inline-workrhythm">
+    <div class="wr-total-block">
+      ${totalHTML}
+    </div>
+    <div class="wr-main-row">
+      <div class="wr-graph-col">
+        ${barsHTML}
+      </div>
+      <div class="wr-detail-col">
+        ${detailHTML}
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderWeekdayBarsSVG(totals) {
   const DAY_SHORT = ["zo","ma","di","wo","do","vr","za"];
   const maxVal = Math.max(...totals, 1);
@@ -3942,7 +4099,9 @@ function renderMeer(){
 
   let mainContentHTML;
 
-  if (panel === "customers") {
+  if (panel === "workRhythm") {
+    mainContentHTML = renderWorkRhythmExpandedHTML(range, period, mode);
+  } else if (panel === "customers") {
     const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
     const COLORS = CUSTOMER_CHART_COLORS;
     const emptyMsg = mode === "logs" ? "Geen werkdata in deze periode" : "Geen omzet in deze periode";
@@ -4028,7 +4187,11 @@ function renderMeer(){
     mainContentHTML = `
       ${heroHTML}
 
-      <div class="insights-section">
+      <div class="insights-section ins-werkritme-section">
+        <div class="insights-section-header">
+          <div class="insights-section-title">Werkritme</div>
+          <svg class="icon ins-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
         ${rhythmChart}
       </div>
 
@@ -4044,7 +4207,7 @@ function renderMeer(){
   }
 
   el.innerHTML = `
-    <div class="stack meer-layout${panel === "customers" ? " meer-layout--customers" : ""}">
+    <div class="stack meer-layout${panel === "customers" ? " meer-layout--customers" : panel === "workRhythm" ? " meer-layout--workrhythm" : ""}">
       <div class="insights-nav">
         <div class="insights-nav-period">
           <button class="ins-nav-prev">&#8249;</button>
@@ -4072,6 +4235,7 @@ function renderMeer(){
     else if (period === "kwartaal") a.setMonth(a.getMonth() - 3);
     else a.setFullYear(a.getFullYear() - 1);
     ui.insightsAnchorDate = a;
+    ui.workRhythmSelectedBucketKey = null;
     renderMeer();
   });
 
@@ -4082,6 +4246,7 @@ function renderMeer(){
     else if (period === "kwartaal") a.setMonth(a.getMonth() + 3);
     else a.setFullYear(a.getFullYear() + 1);
     ui.insightsAnchorDate = a;
+    ui.workRhythmSelectedBucketKey = null;
     renderMeer();
   });
 
@@ -4106,7 +4271,25 @@ function renderMeer(){
         pushView({ view: "customerDetail", id: customerId });
       });
     });
+  } else if (panel === "workRhythm") {
+    // Bucket selectie in expanded werkritme
+    el.querySelectorAll(".wr-bucket[data-bucket-key]").forEach(bucket => {
+      bucket.addEventListener("click", () => {
+        ui.workRhythmSelectedBucketKey = bucket.dataset.bucketKey;
+        renderMeer();
+      });
+    });
   } else {
+    // Tap on werkritme-sectie → expanded inline werkritme
+    const werkritmeSection = el.querySelector(".ins-werkritme-section");
+    if (werkritmeSection) {
+      werkritmeSection.addEventListener("click", () => {
+        ui.workRhythmSelectedBucketKey = null;
+        ui.meerPanel = "workRhythm";
+        renderMeer();
+      });
+    }
+
     // Tap on klanten-sectie → expanded inline klantenanalyse
     const custSection = el.querySelector(".ins-cust-section");
     if (custSection) {
