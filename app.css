@@ -2537,6 +2537,141 @@ h2{
   opacity: 0.6;
 }
 
+/* Inline werkritme expanded state */
+.meer-layout--workrhythm{
+  padding-bottom: calc(var(--more-actionbar-height) + 16px);
+}
+.meer-inline-workrhythm{
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 4px;
+}
+.wr-total-block{
+  text-align: center;
+  padding: 4px 0 8px;
+}
+.wr-total{
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.wr-total-sub{
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.wr-main-row{
+  display: grid;
+  grid-template-columns: 28% 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.wr-graph-col{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wr-bucket{
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  padding: 2px 0;
+}
+.wr-bucket:active{
+  opacity: 0.65;
+}
+.wr-line-zone{
+  height: 13px;
+  position: relative;
+}
+.wr-line{
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: calc(var(--wr-ratio, 0) * (100% - 3px));
+  width: 3px;
+  height: 10px;
+  background: var(--insights-accent-color, var(--accent));
+  border-radius: 2px;
+  opacity: 0.42;
+}
+.wr-line--empty{
+  opacity: 0.12;
+  background: var(--muted);
+}
+.wr-bucket--selected .wr-line:not(.wr-line--empty){
+  opacity: 1;
+}
+.wr-bucket-label{
+  font-size: 8px;
+  color: var(--muted);
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wr-detail-col{
+  padding-top: 2px;
+}
+.wr-detail-label{
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.wr-detail-value{
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+.wr-detail-sub{
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 3px;
+}
+.wr-detail-pct{
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.wr-detail-empty,
+.wr-detail-empty-val{
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+/* Werkritme section in default view — tappable */
+.ins-werkritme-section{
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 10px;
+  transition: background 0.12s;
+}
+.ins-werkritme-section:active{
+  background: color-mix(in srgb, var(--insights-accent-color, var(--surface)) 12%, var(--surface));
+}
+.ins-section-chevron{
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
 /* ====== Inzichten scherm ====== */
 
 /* Periode-selector */
