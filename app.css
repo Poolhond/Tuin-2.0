@@ -3382,3 +3382,64 @@ body[data-theme="day"] .ins-cust-section:active{
   font-size: 13px;
   color: var(--muted);
 }
+
+/* ====== Klant detail: insights overzichtskop ====== */
+
+.client-insights-header{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 0 8px;
+}
+
+/* Accent kleuren per modus — zelfde logica als #tab-meer */
+.client-insights-header.insights-mode-logs{
+  --insights-accent-color: var(--blue-muted);
+}
+.client-insights-header.insights-mode-settlements{
+  --insights-accent-color: var(--rose-muted);
+}
+.client-insights-header .cms-btn.cms-active{
+  color: var(--insights-accent-color, var(--text));
+}
+.client-insights-header .rhythm-area{
+  fill: color-mix(in srgb, var(--insights-accent-color, var(--accent)) 12%, transparent);
+}
+.client-insights-header .rhythm-line{
+  stroke: var(--insights-accent-color, var(--accent));
+}
+
+/* ins-nav-label als span ipv button: zelfde visuele stijl, niet klikbaar */
+.client-insights-header .ins-nav-label{
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Statistiekenrij onderaan de overzichtskop */
+.cdi-stats-row{
+  display: flex;
+  justify-content: space-around;
+  padding: 10px 4px 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.cdi-stat{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+.cdi-stat-val{
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cdi-stat-lbl{
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+}
