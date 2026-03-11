@@ -796,7 +796,8 @@ function ensureCurrentFixedQuarterSettlement(st, customer){
   };
 
   syncSettlementAmountsFromManualOverride(s, st);
-  if (Number(s.invoiceAmount || 0) > 0){
+  const factureAmount = Number(getSettlementTotals(s).invoiceTotal || 0);
+  if (factureAmount > 0){
     s.invoiceNumber = getNextInvoiceNumber(st.settlements || []);
   }
   st.settlements.unshift(s);
