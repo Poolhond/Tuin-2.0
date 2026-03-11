@@ -3243,7 +3243,7 @@ function renderSettlements(){
           `).join("")}
         </div>
       </div>
-      <div class="flat-list">${list || `<div class="meta-text" style="padding:8px 4px;">Nog geen afrekeningen.</div>`}</div>
+      <div class="flat-list settlement-list">${list || `<div class="meta-text" style="padding:8px 4px;">Nog geen afrekeningen.</div>`}</div>
     </div>
   `;
 
