@@ -2806,7 +2806,7 @@ function renderLogs(){
         ${showRestore ? `<button class="btn ghost" id="btnRestoreLogFilters">Herstel</button>` : ""}
       </div>
     </div>
-    <div class="stack stack-tight stack-logs">${timerBlock}<div class="flat-list">${list}</div></div>
+    <div class="stack stack-tight stack-logs">${timerBlock}<div class="flat-list flat-list--logbook">${list}</div></div>
   `;
 
   // Timer-first actions

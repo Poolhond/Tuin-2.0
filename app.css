@@ -2305,6 +2305,13 @@ h2{
   border-left:4px solid var(--status-fixed-border);
   padding-left:10px;
 }
+.flat-list--logbook .item.status-linked,
+.flat-list--logbook .item.status-calculated,
+.flat-list--logbook .item.status-paid,
+.flat-list--logbook .item.status-fixed{
+  border-left:0;
+  padding-left:4px;
+}
 .flat-list .item.settlement-card-item.card-accent--open{
   border-left:0;
   padding-left:4px;
