@@ -2323,7 +2323,8 @@ h2{
 .flat-list--logbook .item.status-paid,
 .flat-list--logbook .item.status-fixed{
   border-left:0;
-  padding-left:4px;
+  padding-left:16px;
+  padding-right:16px;
 }
 .flat-list .item.settlement-card-item.card-accent--open{
   border-left:0;
