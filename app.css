@@ -2284,6 +2284,19 @@ h2{
 .flat-list .item + .item{
   margin-top:0;
 }
+.flat-list.settlement-list .item.settlement-card-item{
+  margin:0;
+}
+.flat-list.settlement-list .item.settlement-card-item + .item.settlement-card-item::before{
+  content:"";
+  position:absolute;
+  top:0;
+  left:0;
+  right:4px;
+  height:1px;
+  background:rgba(255,255,255,0.06);
+  pointer-events:none;
+}
 /* Preserve status color accents in flat lists */
 .flat-list .item.status-linked{
   background: var(--status-linked-bg);
