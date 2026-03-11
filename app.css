@@ -3050,6 +3050,105 @@ body[data-theme="day"] .ins-cust-section:active{
   background: var(--surface2);
 }
 
+/* ===== Klant detail inzichten-sectie (cdi) ===== */
+.cdi-insights{
+  padding: 4px 0 8px;
+}
+.cdi-period-label{
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+  opacity: 0.8;
+}
+.cdi-hero{
+  text-align: center;
+  padding: 0 16px 6px;
+}
+.cdi-hero-amount{
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.cdi-hero-sub{
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.cdi-chart-wrap{
+  margin: 4px 0 6px;
+  overflow: hidden;
+}
+.cdi-mini-chart-svg{
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+.cdi-chart-empty{
+  margin: 6px 0 4px;
+}
+/* Chart kleuren volgen de modus-accentkleur */
+.cdi-insights.insights-mode-logs{
+  --insights-accent-color: var(--blue-muted);
+}
+.cdi-insights.insights-mode-settlements{
+  --insights-accent-color: var(--rose-muted);
+}
+.cdi-insights .rhythm-area{
+  fill: color-mix(in srgb, var(--insights-accent-color, var(--blue-muted)) 12%, transparent);
+}
+.cdi-insights .rhythm-line{
+  stroke: var(--insights-accent-color, var(--blue-muted));
+}
+/* Stats rij */
+.cdi-stats-row{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.cdi-stat{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+}
+.cdi-stat + .cdi-stat{
+  border-left: 1px solid var(--border);
+}
+.cdi-stat-value{
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-align: center;
+}
+.cdi-stat-value--small{
+  font-size: 12px;
+}
+.cdi-stat-label{
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+body[data-theme="day"] .cdi-insights .rhythm-area{
+  fill: color-mix(in srgb, var(--insights-accent-color, var(--blue-muted)) 10%, transparent);
+}
+
 /* Settlement new-afrekening button on Geld tab */
 .geld-header{
   display:flex;

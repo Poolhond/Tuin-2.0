@@ -3280,6 +3280,31 @@ function renderSettlements(){
 
 // ---------- Inzichten helpers ----------
 
+function getInsightsPeriodLabel(period, anchor) {
+  const MONTH_NL = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+  function isoWeekNum(d) {
+    const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const day = tmp.getUTCDay() || 7;
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+    return Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+  }
+  const range = getInsightsPeriodRange(period, anchor);
+  if (period === "week") {
+    const startDate = parseLocalYMD(range.start);
+    const wn = startDate ? isoWeekNum(startDate) : isoWeekNum(anchor);
+    return `week ${wn} \u00b7 ${anchor.getFullYear()}`;
+  }
+  if (period === "maand") {
+    return `${MONTH_NL[anchor.getMonth()]} ${anchor.getFullYear()}`;
+  }
+  if (period === "kwartaal") {
+    const q = Math.floor(anchor.getMonth() / 3) + 1;
+    return `Q${q} ${anchor.getFullYear()}`;
+  }
+  return `${anchor.getFullYear()}`;
+}
+
 function getInsightsPeriodRange(period, anchorDate) {
   const d = anchorDate instanceof Date ? anchorDate : new Date();
   if (period === "week") {
@@ -3681,6 +3706,149 @@ function getAverageEarnedPerWorkday(range) {
   return round2(earned.total / uniqueDays.size);
 }
 
+// ---------- Klant detail inzichten selectors ----------
+
+function getCustomerLogsInsights(customerId, range) {
+  const logs = getLogsForInsights(range).filter(l => l.customerId === customerId);
+  const totalMs = logs.reduce((sum, l) => sum + sumWorkMs(l), 0);
+  const logCount = logs.length;
+  const uniqueDays = new Set(logs.filter(l => sumWorkMs(l) > 0).map(l => l.date)).size;
+  const avgMsPerLog = logCount > 0 ? Math.round(totalMs / logCount) : 0;
+  const sorted = [...logs].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const lastDate = sorted.length > 0 ? sorted[0].date : null;
+  return { totalMs, logCount, uniqueDays, avgMsPerLog, lastDate };
+}
+
+function getCustomerSettlementsInsights(customerId, range) {
+  const settlements = getSettlementsForInsights(range).filter(s =>
+    (s.customerId || s.templateCustomerId) === customerId
+  );
+  let invoiceTotal = 0, cashTotal = 0, paidAmount = 0, openAmount = 0;
+  for (const s of settlements) {
+    const amounts = getSettlementAmounts(s);
+    const total = (amounts.invoice || 0) + (amounts.cash || 0);
+    invoiceTotal += amounts.invoice || 0;
+    cashTotal += amounts.cash || 0;
+    if (isSettlementPaid(s)) paidAmount += total;
+    else openAmount += total;
+  }
+  return {
+    totalAmount: round2(invoiceTotal + cashTotal),
+    settlementCount: settlements.length,
+    paidAmount: round2(paidAmount),
+    openAmount: round2(openAmount),
+    invoiceTotal: round2(invoiceTotal),
+    cashTotal: round2(cashTotal)
+  };
+}
+
+function getCustomerChartSeries(customerId, range, period, mode) {
+  const MONTH_NAMES = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+  const DAY_NAMES = ["Ma","Di","Wo","Do","Vr","Za","Zo"];
+
+  if (mode === "settlements") {
+    const settlements = getSettlementsForInsights(range).filter(s =>
+      (s.customerId || s.templateCustomerId) === customerId
+    );
+    function sumOnDate(dateStr) {
+      return settlements.filter(s => s.date === dateStr).reduce((sum, s) => {
+        const a = getSettlementAmounts(s);
+        return sum + (a.invoice || 0) + (a.cash || 0);
+      }, 0);
+    }
+    if (period === "week") {
+      const startDate = parseLocalYMD(range.start);
+      if (!startDate) return { buckets: [], period };
+      const buckets = [];
+      for (let i = 0; i < 7; i++) {
+        const day = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+        const key = formatLocalYMD(day);
+        buckets.push({ key, label: DAY_NAMES[i], value: sumOnDate(key) });
+      }
+      return { buckets, period };
+    }
+    if (period === "kwartaal" || period === "jaar") {
+      const startDate = parseLocalYMD(range.start);
+      const endDate = parseLocalYMD(range.end);
+      if (!startDate || !endDate) return { buckets: [], period };
+      const buckets = [];
+      const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (cur < endDate) {
+        const year = cur.getFullYear(), month = cur.getMonth();
+        const key = `${year}-${pad2(month + 1)}`;
+        const value = settlements.filter(s => {
+          const d = parseLocalYMD(s.date);
+          return d && d.getFullYear() === year && d.getMonth() === month;
+        }).reduce((sum, s) => { const a = getSettlementAmounts(s); return sum + (a.invoice || 0) + (a.cash || 0); }, 0);
+        buckets.push({ key, label: MONTH_NAMES[month], value });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      return { buckets, period };
+    }
+    // maand
+    const startDate = parseLocalYMD(range.start);
+    if (!startDate) return { buckets: [], period };
+    const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+    const buckets = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const key = formatLocalYMD(new Date(startDate.getFullYear(), startDate.getMonth(), day));
+      buckets.push({ key, label: String(day), value: sumOnDate(key) });
+    }
+    return { buckets, period, startDate };
+  } else {
+    // logs mode
+    const logs = getLogsForInsights(range).filter(l => l.customerId === customerId);
+    if (period === "week") {
+      const startDate = parseLocalYMD(range.start);
+      if (!startDate) return { buckets: [], period };
+      const buckets = [];
+      for (let i = 0; i < 7; i++) {
+        const day = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + i);
+        const key = formatLocalYMD(day);
+        const value = logs.filter(l => {
+          const d = parseLocalYMD(l.date);
+          return d && d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate();
+        }).reduce((sum, l) => sum + sumWorkMs(l), 0);
+        buckets.push({ key, label: DAY_NAMES[i], value });
+      }
+      return { buckets, period };
+    }
+    if (period === "kwartaal" || period === "jaar") {
+      const startDate = parseLocalYMD(range.start);
+      const endDate = parseLocalYMD(range.end);
+      if (!startDate || !endDate) return { buckets: [], period };
+      const buckets = [];
+      const cur = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (cur < endDate) {
+        const year = cur.getFullYear(), month = cur.getMonth();
+        const key = `${year}-${pad2(month + 1)}`;
+        const value = logs.filter(l => {
+          const d = parseLocalYMD(l.date);
+          return d && d.getFullYear() === year && d.getMonth() === month;
+        }).reduce((sum, l) => sum + sumWorkMs(l), 0);
+        buckets.push({ key, label: MONTH_NAMES[month], value });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+      return { buckets, period };
+    }
+    // maand
+    const startDate = parseLocalYMD(range.start);
+    if (!startDate) return { buckets: [], period };
+    const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+    const buckets = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayDate = new Date(startDate.getFullYear(), startDate.getMonth(), day);
+      const key = formatLocalYMD(dayDate);
+      const value = logs.filter(l => {
+        const d = parseLocalYMD(l.date);
+        return d && d.getFullYear() === startDate.getFullYear() && d.getMonth() === startDate.getMonth() && d.getDate() === day;
+      }).reduce((sum, l) => sum + sumWorkMs(l), 0);
+      buckets.push({ key, label: String(day), value });
+    }
+    return { buckets, period, startDate };
+  }
+}
+
 function renderWorkRhythmSVG(series, emptyMsg) {
   const { labels, values, period, startDate } = series;
   if (!labels.length || values.every(v => v === 0)) {
@@ -3940,6 +4108,133 @@ function fmtDurationShort(ms) {
   if (h === 0) return `${m}m`;
   if (m === 0) return `${h}u`;
   return `${h}u${m}m`;
+}
+
+// ---------- Klant detail inzichten renderers ----------
+
+function renderCustomerMiniChart(series, mode) {
+  const { buckets, period, startDate } = series;
+  if (!buckets || !buckets.length || buckets.every(b => b.value === 0)) {
+    return `<p class="insights-empty cdi-chart-empty">Geen data in deze periode</p>`;
+  }
+  const W = 280, H = 44;
+  const maxVal = Math.max(...buckets.map(b => b.value), 1);
+  const n = buckets.length;
+  const pts = buckets.map((b, i) => ({
+    x: n === 1 ? W / 2 : (i / (n - 1)) * W,
+    y: H - Math.max(0, (b.value / maxVal) * (H - 6)) - 3
+  }));
+  const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const areaD = `${pathD} L${pts[pts.length - 1].x.toFixed(1)},${H} L${pts[0].x.toFixed(1)},${H} Z`;
+
+  let xLabels = "";
+  if (period === "maand" && startDate) {
+    xLabels = buckets.map((b, i) => {
+      const x = pts[i].x;
+      const date = new Date(startDate.getFullYear(), startDate.getMonth(), i + 1);
+      const isMon = date.getDay() === 1;
+      const tick = `<line x1="${x.toFixed(1)}" y1="${H}" x2="${x.toFixed(1)}" y2="${(H + 3).toFixed(1)}" class="rhythm-tick"/>`;
+      const textEl = isMon
+        ? `<text x="${x.toFixed(1)}" y="${H + 13}" text-anchor="middle" class="rhythm-x-label">${esc(b.label)}</text>`
+        : "";
+      return tick + textEl;
+    }).join("");
+  } else {
+    xLabels = pts.map((p, i) =>
+      `<text x="${p.x.toFixed(1)}" y="${H + 13}" text-anchor="middle" class="rhythm-x-label">${esc(buckets[i].label)}</text>`
+    ).join("");
+  }
+
+  return `<svg viewBox="0 0 ${W} ${H + 18}" class="rhythm-svg cdi-mini-chart-svg" preserveAspectRatio="none">
+    <path d="${areaD}" class="rhythm-area"/>
+    <path d="${pathD}" class="rhythm-line"/>
+    ${xLabels}
+  </svg>`;
+}
+
+function renderCustomerMiniStats(customerId, range, mode) {
+  if (mode === "logs") {
+    const data = getCustomerLogsInsights(customerId, range);
+    const avgLabel = data.logCount > 0 ? fmtDurationShort(data.avgMsPerLog) : "\u2014";
+    const lastLabel = data.lastDate ? formatDatePretty(data.lastDate) : "\u2014";
+    return `<div class="cdi-stats-row">
+      <div class="cdi-stat">
+        <div class="cdi-stat-value">${esc(String(data.logCount))}</div>
+        <div class="cdi-stat-label">logs</div>
+      </div>
+      <div class="cdi-stat">
+        <div class="cdi-stat-value">${esc(avgLabel)}</div>
+        <div class="cdi-stat-label">gem. duur</div>
+      </div>
+      <div class="cdi-stat">
+        <div class="cdi-stat-value cdi-stat-value--small">${esc(lastLabel)}</div>
+        <div class="cdi-stat-label">laatste bezoek</div>
+      </div>
+    </div>`;
+  } else {
+    const data = getCustomerSettlementsInsights(customerId, range);
+    let invoiceCashLabel;
+    if (data.invoiceTotal > 0 && data.cashTotal > 0) {
+      invoiceCashLabel = `${fmtMoney0(data.invoiceTotal)}\u00a0/\u00a0${fmtMoney0(data.cashTotal)}`;
+    } else if (data.invoiceTotal > 0) {
+      invoiceCashLabel = fmtMoney0(data.invoiceTotal);
+    } else if (data.cashTotal > 0) {
+      invoiceCashLabel = fmtMoney0(data.cashTotal);
+    } else {
+      invoiceCashLabel = "\u2014";
+    }
+    return `<div class="cdi-stats-row">
+      <div class="cdi-stat">
+        <div class="cdi-stat-value">${fmtMoney0(data.openAmount)}</div>
+        <div class="cdi-stat-label">openstaand</div>
+      </div>
+      <div class="cdi-stat">
+        <div class="cdi-stat-value">${fmtMoney0(data.paidAmount)}</div>
+        <div class="cdi-stat-label">betaald</div>
+      </div>
+      <div class="cdi-stat">
+        <div class="cdi-stat-value cdi-stat-value--small">${esc(invoiceCashLabel)}</div>
+        <div class="cdi-stat-label">factuur\u00a0/\u00a0cash</div>
+      </div>
+    </div>`;
+  }
+}
+
+function renderCustomerInsightsSection(customerId) {
+  const period = ui.insightsPeriod || "maand";
+  const anchor = ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date();
+  const range = getInsightsPeriodRange(period, anchor);
+  const mode = getInsightsDashboardMode();
+  const periodLabel = getInsightsPeriodLabel(period, anchor);
+
+  let heroHTML;
+  if (mode === "logs") {
+    const data = getCustomerLogsInsights(customerId, range);
+    const daysLabel = data.uniqueDays === 1 ? "1 werkdag" : `${data.uniqueDays} werkdagen`;
+    heroHTML = `<div class="cdi-hero">
+      <div class="cdi-hero-amount">${esc(fmtDurationShort(data.totalMs))}</div>
+      <div class="cdi-hero-sub">${esc(daysLabel)}</div>
+    </div>`;
+  } else {
+    const data = getCustomerSettlementsInsights(customerId, range);
+    const countLabel = data.settlementCount === 1 ? "1 afrekening" : `${data.settlementCount} afrekeningen`;
+    heroHTML = `<div class="cdi-hero">
+      <div class="cdi-hero-amount">${fmtMoney0(data.totalAmount)}</div>
+      <div class="cdi-hero-sub">${esc(countLabel)}</div>
+    </div>`;
+  }
+
+  const series = getCustomerChartSeries(customerId, range, period, mode);
+  const chartHTML = renderCustomerMiniChart(series, mode);
+  const statsHTML = renderCustomerMiniStats(customerId, range, mode);
+  const modeClass = mode === "settlements" ? "insights-mode-settlements" : "insights-mode-logs";
+
+  return `<div class="cdi-insights ${modeClass}">
+    <div class="cdi-period-label">${esc(periodLabel)}</div>
+    ${heroHTML}
+    <div class="cdi-chart-wrap">${chartHTML}</div>
+    ${statsHTML}
+  </div>`;
 }
 
 function renderCustomerInsightsPreview(customers, mode) {
@@ -4231,30 +4526,7 @@ function renderMeer(){
   const anchor = ui.insightsAnchorDate instanceof Date ? ui.insightsAnchorDate : new Date();
   const range = getInsightsPeriodRange(period, anchor);
   const mode = getInsightsDashboardMode();
-  // ISO week number helper
-  function isoWeekNum(d) {
-    const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    const day = tmp.getUTCDay() || 7;
-    tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
-    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
-    return Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
-  }
-
-  const MONTH_NL = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
-
-  let periodLabel;
-  if (period === "week") {
-    const startDate = parseLocalYMD(range.start);
-    const wn = startDate ? isoWeekNum(startDate) : isoWeekNum(anchor);
-    periodLabel = `week ${wn} \u00b7 ${anchor.getFullYear()}`;
-  } else if (period === "maand") {
-    periodLabel = `${MONTH_NL[anchor.getMonth()]} ${anchor.getFullYear()}`;
-  } else if (period === "kwartaal") {
-    const q = Math.floor(anchor.getMonth() / 3) + 1;
-    periodLabel = `Q${q} ${anchor.getFullYear()}`;
-  } else {
-    periodLabel = `${anchor.getFullYear()}`;
-  }
+  const periodLabel = getInsightsPeriodLabel(period, anchor);
 
   const iconClock = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const iconCard = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="9" width="16" height="10" rx="2"/><path d="M7 9V6h7l3 3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 14h4" stroke-linecap="round"/><path d="M15 14h2" stroke-linecap="round"/><path d="M8 19v-2h8v2" stroke-linecap="round"/></svg>`;
@@ -4896,6 +5168,8 @@ function renderCustomerSheet(id){
           </div>
         `}
       </div>
+
+      ${renderCustomerInsightsSection(c.id)}
 
       <div class="card stack">
         <div class="item-title">Werklogs</div>
