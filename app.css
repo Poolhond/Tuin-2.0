@@ -2277,12 +2277,12 @@ h2{
 .flat-list .item{
   border-radius:0;
   border:0;
-  border-bottom:1px solid var(--border);
   background:transparent;
   padding:12px 4px;
+  margin:0;
 }
-.flat-list .item:last-child{
-  border-bottom:0;
+.flat-list .item + .item{
+  margin-top:0;
 }
 /* Preserve status color accents in flat lists */
 .flat-list .item.status-linked{
