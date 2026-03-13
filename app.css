@@ -2621,6 +2621,15 @@ h2{
   margin-top: -8px;
   padding: 0 16px 4px;
 }
+.client-insights-header .insights-hero{
+  margin-top: 8px;
+}
+.insights-hero-context{
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+}
 .insights-hero-amount{
   font-size: 42px;
   font-weight: 700;

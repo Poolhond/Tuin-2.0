@@ -3883,41 +3883,6 @@ function renderWorkRhythmDetailBlock(details, mode, detailLabel) {
   </div>`;
 }
 
-function renderCustomerBucketDetailBlock(details, detailLabel){
-  if (!details) return "";
-  const { totalMs, pct, count, greenQty, otherQty } = details;
-  const metaParts = [`${pct}% van totaal`, `${count} ${count === 1 ? "log" : "logs"}`];
-  if (greenQty > 0) metaParts.push(`${formatQuickQty(greenQty)} groen`);
-  if (otherQty > 0) metaParts.push(`${formatQuickQty(otherQty)} andere`);
-  const metaHTML = metaParts.map((part, idx)=> `${idx > 0 ? '<span class="rhythm-detail-dot">·</span>' : ""}<span>${esc(part)}</span>`).join("");
-
-  return `<div class="rhythm-detail-block">
-    <div class="rhythm-detail-header">
-      <span class="rhythm-detail-label">${esc(detailLabel)}</span>
-      <span class="rhythm-detail-value">${esc(durMsToHM(totalMs))}</span>
-    </div>
-    <div class="rhythm-detail-meta">${metaHTML}</div>
-  </div>`;
-}
-
-function renderCustomerSettlementBucketDetailBlock(details, detailLabel){
-  if (!details) return "";
-  const { totalAmount, totalInvoice, totalCash, pct } = details;
-  const splitParts = [];
-  if (totalInvoice > 0) splitParts.push(`factuur ${fmtMoney0(totalInvoice)}`);
-  if (totalCash > 0) splitParts.push(`cash ${fmtMoney0(totalCash)}`);
-  const metaParts = [`${pct}% van totaal`, ...splitParts];
-  const metaHTML = metaParts.map((part, idx)=> `${idx > 0 ? '<span class="rhythm-detail-dot">·</span>' : ""}<span>${part}</span>`).join("");
-
-  return `<div class="rhythm-detail-block">
-    <div class="rhythm-detail-header">
-      <span class="rhythm-detail-label">${esc(detailLabel)}</span>
-      <span class="rhythm-detail-value">${fmtMoney0(totalAmount)}</span>
-    </div>
-    <div class="rhythm-detail-meta">${metaHTML}</div>
-  </div>`;
-}
-
 function renderWeekdayBarsSVG(totals) {
   const DAY_SHORT = ["zo","ma","di","wo","do","vr","za"];
   const maxVal = Math.max(...totals, 1);
@@ -4808,34 +4773,19 @@ function renderCustomerSheet(id){
   // Hero data
   const cdiLogsInRange = getLogsForCustomerPeriod(c.id, cdiRange);
   const cdiTotalWorkMs = cdiLogsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
+  const cdiPeriodGreenQty = round2(cdiLogsInRange.reduce((sum, log) => {
+    const { greenItemQty } = splitLogItems(log);
+    return sum + (Number(greenItemQty) || 0);
+  }, 0));
+  const cdiPeriodOtherQty = round2(cdiLogsInRange.reduce((sum, log) => {
+    return sum + (log.items || []).reduce((itemSum, item) => {
+      if (!isOtherProduct(item)) return itemSum;
+      return itemSum + (Number(item.qty) || 0);
+    }, 0);
+  }, 0));
 
-  let cdiHeroHTML;
-  if (cdiMode === "logs") {
-    const workedDays = new Set(cdiLogsInRange.filter(l => sumWorkMs(l) > 0).map(l => l.date)).size;
-    const logCount = cdiLogsInRange.length;
-    const subLabel = workedDays === 1
-      ? `${logCount} ${logCount === 1 ? "log" : "logs"} · 1 werkdag`
-      : `${logCount} ${logCount === 1 ? "log" : "logs"} · ${workedDays} werkdagen`;
-    cdiHeroHTML = `<div class="insights-hero">
-      <div class="insights-hero-amount">${esc(fmtDurationShort(cdiTotalWorkMs))}</div>
-      <div class="insights-hero-worked">${esc(subLabel)}</div>
-    </div>`;
-  } else {
-    const cdiEarnings = getCustomerEarningsSummaryForPeriod(c.id, cdiRange);
-    const cdiSettlements = getSettlementsForCustomerPeriod(c.id, cdiRange);
-    const splitParts = [];
-    if (cdiEarnings.invoice > 0) splitParts.push(`factuur ${fmtMoney0(cdiEarnings.invoice)}`);
-    if (cdiEarnings.cash > 0) splitParts.push(`cash ${fmtMoney0(cdiEarnings.cash)}`);
-    const subLabel = `${cdiSettlements.length} ${cdiSettlements.length === 1 ? "afrekening" : "afrekeningen"}`;
-    cdiHeroHTML = `<div class="insights-hero">
-      <div class="insights-hero-amount">${fmtMoney0(cdiEarnings.total)}</div>
-      <div class="insights-hero-worked">${esc(subLabel)}</div>
-      ${splitParts.length ? `<div class="insights-hero-split">
-        <span>${splitParts[0]}</span>
-        ${splitParts.length > 1 ? `<span class="insights-hero-dot">\u00b7</span><span>${splitParts[1]}</span>` : ""}
-      </div>` : ""}
-    </div>`;
-  }
+  const cdiEarnings = getCustomerEarningsSummaryForPeriod(c.id, cdiRange);
+  const cdiSettlements = getSettlementsForCustomerPeriod(c.id, cdiRange);
 
   // Chart
   const cdiRhythmSeries = getCustomerRhythmSeries(c.id, cdiRange, cdiPeriod, cdiMode);
@@ -4847,63 +4797,104 @@ function renderCustomerSheet(id){
     if (!keyStillValid) ui.customerDetailRhythmSelectedKey = null;
   }
 
-  const cdiRhythmChart = renderWorkRhythmSVGInteractive(cdiRhythmSeries, ui.customerDetailRhythmSelectedKey, cdiRhythmEmptyMsg);
+  const cdiSelectedBucket = ui.customerDetailRhythmSelectedKey
+    ? cdiRhythmSeries.buckets.find(b => b.key === ui.customerDetailRhythmSelectedKey) || null
+    : null;
 
-  // Detail block for selected bucket
-  let cdiDetailBlockHTML = "";
-  if (ui.customerDetailRhythmSelectedKey) {
-    const selBucket = cdiRhythmSeries.buckets.find(b => b.key === ui.customerDetailRhythmSelectedKey);
-    if (selBucket) {
-      const selKey = ui.customerDetailRhythmSelectedKey;
-      if (cdiMode === "logs") {
-        const bucketLogs = (cdiPeriod === "week" || cdiPeriod === "maand")
-          ? cdiLogsInRange.filter(l => l.date === selKey)
-          : cdiLogsInRange.filter(l => (l.date || "").startsWith(selKey + "-"));
-        const totalMs = bucketLogs.reduce((sum, l) => sum + sumWorkMs(l), 0);
-        const allMs = cdiLogsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
-        const pct = allMs > 0 ? Math.round((totalMs / allMs) * 100) : 0;
-        const greenQty = round2(bucketLogs.reduce((sum, log) => {
-          const { greenItemQty } = splitLogItems(log);
-          return sum + (Number(greenItemQty) || 0);
-        }, 0));
-        const otherQty = round2(bucketLogs.reduce((sum, log) => {
-          return sum + (log.items || []).reduce((itemSum, item) => {
-            if (!isOtherProduct(item)) return itemSum;
-            return itemSum + (Number(item.qty) || 0);
-          }, 0);
-        }, 0));
-        cdiDetailBlockHTML = renderCustomerBucketDetailBlock({
-          totalMs,
-          pct,
-          count: bucketLogs.length,
-          greenQty,
-          otherQty
-        }, selBucket.detailLabel);
-      } else {
-        const allSettlements = getSettlementsForCustomerPeriod(c.id, cdiRange);
-        const bucketSettlements = (cdiPeriod === "week" || cdiPeriod === "maand")
-          ? allSettlements.filter(s => s.date === selKey)
-          : allSettlements.filter(s => (s.date || "").startsWith(selKey + "-"));
-        const totalAmount = bucketSettlements.reduce((sum, s) => {
-          const a = getSettlementAmounts(s);
-          return sum + (a.invoice || 0) + (a.cash || 0);
-        }, 0);
-        const totalInvoice = bucketSettlements.reduce((sum, s) => sum + (getSettlementAmounts(s).invoice || 0), 0);
-        const totalCash = bucketSettlements.reduce((sum, s) => sum + (getSettlementAmounts(s).cash || 0), 0);
-        const allTotal = allSettlements.reduce((sum, s) => {
-          const a = getSettlementAmounts(s);
-          return sum + (a.invoice || 0) + (a.cash || 0);
-        }, 0);
-        const pct = allTotal > 0 ? Math.round((totalAmount / allTotal) * 100) : 0;
-        cdiDetailBlockHTML = renderCustomerSettlementBucketDetailBlock({
-          totalAmount,
-          totalInvoice,
-          totalCash,
-          pct
-        }, selBucket.detailLabel);
+  let cdiHeroLabelHTML = "";
+  let cdiHeroAmountHTML = "";
+  let cdiHeroWorkedHTML = "";
+  let cdiHeroMetaHTML = "";
+
+  if (cdiMode === "logs") {
+    if (!cdiSelectedBucket) {
+      const workedDays = new Set(cdiLogsInRange.filter(l => sumWorkMs(l) > 0).map(l => l.date)).size;
+      const logCount = cdiLogsInRange.length;
+      const subLabel = workedDays === 1
+        ? `${logCount} ${logCount === 1 ? "log" : "logs"} · 1 werkdag`
+        : `${logCount} ${logCount === 1 ? "log" : "logs"} · ${workedDays} werkdagen`;
+      const metaParts = [];
+      if (cdiPeriodGreenQty > 0) metaParts.push(`${formatQuickQty(cdiPeriodGreenQty)} groen`);
+      if (cdiPeriodOtherQty > 0) metaParts.push(`${formatQuickQty(cdiPeriodOtherQty)} andere producten`);
+
+      cdiHeroAmountHTML = esc(fmtDurationShort(cdiTotalWorkMs));
+      cdiHeroWorkedHTML = esc(subLabel);
+      if (metaParts.length) {
+        cdiHeroMetaHTML = `<div class="insights-hero-split">${metaParts.map((part, idx) => `${idx > 0 ? '<span class="insights-hero-dot">·</span>' : ""}<span>${esc(part)}</span>`).join("")}</div>`;
       }
+    } else {
+      const selKey = cdiSelectedBucket.key;
+      const bucketLogs = (cdiPeriod === "week" || cdiPeriod === "maand")
+        ? cdiLogsInRange.filter(l => l.date === selKey)
+        : cdiLogsInRange.filter(l => (l.date || "").startsWith(selKey + "-"));
+      const totalMs = bucketLogs.reduce((sum, l) => sum + sumWorkMs(l), 0);
+      const pct = cdiTotalWorkMs > 0 ? Math.round((totalMs / cdiTotalWorkMs) * 100) : 0;
+      const greenQty = round2(bucketLogs.reduce((sum, log) => {
+        const { greenItemQty } = splitLogItems(log);
+        return sum + (Number(greenItemQty) || 0);
+      }, 0));
+      const otherQty = round2(bucketLogs.reduce((sum, log) => {
+        return sum + (log.items || []).reduce((itemSum, item) => {
+          if (!isOtherProduct(item)) return itemSum;
+          return itemSum + (Number(item.qty) || 0);
+        }, 0);
+      }, 0));
+      const metaParts = [`${pct}% van totaal`, `${bucketLogs.length} ${bucketLogs.length === 1 ? "log" : "logs"}`];
+      if (greenQty > 0) metaParts.push(`${formatQuickQty(greenQty)} groen`);
+      if (otherQty > 0) metaParts.push(`${formatQuickQty(otherQty)} andere producten`);
+
+      cdiHeroLabelHTML = `<div class="insights-hero-context">Geselecteerde bucket · ${esc(cdiSelectedBucket.detailLabel)}</div>`;
+      cdiHeroAmountHTML = esc(durMsToHM(totalMs));
+      cdiHeroWorkedHTML = esc(metaParts.slice(0, 2).join(" · "));
+      cdiHeroMetaHTML = metaParts.length > 2
+        ? `<div class="insights-hero-split">${metaParts.slice(2).map((part, idx) => `${idx > 0 ? '<span class="insights-hero-dot">·</span>' : ""}<span>${esc(part)}</span>`).join("")}</div>`
+        : "";
+    }
+  } else {
+    if (!cdiSelectedBucket) {
+      const splitParts = [];
+      if (cdiEarnings.invoice > 0) splitParts.push(`factuur ${fmtMoney0(cdiEarnings.invoice)}`);
+      if (cdiEarnings.cash > 0) splitParts.push(`cash ${fmtMoney0(cdiEarnings.cash)}`);
+      const subLabel = `${cdiSettlements.length} ${cdiSettlements.length === 1 ? "afrekening" : "afrekeningen"}`;
+
+      cdiHeroAmountHTML = fmtMoney0(cdiEarnings.total);
+      cdiHeroWorkedHTML = esc(subLabel);
+      cdiHeroMetaHTML = splitParts.length
+        ? `<div class="insights-hero-split">${splitParts.map((part, idx) => `${idx > 0 ? '<span class="insights-hero-dot">·</span>' : ""}<span>${part}</span>`).join("")}</div>`
+        : "";
+    } else {
+      const selKey = cdiSelectedBucket.key;
+      const bucketSettlements = (cdiPeriod === "week" || cdiPeriod === "maand")
+        ? cdiSettlements.filter(s => s.date === selKey)
+        : cdiSettlements.filter(s => (s.date || "").startsWith(selKey + "-"));
+      const totalAmount = bucketSettlements.reduce((sum, s) => {
+        const a = getSettlementAmounts(s);
+        return sum + (a.invoice || 0) + (a.cash || 0);
+      }, 0);
+      const totalInvoice = bucketSettlements.reduce((sum, s) => sum + (getSettlementAmounts(s).invoice || 0), 0);
+      const totalCash = bucketSettlements.reduce((sum, s) => sum + (getSettlementAmounts(s).cash || 0), 0);
+      const pct = cdiEarnings.total > 0 ? Math.round((totalAmount / cdiEarnings.total) * 100) : 0;
+      const splitParts = [`${pct}% van totaal`];
+      if (totalInvoice > 0) splitParts.push(`factuur ${fmtMoney0(totalInvoice)}`);
+      if (totalCash > 0) splitParts.push(`cash ${fmtMoney0(totalCash)}`);
+
+      cdiHeroLabelHTML = `<div class="insights-hero-context">Geselecteerde bucket · ${esc(cdiSelectedBucket.detailLabel)}</div>`;
+      cdiHeroAmountHTML = fmtMoney0(totalAmount);
+      cdiHeroWorkedHTML = esc(splitParts[0]);
+      cdiHeroMetaHTML = splitParts.length > 1
+        ? `<div class="insights-hero-split">${splitParts.slice(1).map((part, idx) => `${idx > 0 ? '<span class="insights-hero-dot">·</span>' : ""}<span>${part}</span>`).join("")}</div>`
+        : "";
     }
   }
+
+  const cdiHeroHTML = `<div class="insights-hero${cdiSelectedBucket ? " insights-hero-selected" : ""}">
+    ${cdiHeroLabelHTML}
+    <div class="insights-hero-amount">${cdiHeroAmountHTML}</div>
+    <div class="insights-hero-worked">${cdiHeroWorkedHTML}</div>
+    ${cdiHeroMetaHTML}
+  </div>`;
+
+  const cdiRhythmChart = renderWorkRhythmSVGInteractive(cdiRhythmSeries, ui.customerDetailRhythmSelectedKey, cdiRhythmEmptyMsg);
 
   const insightsHeaderHTML = `
     <div class="client-insights-header insights-mode-${cdiMode}">
@@ -4921,9 +4912,8 @@ function renderCustomerSheet(id){
         </div>
         ${cdiModeSwitchHTML}
       </div>
-      ${cdiHeroHTML}
       <div class="insights-section">${cdiRhythmChart}</div>
-      <div class="rhythm-detail-container">${cdiDetailBlockHTML}</div>
+      ${cdiHeroHTML}
     </div>
   `;
 
