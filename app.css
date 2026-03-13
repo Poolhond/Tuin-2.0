@@ -633,29 +633,6 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 
-.settings-detail-actionbar .detail-actionbar-inner{
-  justify-content:flex-end;
-  gap:8px;
-}
-
-.settings-detail-action-btn{
-  width:44px;
-  height:44px;
-  min-height:44px;
-  border-radius:999px;
-  border:1px solid var(--border);
-  background:transparent;
-  color:var(--fg);
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  padding:0;
-}
-
-.settings-detail-action-btn .icon{
-  width:20px;
-  height:20px;
-}
 
 /* Purple accent for calendar icon when fixed quarter template is active */
 .detail-edit-toggle.is-template-active{
@@ -1970,21 +1947,6 @@ h2{
   justify-content:flex-end;
 }
 
-.backup-warning{
-  color:rgba(255,77,77,.92);
-}
-
-.backup-feedback{
-  min-height:18px;
-}
-
-.backup-feedback.is-success{
-  color:#65d39c;
-}
-
-.backup-feedback.is-error{
-  color:#ff8d8d;
-}
 
 /* ====== REFACTOR: Typography hierarchy ====== */
 .item-title{

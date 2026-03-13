@@ -286,62 +286,12 @@ function openConfirmModal({ title, message, confirmText = "Bevestigen", cancelTe
   });
 }
 
-function openTextConfirmModal({ title, message, expectedText, confirmText = "Definitief wissen", cancelText = "Annuleren" }){
-  return new Promise((resolve)=>{
-    const root = ensureModalRoot();
-    root.innerHTML = `
-      <div class="modal-backdrop">
-        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitleTextConfirm">
-          <div class="item-title" id="modalTitleTextConfirm">${esc(title || "Bevestigen")}</div>
-          <div class="small modal-message">${esc(message || "")}</div>
-          <label for="modalConfirmInput">Typ <span class="mono">${esc(expectedText)}</span> om verder te gaan</label>
-          <input id="modalConfirmInput" autocomplete="off" />
-          <div class="row modal-actions">
-            <button class="btn" id="modalCancelBtn">${esc(cancelText)}</button>
-            <button class="btn danger" id="modalConfirmBtn" disabled>${esc(confirmText)}</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const input = root.querySelector("#modalConfirmInput");
-    const confirmBtn = root.querySelector("#modalConfirmBtn");
-    const finish = (value)=>{
-      closeModal();
-      resolve(value);
-    };
-
-    input?.addEventListener("input", ()=>{
-      const valid = (input.value || "").trim().toUpperCase() === String(expectedText || "").trim().toUpperCase();
-      confirmBtn.disabled = !valid;
-    });
-
-    root.querySelector("#modalCancelBtn")?.addEventListener("click", ()=> finish(false));
-    confirmBtn?.addEventListener("click", ()=> finish(true));
-    root.querySelector(".modal-backdrop")?.addEventListener("click", (e)=>{
-      if (e.target.classList.contains("modal-backdrop")) finish(false);
-    });
-  });
-}
-
 // ---------- State ----------
 function defaultState(){
   return {
     schemaVersion: 1,
     settings: {
-      theme: "night",
-      user: {
-        name: "",
-        street: "",
-        postalCity: "",
-        btwNummer: "",
-        iban: "",
-        bic: "",
-        rpr: "",
-        email: "",
-        gsm: "",
-        logoBase64: ""
-      }
+      theme: "night"
     },
     customers: [
       { id: uid(), nickname:"Jules", name:"", address:"Heverlee, Leuven", createdAt: now() },
@@ -394,7 +344,6 @@ function migrateState(st){
 
   if (!Number.isInteger(st.schemaVersion) || st.schemaVersion < 1) st.schemaVersion = 1;
   if (!st.settings || typeof st.settings !== "object" || Array.isArray(st.settings)) st.settings = {};
-  if (!st.settings.user) st.settings.user = {};
   return st;
 }
 
@@ -406,7 +355,6 @@ function validateAndRepairState(st){
   if (!Array.isArray(st.settlements)) st.settlements = [];
   if (!Array.isArray(st.products)) st.products = [];
   if (!st.settings || typeof st.settings !== "object" || Array.isArray(st.settings)) st.settings = {};
-  if (!st.settings.user || typeof st.settings.user !== "object" || Array.isArray(st.settings.user)) st.settings.user = {};
   if (!st.ui || typeof st.ui !== "object" || Array.isArray(st.ui)) st.ui = {};
 
   return st;
@@ -519,11 +467,6 @@ function loadState(){
   if (!st.settings) st.settings = { theme: "night" };
   for (const legacyKey of ["hourlyRate", "vatRate"]) delete st.settings[legacyKey];
   if (!("theme" in st.settings)) st.settings.theme = "night";
-  if (!st.settings.user || typeof st.settings.user !== "object" || Array.isArray(st.settings.user)) st.settings.user = {};
-  const userFields = ["name", "street", "postalCity", "btwNummer", "iban", "bic", "rpr", "email", "gsm", "logoBase64"];
-  for (const field of userFields){
-    if (!(field in st.settings.user)) st.settings.user[field] = "";
-  }
   st.settings.theme = normalizeTheme(st.settings.theme);
   if (!st.customers) st.customers = [];
   if (!st.products) st.products = [];
@@ -1937,22 +1880,6 @@ const actions = {
     commit();
   },
   addProduct(product){ state.products.unshift(product); commit(); return product; },
-  saveUserProfile(profile){
-    const current = state.settings.user && typeof state.settings.user === "object" ? state.settings.user : {};
-    state.settings.user = {
-      ...current,
-      name: String(profile?.name || "").trim(),
-      street: String(profile?.street || "").trim(),
-      postalCity: String(profile?.postalCity || "").trim(),
-      btwNummer: String(profile?.btwNummer || "").trim(),
-      iban: String(profile?.iban || "").trim(),
-      bic: String(profile?.bic || "").trim(),
-      rpr: String(profile?.rpr || "").trim(),
-      email: String(profile?.email || "").trim(),
-      gsm: String(profile?.gsm || "").trim()
-    };
-    commit();
-  },
   setTheme(theme){
     state.settings.theme = normalizeTheme(theme);
     commit();
@@ -2011,12 +1938,7 @@ const actions = {
     Object.assign(p, patch);
     commit();
   },
-  deleteProduct(productId){ state.products = state.products.filter(x => x.id !== productId); commit(); },
-  setBackupFeedback(type, text){
-    state.ui = state.ui || {};
-    state.ui.backupFeedback = { type, text };
-    commit();
-  }
+  deleteProduct(productId){ state.products = state.products.filter(x => x.id !== productId); commit(); }
 };
 
 function toggleEditLog(logId){
@@ -2159,7 +2081,6 @@ function viewTitle(viewState){
   if (view === "meer") return "Meer";
   if (view === "customers") return "Klanten";
   if (view === "products") return "Producten";
-  if (view === "settings") return "Instellingen";
   if (view === "settlementListOptions") return "Filter & sorteer";
   if (view === "logDetail"){
     const l = state.logs.find(x => x.id === viewState.id);
@@ -2497,11 +2418,13 @@ function setDetailActionBar({ className = "", html = "" } = {}){
 function syncMoreActionRow(){
   const active = currentView();
   const row = document.getElementById("moreActionBar");
-  const themeBtn = document.getElementById("moreThemeToggle");
   const customersBtn = document.getElementById("moreNavCustomers");
   const productsBtn = document.getElementById("moreNavProducts");
-  const settingsBtn = document.getElementById("moreNavSettings");
-  if (!row || !themeBtn || !customersBtn || !productsBtn || !settingsBtn) return;
+  const themeBtn = document.getElementById("moreThemeToggle");
+  const exportBtn = document.getElementById("moreBackupExport");
+  const importBtn = document.getElementById("moreBackupImport");
+  const importInput = document.getElementById("backupImportInput");
+  if (!row || !customersBtn || !productsBtn || !themeBtn || !exportBtn || !importBtn || !importInput) return;
 
   const show = active.view === "meer";
   if (!show){
@@ -2534,7 +2457,6 @@ function syncMoreActionRow(){
   const view = currentView().view;
   customersBtn.classList.toggle("is-active", view === "customers");
   productsBtn.classList.toggle("is-active", view === "products");
-  settingsBtn.classList.toggle("is-active", view === "settings");
 
   const openFromMore = (target)=>{
     pushView({ view: target });
@@ -2548,9 +2470,20 @@ function syncMoreActionRow(){
     productsBtn.addEventListener("click", ()=> openFromMore("products"));
     productsBtn.dataset.bound = "true";
   }
-  if (!settingsBtn.dataset.bound){
-    settingsBtn.addEventListener("click", ()=> openFromMore("settings"));
-    settingsBtn.dataset.bound = "true";
+
+  if (!exportBtn.dataset.bound){
+    exportBtn.addEventListener("click", exportBackup);
+    exportBtn.dataset.bound = "true";
+  }
+
+  if (!importBtn.dataset.bound){
+    importBtn.addEventListener("click", ()=> importInput.click());
+    importBtn.dataset.bound = "true";
+  }
+
+  if (!importInput.dataset.bound){
+    importInput.addEventListener("change", handleBackupImport);
+    importInput.dataset.bound = "true";
   }
 
   document.documentElement.style.setProperty("--more-actionbar-height", `${measureMoreActionBarHeight()}px`);
@@ -2575,6 +2508,97 @@ function syncViewUiState(){
 
   host.classList.remove("hidden");
   setBottomBarHeights({ statusVisible: true });
+}
+
+function parseBackupFile(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(String(reader.result || ""));
+    reader.onerror = ()=> reject(new Error("Bestand kon niet worden gelezen."));
+    reader.readAsText(file);
+  });
+}
+
+function validateBackupPayload(payload){
+  if (!payload || typeof payload !== "object") return "Ongeldige backup: JSON-object ontbreekt.";
+  if (payload.version !== STORAGE_KEY) return "Ongeldige backup-versie. Alleen backups van TuinLog MVP v1 zijn toegestaan.";
+  if (!payload.data || typeof payload.data !== "object") return "Ongeldige backup: data-object ontbreekt.";
+  const required = ["customers", "logs", "settlements", "settings"];
+  const missing = required.filter((key)=> !(key in payload.data));
+  if (missing.length) return `Ongeldige backup: ontbrekende velden (${missing.join(", ")}).`;
+  return "";
+}
+
+function exportBackup(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw){
+      alert("Er is geen lokale data gevonden om te exporteren.");
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      version: STORAGE_KEY,
+      data: parsed,
+    };
+    const today = new Date().toISOString().slice(0,10);
+    const filename = `tuinlog-backup-${today}.json`;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  } catch {
+    alert("Backup exporteren is mislukt. Controleer of je data geldig is.");
+  }
+}
+
+async function handleBackupImport(event){
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    const text = await parseBackupFile(file);
+    let payload = null;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      alert("Import mislukt: bestand bevat geen geldige JSON.");
+      event.target.value = "";
+      return;
+    }
+
+    const validationError = validateBackupPayload(payload);
+    if (validationError){
+      alert(validationError);
+      event.target.value = "";
+      return;
+    }
+
+    const exportedAt = payload.exportedAt || "onbekende datum";
+    const confirmed = await openConfirmModal({
+      title: "Backup herstellen",
+      message: `Weet je zeker dat je alle huidige data wilt vervangen door de backup van ${exportedAt}?`,
+      confirmText: "Herstellen",
+      cancelText: "Annuleren",
+    });
+    if (!confirmed){
+      event.target.value = "";
+      return;
+    }
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.data));
+    location.reload();
+  } catch {
+    alert("Import mislukt: kon het backup-bestand niet verwerken.");
+  } finally {
+    event.target.value = "";
+  }
 }
 
 // ---------- Render ----------
@@ -2849,192 +2873,6 @@ function renderLogs(){
     render();
   });
 
-}
-
-function _attachSettingsHandlers(){
-  const setBackupFeedback = (type, text)=>{
-    state.ui = state.ui || {};
-    state.ui.backupFeedback = { type, text };
-    const feedbackEl = $("#backupFeedback");
-    if (!feedbackEl) return;
-    feedbackEl.textContent = text || "";
-    feedbackEl.classList.remove("is-error", "is-success");
-    if (text){
-      feedbackEl.classList.add(type === "error" ? "is-error" : "is-success");
-    }
-  };
-
-  const parseBackupFile = (file)=> new Promise((resolve, reject)=>{
-    const reader = new FileReader();
-    reader.onload = ()=> resolve(String(reader.result || ""));
-    reader.onerror = ()=> reject(new Error("Bestand kon niet worden gelezen."));
-    reader.readAsText(file);
-  });
-
-  const validateBackupPayload = (payload)=>{
-    if (!payload || typeof payload !== "object") return "Ongeldige backup: JSON-object ontbreekt.";
-    if (payload.version !== STORAGE_KEY) return "Ongeldige backup-versie. Alleen backups van TuinLog MVP v1 zijn toegestaan.";
-    if (!payload.data || typeof payload.data !== "object") return "Ongeldige backup: data-object ontbreekt.";
-    const required = ["customers", "logs", "settlements", "settings"];
-    const missing = required.filter((key)=> !(key in payload.data));
-    if (missing.length) return `Ongeldige backup: ontbrekende velden (${missing.join(", ")}).`;
-    return "";
-  };
-
-  $("#saveUserProfile").onclick = ()=>{
-    actions.saveUserProfile({
-      name: $("#userName")?.value,
-      street: $("#userStreet")?.value,
-      postalCity: $("#userPostalCity")?.value,
-      btwNummer: $("#userBtwNummer")?.value,
-      iban: $("#userIban")?.value,
-      bic: $("#userBic")?.value,
-      rpr: $("#userRpr")?.value,
-      email: $("#userEmail")?.value,
-      gsm: $("#userGsm")?.value,
-    });
-    alert("Mijn gegevens opgeslagen.");
-  };
-
-  $("#companyLogoInput").onchange = (event)=>{
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      const base64 = String(reader.result || "");
-      const current = state.settings.user && typeof state.settings.user === "object" ? state.settings.user : {};
-      state.settings.user = { ...current, logoBase64: base64 };
-      commit();
-    };
-    reader.readAsDataURL(file);
-  };
-
-  $("#removeCompanyLogo").onclick = ()=>{
-    const current = state.settings.user && typeof state.settings.user === "object" ? state.settings.user : {};
-    state.settings.user = { ...current, logoBase64: "" };
-    commit();
-  };
-
-  $("#resetAllBtn").onclick = ()=>{
-    if (!confirmAction("Reset alles? Dit wist alle lokale data.")) return;
-    localStorage.removeItem(STORAGE_KEY);
-    location.reload();
-  };
-
-  $("#backupExportBtn").onclick = ()=>{
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw){
-        setBackupFeedback("error", "Er is geen lokale data gevonden om te exporteren.");
-        return;
-      }
-      const parsed = JSON.parse(raw);
-      const payload = {
-        exportedAt: new Date().toISOString(),
-        version: STORAGE_KEY,
-        data: parsed,
-      };
-      const today = new Date().toISOString().slice(0,10);
-      const filename = `tuinlog-backup-${today}.json`;
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = filename;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-      setBackupFeedback("success", `Backup opgeslagen als ${filename}.`);
-    } catch {
-      setBackupFeedback("error", "Backup exporteren is mislukt. Controleer of je data geldig is.");
-    }
-  };
-
-  $("#backupImportBtn").onclick = ()=>{
-    $("#backupImportInput")?.click();
-  };
-
-  $("#backupExportActionBtn").onclick = ()=>{
-    $("#backupExportBtn")?.click();
-  };
-
-  $("#backupImportActionBtn").onclick = ()=>{
-    $("#backupImportBtn")?.click();
-  };
-
-  $("#backupImportInput").onchange = async (event)=>{
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const text = await parseBackupFile(file);
-      let payload = null;
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        setBackupFeedback("error", "Import mislukt: bestand bevat geen geldige JSON.");
-        event.target.value = "";
-        return;
-      }
-
-      const validationError = validateBackupPayload(payload);
-      if (validationError){
-        setBackupFeedback("error", validationError);
-        event.target.value = "";
-        return;
-      }
-
-      const exportedAt = payload.exportedAt || "onbekende datum";
-      const confirmed = await openConfirmModal({
-        title: "Backup herstellen",
-        message: `Weet je zeker dat je alle huidige data wilt vervangen door de backup van ${exportedAt}?`,
-        confirmText: "Herstellen",
-        cancelText: "Annuleren",
-      });
-      if (!confirmed){
-        setBackupFeedback("error", "Herstel geannuleerd.");
-        event.target.value = "";
-        return;
-      }
-
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload.data));
-      location.reload();
-    } catch {
-      setBackupFeedback("error", "Import mislukt: kon het backup-bestand niet verwerken.");
-    } finally {
-      event.target.value = "";
-    }
-  };
-
-  $("#backupWipeBtn").onclick = async ()=>{
-    const firstConfirm = await openConfirmModal({
-      title: "Alles wissen",
-      message: "Weet je zeker dat je alle data permanent wilt wissen? Dit kan niet ongedaan gemaakt worden.",
-      confirmText: "Verder",
-      cancelText: "Annuleren",
-      danger: true,
-    });
-    if (!firstConfirm){
-      setBackupFeedback("error", "Wissen geannuleerd.");
-      return;
-    }
-
-    const secondConfirm = await openTextConfirmModal({
-      title: "Laatste bevestiging",
-      message: "Dit verwijdert alle lokale data definitief.",
-      expectedText: "WISSEN",
-      confirmText: "Definitief wissen",
-      cancelText: "Annuleren",
-    });
-    if (!secondConfirm){
-      setBackupFeedback("error", "Wissen geannuleerd.");
-      return;
-    }
-
-    localStorage.removeItem(STORAGE_KEY);
-    location.reload();
-  };
 }
 
 function renderSettlements(){
@@ -4644,7 +4482,6 @@ function renderSheet(){
   if (active.view === "newLog") renderNewLogSheet();
   if (active.view === "customers") renderCustomersSheet();
   if (active.view === "products") renderProductsSheet();
-  if (active.view === "settings") renderSettingsSheet();
   if (active.view === "settlementListOptions") renderSettlementListOptionsSheet();
   if (active.view === "customerInsights") renderCustomerInsightsDetail();
 }
@@ -4830,98 +4667,6 @@ function renderProductsSheet(){
   body.querySelectorAll("[data-open-product]").forEach(x=>{
     x.addEventListener("click", ()=> openSheet("product", x.getAttribute("data-open-product")));
   });
-}
-
-function renderSettingsSheet(){
-  const body = $("#sheetBody");
-  const user = state.settings?.user || {};
-  const hasLogo = Boolean(user.logoBase64);
-
-  setDetailActionBar({
-    className: "settings-detail-actionbar",
-    html: `
-      <button class="settings-detail-action-btn" id="backupExportActionBtn" type="button" aria-label="Backup exporteren" title="Backup exporteren">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4" stroke-linecap="round"/><path d="M8 8l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="16" width="16" height="4" rx="1"/></svg>
-      </button>
-      <button class="settings-detail-action-btn" id="backupImportActionBtn" type="button" aria-label="Backup importeren" title="Backup importeren">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12" stroke-linecap="round"/><path d="M16 12l-4 4-4-4" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="16" width="16" height="4" rx="1"/></svg>
-      </button>
-    `
-  });
-  body.style.paddingBottom = "calc(var(--detail-actionbar-height) + 18px)";
-
-  body.innerHTML = `
-    <div class="stack">
-      <div class="card stack">
-        <div class="item-title">Mijn gegevens</div>
-        <div>
-          <label>Naam</label>
-          <input id="userName" value="${esc(user.name || "")}" />
-        </div>
-        <div>
-          <label>Straat</label>
-          <input id="userStreet" value="${esc(user.street || "")}" />
-        </div>
-        <div>
-          <label>Postcode + stad</label>
-          <input id="userPostalCity" value="${esc(user.postalCity || "")}" />
-        </div>
-        <div>
-          <label>BTW-nummer</label>
-          <input id="userBtwNummer" value="${esc(user.btwNummer || "")}" />
-        </div>
-        <div>
-          <label>IBAN</label>
-          <input id="userIban" value="${esc(user.iban || "")}" />
-        </div>
-        <div>
-          <label>BIC</label>
-          <input id="userBic" value="${esc(user.bic || "")}" />
-        </div>
-        <div>
-          <label>RPR</label>
-          <input id="userRpr" value="${esc(user.rpr || "")}" />
-        </div>
-        <div>
-          <label>E-mail</label>
-          <input id="userEmail" inputmode="email" value="${esc(user.email || "")}" />
-        </div>
-        <div>
-          <label>GSM</label>
-          <input id="userGsm" inputmode="tel" value="${esc(user.gsm || "")}" />
-        </div>
-        <button class="btn primary" id="saveUserProfile">Opslaan</button>
-      </div>
-
-      <div class="card stack">
-        <div class="item-title">Bedrijfslogo</div>
-        <img id="companyLogoPreview" src="${esc(user.logoBase64 || "")}" alt="Bedrijfslogo" style="max-width:220px; max-height:120px; object-fit:contain; border-radius:8px; ${hasLogo ? "" : "display:none;"}" />
-        <input id="companyLogoInput" type="file" accept="image/png,image/jpeg" />
-        <button class="btn" id="removeCompanyLogo" ${hasLogo ? "" : "style='display:none;'"}>Verwijder logo</button>
-      </div>
-
-      <div class="card stack">
-        <div class="item-title">Geavanceerd</div>
-        <button class="btn danger" id="resetAllBtn">Reset alles</button>
-      </div>
-
-      <div class="card stack">
-        <div class="item-title">Backup & Herstel</div>
-        <div class="meta-text">Maak een reservekopie van je volledige lokale data of herstel een eerdere backup.</div>
-        <div class="row">
-          <button class="btn primary" id="backupExportBtn">Backup downloaden</button>
-          <button class="btn" id="backupImportBtn">Backup importeren</button>
-          <input id="backupImportInput" type="file" accept=".json,application/json" class="hidden" />
-        </div>
-        <button class="btn danger" id="backupWipeBtn">Alles wissen</button>
-        <div class="meta-text" style="color:rgba(255,77,77,.92);">Let op: hiermee verwijder je alle klanten, werklogs en facturen permanent.</div>
-        <div class="meta-text backup-feedback ${state.ui?.backupFeedback?.type === "error" ? "is-error" : "is-success"}" id="backupFeedback">${esc(state.ui?.backupFeedback?.text || "")}</div>
-      </div>
-    </div>
-  `;
-
-  // Re-attach settings event handlers
-  _attachSettingsHandlers();
 }
 
 function renderNewLogSheet(){
