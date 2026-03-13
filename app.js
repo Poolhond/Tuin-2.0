@@ -3357,31 +3357,6 @@ function getCustomerRhythmSeries(customerId, range, period, mode) {
   }
 }
 
-function getCustomerStatsRow(customerId, range, mode) {
-  if (mode === "logs") {
-    const logs = getLogsForCustomerPeriod(customerId, range);
-    const totalMs = logs.reduce((sum, l) => sum + sumWorkMs(l), 0);
-    const logCount = logs.length;
-    const avgMs = logCount > 0 ? Math.round(totalMs / logCount) : 0;
-    const dates = logs.map(l => l.date).filter(Boolean).sort();
-    const lastVisit = dates.length > 0 ? dates[dates.length - 1] : null;
-    return { logCount, avgMs, lastVisit };
-  } else {
-    const settlements = getSettlementsForCustomerPeriod(customerId, range);
-    let openstaand = 0, betaald = 0, factuurCount = 0, cashCount = 0;
-    for (const s of settlements) {
-      const amounts = getSettlementAmounts(s);
-      if (s.status === "paid") {
-        betaald = round2(betaald + (amounts.invoice || 0) + (amounts.cash || 0));
-      } else {
-        openstaand = round2(openstaand + (amounts.invoice || 0) + (amounts.cash || 0));
-      }
-      if ((amounts.invoice || 0) > 0) factuurCount++;
-      if ((amounts.cash || 0) > 0) cashCount++;
-    }
-    return { openstaand, betaald, factuurCount, cashCount };
-  }
-}
 
 function getWorkRhythmSeries(range, period) {
   const logs = getLogsForInsights(range);
@@ -3905,6 +3880,41 @@ function renderWorkRhythmDetailBlock(details, mode, detailLabel) {
     ${headerHTML}
     ${metaHTML}
     <div class="rhythm-detail-custs">${customersHTML}</div>
+  </div>`;
+}
+
+function renderCustomerBucketDetailBlock(details, detailLabel){
+  if (!details) return "";
+  const { totalMs, pct, count, greenQty, otherQty } = details;
+  const metaParts = [`${pct}% van totaal`, `${count} ${count === 1 ? "log" : "logs"}`];
+  if (greenQty > 0) metaParts.push(`${formatQuickQty(greenQty)} groen`);
+  if (otherQty > 0) metaParts.push(`${formatQuickQty(otherQty)} andere`);
+  const metaHTML = metaParts.map((part, idx)=> `${idx > 0 ? '<span class="rhythm-detail-dot">·</span>' : ""}<span>${esc(part)}</span>`).join("");
+
+  return `<div class="rhythm-detail-block">
+    <div class="rhythm-detail-header">
+      <span class="rhythm-detail-label">${esc(detailLabel)}</span>
+      <span class="rhythm-detail-value">${esc(durMsToHM(totalMs))}</span>
+    </div>
+    <div class="rhythm-detail-meta">${metaHTML}</div>
+  </div>`;
+}
+
+function renderCustomerSettlementBucketDetailBlock(details, detailLabel){
+  if (!details) return "";
+  const { totalAmount, totalInvoice, totalCash, pct } = details;
+  const splitParts = [];
+  if (totalInvoice > 0) splitParts.push(`factuur ${fmtMoney0(totalInvoice)}`);
+  if (totalCash > 0) splitParts.push(`cash ${fmtMoney0(totalCash)}`);
+  const metaParts = [`${pct}% van totaal`, ...splitParts];
+  const metaHTML = metaParts.map((part, idx)=> `${idx > 0 ? '<span class="rhythm-detail-dot">·</span>' : ""}<span>${part}</span>`).join("");
+
+  return `<div class="rhythm-detail-block">
+    <div class="rhythm-detail-header">
+      <span class="rhythm-detail-label">${esc(detailLabel)}</span>
+      <span class="rhythm-detail-value">${fmtMoney0(totalAmount)}</span>
+    </div>
+    <div class="rhythm-detail-meta">${metaHTML}</div>
   </div>`;
 }
 
@@ -4845,7 +4855,6 @@ function renderCustomerSheet(id){
     const selBucket = cdiRhythmSeries.buckets.find(b => b.key === ui.customerDetailRhythmSelectedKey);
     if (selBucket) {
       const selKey = ui.customerDetailRhythmSelectedKey;
-      let details;
       if (cdiMode === "logs") {
         const bucketLogs = (cdiPeriod === "week" || cdiPeriod === "maand")
           ? cdiLogsInRange.filter(l => l.date === selKey)
@@ -4853,7 +4862,23 @@ function renderCustomerSheet(id){
         const totalMs = bucketLogs.reduce((sum, l) => sum + sumWorkMs(l), 0);
         const allMs = cdiLogsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
         const pct = allMs > 0 ? Math.round((totalMs / allMs) * 100) : 0;
-        details = { totalMs, pct, customers: [], count: bucketLogs.length };
+        const greenQty = round2(bucketLogs.reduce((sum, log) => {
+          const { greenItemQty } = splitLogItems(log);
+          return sum + (Number(greenItemQty) || 0);
+        }, 0));
+        const otherQty = round2(bucketLogs.reduce((sum, log) => {
+          return sum + (log.items || []).reduce((itemSum, item) => {
+            if (!isOtherProduct(item)) return itemSum;
+            return itemSum + (Number(item.qty) || 0);
+          }, 0);
+        }, 0));
+        cdiDetailBlockHTML = renderCustomerBucketDetailBlock({
+          totalMs,
+          pct,
+          count: bucketLogs.length,
+          greenQty,
+          otherQty
+        }, selBucket.detailLabel);
       } else {
         const allSettlements = getSettlementsForCustomerPeriod(c.id, cdiRange);
         const bucketSettlements = (cdiPeriod === "week" || cdiPeriod === "maand")
@@ -4870,46 +4895,14 @@ function renderCustomerSheet(id){
           return sum + (a.invoice || 0) + (a.cash || 0);
         }, 0);
         const pct = allTotal > 0 ? Math.round((totalAmount / allTotal) * 100) : 0;
-        details = { totalAmount, totalInvoice, totalCash, pct, customers: [] };
+        cdiDetailBlockHTML = renderCustomerSettlementBucketDetailBlock({
+          totalAmount,
+          totalInvoice,
+          totalCash,
+          pct
+        }, selBucket.detailLabel);
       }
-      cdiDetailBlockHTML = renderWorkRhythmDetailBlock(details, cdiMode, selBucket.detailLabel);
     }
-  }
-
-  // Stats row
-  const cdiStats = getCustomerStatsRow(c.id, cdiRange, cdiMode);
-  let cdiStatsRowHTML;
-  if (cdiMode === "logs") {
-    const lastVisitLabel = cdiStats.lastVisit ? formatDatePretty(cdiStats.lastVisit) : "\u2014";
-    cdiStatsRowHTML = `
-      <div class="cdi-stat">
-        <span class="cdi-stat-val">${esc(String(cdiStats.logCount))}</span>
-        <span class="cdi-stat-lbl">logs</span>
-      </div>
-      <div class="cdi-stat">
-        <span class="cdi-stat-val">${esc(durMsToHM(cdiStats.avgMs))}</span>
-        <span class="cdi-stat-lbl">gem. duur</span>
-      </div>
-      <div class="cdi-stat">
-        <span class="cdi-stat-val">${esc(lastVisitLabel)}</span>
-        <span class="cdi-stat-lbl">laatste bezoek</span>
-      </div>
-    `;
-  } else {
-    cdiStatsRowHTML = `
-      <div class="cdi-stat">
-        <span class="cdi-stat-val">${esc(fmtMoney0(cdiStats.openstaand))}</span>
-        <span class="cdi-stat-lbl">openstaand</span>
-      </div>
-      <div class="cdi-stat">
-        <span class="cdi-stat-val">${esc(fmtMoney0(cdiStats.betaald))}</span>
-        <span class="cdi-stat-lbl">betaald</span>
-      </div>
-      <div class="cdi-stat">
-        <span class="cdi-stat-val">${esc(String(cdiStats.factuurCount))} / ${esc(String(cdiStats.cashCount))}</span>
-        <span class="cdi-stat-lbl">factuur / cash</span>
-      </div>
-    `;
   }
 
   const insightsHeaderHTML = `
@@ -4931,7 +4924,6 @@ function renderCustomerSheet(id){
       ${cdiHeroHTML}
       <div class="insights-section">${cdiRhythmChart}</div>
       <div class="rhythm-detail-container">${cdiDetailBlockHTML}</div>
-      <div class="cdi-stats-row">${cdiStatsRowHTML}</div>
     </div>
   `;
 
