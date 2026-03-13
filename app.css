@@ -3406,31 +3406,3 @@ body[data-theme="day"] .ins-cust-section:active{
   pointer-events: none;
 }
 
-/* Statistiekenrij onderaan de overzichtskop */
-.cdi-stats-row{
-  display: flex;
-  justify-content: space-around;
-  padding: 10px 4px 4px;
-  border-top: 1px solid var(--border);
-  margin-top: 4px;
-}
-.cdi-stat{
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  flex: 1;
-}
-.cdi-stat-val{
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.cdi-stat-lbl{
-  font-size: 11px;
-  color: var(--muted);
-  text-align: center;
-  white-space: nowrap;
-}
