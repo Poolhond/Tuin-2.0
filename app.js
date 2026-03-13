@@ -329,8 +329,6 @@ function defaultState(){
   return {
     schemaVersion: 1,
     settings: {
-      hourlyRate: 38,
-      vatRate: 0.21,
       theme: "night",
       user: {
         name: "",
@@ -492,6 +490,16 @@ function ensureCoreProducts(st){
   }
 }
 
+function getWorkProductSnapshot(sourceState = state){
+  const products = sourceState?.products || [];
+  const product = products.find(p => (p.name || "").trim().toLowerCase() === "werk") || null;
+  return {
+    product,
+    unitPrice: Number(product?.unitPrice ?? 0),
+    vatRate: Number(product?.vatRate ?? 0.21)
+  };
+}
+
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw){
@@ -508,9 +516,8 @@ function loadState(){
   const st = validateAndRepairState(migrateState(parsed.value));
 
   // migrations
-  if (!st.settings) st.settings = { hourlyRate: 38, vatRate: 0.21, theme: "night" };
-  if (!("hourlyRate" in st.settings)) st.settings.hourlyRate = 38;
-  if (!("vatRate" in st.settings)) st.settings.vatRate = 0.21;
+  if (!st.settings) st.settings = { theme: "night" };
+  for (const legacyKey of ["hourlyRate", "vatRate"]) delete st.settings[legacyKey];
   if (!("theme" in st.settings)) st.settings.theme = "night";
   if (!st.settings.user || typeof st.settings.user !== "object" || Array.isArray(st.settings.user)) st.settings.user = {};
   const userFields = ["name", "street", "postalCity", "btwNummer", "iban", "bic", "rpr", "email", "gsm", "logoBase64"];
@@ -809,25 +816,17 @@ function ensureCurrentFixedQuarterSettlement(st, customer){
 function syncSettlementAmountsFromManualOverride(settlement, sourceState){
   if (!settlement?.manualOverride?.enabled) return;
   const manual = settlement.manualOverride;
-  const settings = sourceState?.settings || {};
   const products = sourceState?.products || [];
-
-  const workProduct = products.find(p => {
-    const n = (p.name || "").toLowerCase();
-    return n === "werk" || n === "arbeid";
-  });
+  const { unitPrice: workUnitPrice, vatRate: workVatRate } = getWorkProductSnapshot(sourceState);
   const greenProduct = products.find(p => (p.name || "").toLowerCase() === "groen");
-
-  const hourlyRate = Number(workProduct?.unitPrice ?? settings.hourlyRate ?? 38);
   const greenRate = Number(greenProduct?.unitPrice ?? 0);
-  const vatRate = Number(settings.vatRate ?? 0.21);
 
-  let invoiceExcl = (manual.hoursInvoice || 0) * hourlyRate + (manual.groenInvoice || 0) * greenRate;
-  let cashExcl = (manual.hoursCash || 0) * hourlyRate + (manual.groenCash || 0) * greenRate;
+  let invoiceExcl = (manual.hoursInvoice || 0) * workUnitPrice + (manual.groenInvoice || 0) * greenRate;
+  let cashExcl = (manual.hoursCash || 0) * workUnitPrice + (manual.groenCash || 0) * greenRate;
   invoiceExcl = round2(invoiceExcl);
   cashExcl = round2(cashExcl);
 
-  settlement.invoiceAmount = round2(invoiceExcl + round2(invoiceExcl * vatRate));
+  settlement.invoiceAmount = round2(invoiceExcl + round2(invoiceExcl * workVatRate));
   settlement.cashAmount = round2(cashExcl);
 }
 
@@ -1127,19 +1126,16 @@ function getLogVisualState(log){
 function getManualOverrideTotals(settlement){
   const manual = getSettlementManualOverride(settlement);
   // try-catch vereist: state kan nog in TDZ zijn wanneer aangeroepen vanuit loadState().
-  let workProduct = null, greenProduct = null, stateSettings = null;
-  try { workProduct = preferredWorkProduct(); } catch(e) { /* TDZ */ }
+  let greenProduct = null, workSnapshot = { unitPrice: 0, vatRate: 0.21 };
+  try { workSnapshot = getWorkProductSnapshot(); } catch(e) { /* TDZ */ }
   try { greenProduct = findGreenProduct(); } catch(e) { /* TDZ */ }
-  try { stateSettings = state?.settings; } catch(e) { /* TDZ */ }
-  const hourlyRate = Number(workProduct?.unitPrice ?? stateSettings?.hourlyRate ?? 0);
   const greenRate = Number(greenProduct?.unitPrice ?? 0);
-  const vatRate = Number(stateSettings?.vatRate ?? 0.21);
 
   const allocations = {
     work: {
       invoiceQty: manual.hoursInvoice,
       cashQty: manual.hoursCash,
-      unitPrice: hourlyRate
+      unitPrice: workSnapshot.unitPrice
     },
     green: {
       invoiceQty: manual.groenInvoice,
@@ -1157,7 +1153,7 @@ function getManualOverrideTotals(settlement){
 
   invoiceExcl = round2(invoiceExcl);
   cashExcl = round2(cashExcl);
-  const invoiceVat = round2(invoiceExcl * vatRate);
+  const invoiceVat = round2(invoiceExcl * workSnapshot.vatRate);
   const invoiceTotal = round2(invoiceExcl + invoiceVat);
   const cashTotal = round2(cashExcl);
 
@@ -1422,7 +1418,7 @@ function statusLabelNL(s){
 // ---------- Lines & totals ----------
 function lineAmount(line){ return round2((Number(line.qty)||0) * (Number(line.unitPrice)||0)); }
 function lineVat(line){
-  const r = Number(line.vatRate ?? state.settings.vatRate ?? 0.21);
+  const r = Number(line.vatRate ?? 0.21);
   const bucket = line.bucket || "invoice";
   if (bucket === "cash") return 0;
   return round2(lineAmount(line) * r);
@@ -1484,10 +1480,7 @@ function computeSettlementFromLogsInState(sourceState, customerId, logIds){
 
   // build lines: labour + grouped items
   const lines = [];
-  const labourProduct = sourceState.products.find(p => {
-    const n = (p.name||"").toLowerCase();
-    return n === "werk" || n === "arbeid";
-  });
+  const { product: labourProduct, unitPrice: workUnitPrice, vatRate: workVatRate } = getWorkProductSnapshot(sourceState);
   if (hours > 0){
     lines.push({
       id: uid(),
@@ -1495,8 +1488,8 @@ function computeSettlementFromLogsInState(sourceState, customerId, logIds){
       description: labourProduct?.name || "Werk",
       unit: labourProduct?.unit || "uur",
       qty: hours,
-      unitPrice: Number(sourceState.settings.hourlyRate||38),
-      vatRate: labourProduct?.vatRate ?? 0.21,
+      unitPrice: workUnitPrice,
+      vatRate: workVatRate,
       bucket: "invoice"
     });
   }
@@ -1605,11 +1598,7 @@ function buildAllocationsFromLogs(settlement, sourceState = state){
   // Guard: fixed-period settlements use manual override, never rebuild allocations from logs
   if (isFixedPeriodSettlement(settlement)) return settlement.allocations || {};
   const { baseWorkHours, baseDate, productMap } = computeBaseTotals(settlement, sourceState);
-  const labourProduct = sourceState.products.find(p => {
-    const n = (p.name || "").toLowerCase();
-    return n === "werk" || n === "arbeid";
-  });
-  const hourlyRate = Number(sourceState.settings.hourlyRate || 38);
+  const { product: labourProduct, unitPrice: workUnitPrice, vatRate: workVatRate } = getWorkProductSnapshot(sourceState);
   const oldAllocations = settlement.allocations || null;
   const oldLines = settlement.lines || [];
   const newAllocations = {};
@@ -1629,11 +1618,11 @@ function buildAllocationsFromLogs(settlement, sourceState = state){
       baseQty: baseWorkHours,
       invoiceQty: round2(baseWorkHours - cashQty),
       cashQty,
-      unitPrice: hourlyRate,
+      unitPrice: workUnitPrice,
       productId: labourProduct?.id || null,
       name: labourProduct?.name || "Werk",
       unit: labourProduct?.unit || "uur",
-      vatRate: labourProduct?.vatRate ?? 0.21
+      vatRate: workVatRate
     };
   }
 
@@ -1690,21 +1679,21 @@ function shiftAllocation(settlement, key, direction, step){
  * Factuur is incl BTW, cash is excl BTW.
  */
 function getTotalsFromAllocations(settlement){
-  // try-catch is vereist: typeof geeft ook ReferenceError voor let-variabelen in TDZ.
-  // getTotalsFromAllocations wordt aangeroepen vanuit validateAndRepairState() TIJDENS
-  // let state = loadState(), dus state is nog niet geïnitialiseerd.
-  let btwRate = 0.21;
-  try { btwRate = Number(state?.settings?.vatRate ?? 0.21); } catch(e) { /* TDZ */ }
   const allocs = settlement.allocations || {};
   let invoiceExcl = 0;
   let cashExcl = 0;
+  let invoiceVat = 0;
   for (const alloc of Object.values(allocs)){
-    invoiceExcl += (alloc.invoiceQty || 0) * (alloc.unitPrice || 0);
-    cashExcl += (alloc.cashQty || 0) * (alloc.unitPrice || 0);
+    const invoiceLine = (alloc.invoiceQty || 0) * (alloc.unitPrice || 0);
+    const cashLine = (alloc.cashQty || 0) * (alloc.unitPrice || 0);
+    const vatRate = Number(alloc.vatRate ?? 0.21);
+    invoiceExcl += invoiceLine;
+    cashExcl += cashLine;
+    invoiceVat += round2(invoiceLine * vatRate);
   }
   invoiceExcl = round2(invoiceExcl);
   cashExcl = round2(cashExcl);
-  const invoiceVat = round2(invoiceExcl * btwRate);
+  invoiceVat = round2(invoiceVat);
   const invoiceTotal = round2(invoiceExcl + invoiceVat);
   const cashTotal = round2(cashExcl);
   return { invoiceSubtotal: invoiceExcl, invoiceVat, invoiceTotal, cashSubtotal: cashExcl, cashTotal };
@@ -1948,12 +1937,6 @@ const actions = {
     commit();
   },
   addProduct(product){ state.products.unshift(product); commit(); return product; },
-  updateSettings(hourlyRate, vatRate, theme = state.settings.theme){
-    state.settings.hourlyRate = round2(hourlyRate);
-    state.settings.vatRate = round2(vatRate);
-    state.settings.theme = normalizeTheme(theme);
-    commit();
-  },
   saveUserProfile(profile){
     const current = state.settings.user && typeof state.settings.user === "object" ? state.settings.user : {};
     state.settings.user = {
@@ -2930,14 +2913,6 @@ function _attachSettingsHandlers(){
     const current = state.settings.user && typeof state.settings.user === "object" ? state.settings.user : {};
     state.settings.user = { ...current, logoBase64: "" };
     commit();
-  };
-
-  $("#saveSettings").onclick = ()=>{
-    const hourly = Number(String($("#settingHourly").value).replace(",", ".") || "0");
-    const vatPct = Number(String($("#settingVat").value).replace(",", ".") || "0");
-
-    actions.updateSettings(hourly, vatPct / 100);
-    alert("Instellingen opgeslagen.");
   };
 
   $("#resetAllBtn").onclick = ()=>{
@@ -4926,21 +4901,6 @@ function renderSettingsSheet(){
       </div>
 
       <div class="card stack">
-        <div class="item-title">Algemeen</div>
-        <div class="row">
-          <div style="flex:1; min-width:170px;">
-            <label>Uurtarief</label>
-            <input id="settingHourly" inputmode="decimal" value="${esc(String(state.settings.hourlyRate ?? 38))}" />
-          </div>
-          <div style="flex:1; min-width:170px;">
-            <label>BTW %</label>
-            <input id="settingVat" inputmode="decimal" value="${esc(String(round2(Number(state.settings.vatRate || 0) * 100)))}" />
-          </div>
-        </div>
-        <button class="btn primary" id="saveSettings">Opslaan</button>
-      </div>
-
-      <div class="card stack">
         <div class="item-title">Geavanceerd</div>
         <button class="btn danger" id="resetAllBtn">Reset alles</button>
       </div>
@@ -6250,7 +6210,7 @@ function settlementLogbookSummary(s){
     .filter(Boolean);
   const totalWorkMs = linkedLogs.reduce((acc, log) => acc + sumWorkMs(log), 0);
   const totalProductCosts = round2(linkedLogs.reduce((acc, log) => acc + sumItemsAmount(log), 0));
-  const hourly = Number(state.settings.hourlyRate||0);
+  const { unitPrice: hourly } = getWorkProductSnapshot();
   const totalLogPrice = round2((totalWorkMs / 3600000) * hourly + totalProductCosts);
   return { linkedCount: linkedLogs.length, totalWorkMs, totalProductCosts, totalLogPrice };
 }
@@ -6394,7 +6354,7 @@ function renderSettlementLogOverviewSheet(settlementId){
 
   const totalWorkMinutes = linkedLogs.reduce((acc, log) => acc + Math.floor(sumWorkMs(log) / 60000), 0);
   const totalProductCost = round2(linkedLogs.reduce((acc, log) => acc + sumItemsAmount(log), 0));
-  const totalAmount = round2(totalProductCost + ((totalWorkMinutes / 60) * Number(state.settings.hourlyRate || 0)));
+  const totalAmount = round2(totalProductCost + ((totalWorkMinutes / 60) * getWorkProductSnapshot().unitPrice));
 
   $('#sheetActions').innerHTML = '';
   $('#sheetBody').innerHTML = `
