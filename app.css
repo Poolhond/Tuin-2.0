@@ -443,7 +443,7 @@ label{ display:block; font-size:12px; color:var(--muted); margin: 0 0 6px 0; }
 .status-tabbar{
   z-index:21;
   bottom: var(--bottom-tabbar-height);
-  padding: 8px 12px;
+  padding: 8px 10px;
 }
 
 .status-tabbar-inner{
@@ -452,25 +452,28 @@ label{ display:block; font-size:12px; color:var(--muted); margin: 0 0 6px 0; }
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:10px;
+  min-height:44px;
+  gap:16px;
 }
 
 .status-tabbar .settlement-status-bar{
-  min-height:36px;
+  min-height:44px;
   flex:1 1 auto;
   min-width:0;
+  gap:16px;
 }
 
 .status-tabbar .status-icon-chip,
 .status-tabbar .iconbtn{
-  width:36px;
-  height:36px;
-  flex:0 0 36px;
+  width:44px;
+  height:44px;
+  min-height:44px;
+  flex:0 0 44px;
 }
 
 .status-tabbar .status-icon-chip{
-  min-height:36px;
-  padding:10px;
+  min-height:44px;
+  padding:0;
   border:0;
   background:transparent;
   border-radius:0;
@@ -478,8 +481,8 @@ label{ display:block; font-size:12px; color:var(--muted); margin: 0 0 6px 0; }
 }
 
 .status-tabbar .status-icon-chip .icon{
-  width:22px;
-  height:22px;
+  width:20px;
+  height:20px;
 }
 
 .status-tabbar .status-icon-chip.is-open{
@@ -491,23 +494,28 @@ label{ display:block; font-size:12px; color:var(--muted); margin: 0 0 6px 0; }
 }
 
 .status-tabbar .iconbtn{
-  min-height:36px;
+  min-height:44px;
   padding:0;
-  border-radius:999px;
+  border-radius:0;
+  border:0;
+  background:transparent;
+  color:var(--muted);
 }
 
 .status-tabbar .iconbtn.is-active{
   color:var(--text);
-  border-color:rgba(233,238,246,.34);
-  background:rgba(233,238,246,.08);
+  border-color:transparent;
+  background:transparent;
 }
 
 .status-tabbar .settlement-detail-action-btn{
+  width:44px;
+  height:44px;
+  min-height:44px;
   border:0;
   background:transparent;
   border-radius:0;
-  min-height:36px;
-  padding:10px;
+  padding:0;
   color:var(--muted);
 }
 
@@ -518,19 +526,19 @@ label{ display:block; font-size:12px; color:var(--muted); margin: 0 0 6px 0; }
 }
 
 .status-tabbar .settlement-detail-action-icon{
-  width:22px;
-  height:22px;
+  width:20px;
+  height:20px;
 }
 
 .status-log-link-wrap{
   position:relative;
-  width:36px;
-  height:36px;
+  width:44px;
+  height:44px;
 }
 
 .status-log-link-wrap .status-icon-chip{
-  width:36px;
-  height:36px;
+  width:44px;
+  height:44px;
 }
 
 .status-link,
