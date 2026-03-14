@@ -6372,16 +6372,16 @@ function renderSettlementSheet(id){
       ${renderSettlementStatusIcons(s)}
     </div>
     ${isEdit && !isManualMode && !isFixed ? `
-      <button class="iconbtn" id="btnSettlementRecalc" type="button" aria-label="Herbereken uit logs" title="Herbereken uit logs">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button class="iconbtn settlement-detail-action-btn" id="btnSettlementRecalc" type="button" aria-label="Herbereken uit logs" title="Herbereken uit logs">
+        <svg class="icon settlement-detail-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke-linecap="round"/>
           <path d="M21 3v6h-6" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
     ` : ""}
     ${isEdit && !isFixed ? `
-      <button class="iconbtn ${isManualMode ? "is-active" : ""}" id="btnSettlementManualOverride" type="button" aria-label="Handmatige override" title="Handmatige override" aria-pressed="${isManualMode ? "true" : "false"}">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+      <button class="iconbtn settlement-detail-action-btn ${isManualMode ? "is-active" : ""}" id="btnSettlementManualOverride" type="button" aria-label="Handmatige override" title="Handmatige override" aria-pressed="${isManualMode ? "true" : "false"}">
+        <svg class="icon settlement-detail-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
           <path d="M4 6h8" stroke-linecap="round"/>
           <circle cx="15" cy="6" r="2"/>
           <path d="M4 12h5" stroke-linecap="round"/>
@@ -6391,10 +6391,10 @@ function renderSettlementSheet(id){
         </svg>
       </button>
     ` : ""}
-    <button class="iconbtn" id="btnSettlementEdit" type="button" aria-label="${isEdit ? "Gereed" : "Bewerk"}" title="${isEdit ? "Gereed" : "Bewerk"}">
+    <button class="iconbtn settlement-detail-action-btn" id="btnSettlementEdit" type="button" aria-label="${isEdit ? "Gereed" : "Bewerk"}" title="${isEdit ? "Gereed" : "Bewerk"}">
       ${isEdit
-        ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
-        : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l3.5-.8L19 7.7a1.8 1.8 0 0 0 0-2.5l-.2-.2a1.8 1.8 0 0 0-2.5 0L3.8 17.5z"></path><path d="M14 5l5 5"></path></svg>`}
+        ? `<svg class="icon settlement-detail-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
+        : `<svg class="icon settlement-detail-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l3.5-.8L19 7.7a1.8 1.8 0 0 0 0-2.5l-.2-.2a1.8 1.8 0 0 0-2.5 0L3.8 17.5z"></path><path d="M14 5l5 5"></path></svg>`}
     </button>
   `);
 
