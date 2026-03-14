@@ -5548,9 +5548,7 @@ function renderLogSheet(id){
     `;
   }
 
-  function renderLogHeader(currentLog, editing){
-    const dateInputValue = formatLocalYMD(new Date(currentLog.date));
-    const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
+  function renderLogHeader(currentLog){
     const dateValue = parseLocalYMD(currentLog.date);
     const dayNamesLong = ["Zondag", "Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag"];
     const monthNamesLong = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
@@ -5560,15 +5558,7 @@ function renderLogSheet(id){
       : (currentLog.date || "—");
     const timeRange = `${currentLog.startTime || "—"} – ${currentLog.endTime || "—"}`;
     const pauseMinutes = Number(currentLog.pauseTotal ?? sumBreakMinutes(currentLog)) || 0;
-    const dateHeader = editing
-      ? `
-        <div class="log-detail-date-edit" role="group" aria-label="Datum bewerken">
-          <svg class="icon log-detail-date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18" stroke-linecap="round"></path></svg>
-          <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(draftDate)}" max="${formatLocalYMD(new Date())}" />
-          <button class="iconbtn iconbtn-sm" id="btnCommitLogDate" type="button" aria-label="Bevestig datum" title="Bevestig datum"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
-        </div>
-      `
-      : `
+    const dateHeader = `
         <div class="stack log-detail-hero">
           <div class="log-detail-hero-day">${esc(heroDay)}</div>
           <div class="log-detail-hero-date">${esc(heroDate)}</div>
@@ -5604,7 +5594,9 @@ function renderLogSheet(id){
           <div class="log-detail-note-text">${esc(log.note.trim())}</div>
         </section>
       ` : ""}
-      ${renderLogHeader(log, isEditing)}
+      ${!isEditing ? renderLogHeader(log) : ""}
+
+      ${isEditing ? `<section class="compact-section stack"><label>Datum<input id="logDateInput" type="date" value="${esc(formatLocalYMD(new Date(log.date)))}" max="${formatLocalYMD(new Date())}" /></label></section>` : ""}
 
       ${isEditing ? `<section class="compact-section stack"><div class="row"><label>Start<input id="logStartTime" type="time" value="${esc(log.startTime||"")}" ${isEditing ? "" : "disabled"} /></label><label>Einde<input id="logEndTime" type="time" value="${esc(log.endTime||"")}" ${isEditing ? "" : "disabled"} /></label></div></section>` : ""}
       ${isEditing ? renderBreaks(log, isEditing) : ""}
@@ -5678,17 +5670,10 @@ function renderLogSheet(id){
     const nextDate = event.target?.value;
     if (!nextDate) return;
     if (nextDate > formatLocalYMD(new Date())) return;
-    ui.logDateDraft[log.id] = nextDate;
-  });
-
-  $("#btnCommitLogDate")?.addEventListener("click", ()=>{
-    const nextDate = ui.logDateDraft[log.id];
-    if (!nextDate) return;
-    if (nextDate > formatLocalYMD(new Date())) return;
     actions.editLog(log.id, (draft)=>{
       setLogDay(draft, nextDate);
     });
-    delete ui.logDateDraft[log.id];
+    renderSheet();
   });
 
 
@@ -5893,7 +5878,7 @@ function renderProducts(log, { context = "log", isEditing = false } = {}){
         <div class="log-other-items-wrap">
           <div class="log-other-head">
             <div class="item-sub">Andere producten</div>
-            ${isEditing && productOptions ? `<button class="btn" id="addProductItem" type="button">+ Extra kost</button>` : ""}
+            ${isEditing ? `<button class="btn" id="addProductItem" type="button" ${productOptions ? "" : "disabled"}>+ Extra kost</button>` : ""}
           </div>
           ${isEditing ? `
             ${otherRowsEdit}
