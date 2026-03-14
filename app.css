@@ -1548,12 +1548,13 @@ body:not([data-view="meer"]) #moreActionBar{
 
 .log-detail-hero-context{
   width:100%;
-  margin-bottom:12px;
+  margin-bottom:0;
   text-align:center;
-  font-size:17px;
-  font-weight:600;
-  line-height:1.2;
-  opacity:.9;
+  font-size:34px;
+  font-weight:700;
+  line-height:1.04;
+  letter-spacing:-0.018em;
+  opacity:1;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -1575,7 +1576,7 @@ body:not([data-view="meer"]) #moreActionBar{
   text-align:center;
   justify-content:center;
   width:100%;
-  gap:7px;
+  gap:0;
 }
 .log-detail-header::before,
 .log-detail-header::after{
@@ -1631,28 +1632,32 @@ body[data-theme="day"] .log-detail-header::after{
 }
 
 .log-detail-hero-weekday{
-  font-size:12px;
+  margin-top:6px;
+  font-size:17px;
   color:color-mix(in srgb, var(--muted) 92%, #bfcce0 8%);
-  font-weight:560;
-  letter-spacing:.03em;
+  font-weight:500;
+  letter-spacing:.12em;
   line-height:1.15;
+  opacity:.75;
   text-transform:uppercase;
 }
 
 .log-detail-hero-date{
-  margin-top:1px;
+  margin-top:6px;
   font-size:34px;
-  font-weight:690;
+  font-weight:700;
   line-height:1.03;
-  letter-spacing:.003em;
+  letter-spacing:-0.018em;
 }
 
 .log-detail-hero-time{
-  margin-top:2px;
-  font-size:14px;
+  margin-top:10px;
+  font-size:17px;
   color:color-mix(in srgb, var(--muted) 94%, #d2deeb 6%);
-  letter-spacing:.018em;
+  font-weight:500;
+  letter-spacing:.01em;
   line-height:1.18;
+  opacity:.75;
 }
 
 body[data-theme="day"] .log-detail-hero-weekday{
