@@ -1707,6 +1707,56 @@ body[data-theme="day"] .log-detail-hero-time{
   text-align:center;
 }
 
+
+.log-detail-header.is-editing{
+  margin:0;
+  padding:8px 0 10px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+
+.log-detail-header.is-editing::before,
+.log-detail-header.is-editing::after{
+  display:none;
+}
+
+.log-detail-hero-weekday,
+.log-detail-hero-date,
+.log-detail-hero-time{
+  border:0;
+  background:transparent;
+  color:inherit;
+}
+
+.log-detail-header .log-detail-hero-weekday:disabled,
+.log-detail-header .log-detail-hero-date:disabled,
+.log-detail-header .log-detail-hero-time:disabled{
+  opacity:1;
+}
+
+.log-detail-hero-time-wrap{
+  margin-top:10px;
+  font-size:17px;
+  color:color-mix(in srgb, var(--muted) 94%, #d2deeb 6%);
+  font-weight:500;
+  letter-spacing:.01em;
+  line-height:1.18;
+  opacity:.75;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+}
+
+.log-detail-hidden-native-input{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+  width:1px;
+  height:1px;
+}
 .log-detail-compact .compact-section:last-child{
   border-bottom:0;
 }
@@ -1714,7 +1764,7 @@ body[data-theme="day"] .log-detail-hero-time{
 .log-detail-footer-actions{
   display:flex;
   align-items:center;
-  justify-content:space-between;
+  justify-content:flex-start;
   gap:10px;
   padding-bottom:2px;
 }
