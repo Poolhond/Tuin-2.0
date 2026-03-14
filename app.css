@@ -1491,22 +1491,22 @@ body:not([data-view="meer"]) #moreActionBar{
   isolation:isolate;
   overflow:hidden;
   margin:6px 16px 10px;
-  padding:25px 21px;
-  border-radius:24px;
-  border:1px solid rgba(255,255,255,.1);
+  padding:23px 22px 22px;
+  border-radius:20px;
+  border:1px solid rgba(214,226,242,.13);
   background:
-    linear-gradient(180deg, rgba(43,48,57,.94) 0%, rgba(24,28,36,.96) 52%, rgba(16,19,26,.97) 100%);
+    linear-gradient(176deg, rgba(52,60,74,.92) 0%, rgba(34,41,52,.94) 50%, rgba(24,30,40,.96) 100%);
   box-shadow:
-    0 18px 38px rgba(0,0,0,.34),
-    0 4px 10px rgba(0,0,0,.22),
-    inset 0 1px 0 rgba(255,255,255,.075),
-    inset 0 -14px 24px rgba(0,0,0,.16);
+    0 10px 24px rgba(2,7,15,.16),
+    0 2px 6px rgba(2,7,15,.12),
+    inset 0 1px 0 rgba(245,250,255,.12),
+    inset 0 -10px 18px rgba(8,12,20,.15);
   display:flex;
   flex-direction:column;
   align-items:center;
   text-align:center;
   justify-content:center;
-  gap:7px;
+  gap:6px;
 }
 
 .log-detail-header::before,
@@ -1517,22 +1517,41 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-header::before{
-  inset:0;
+  inset:.5px;
   border-radius:inherit;
-  background:linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 26%, rgba(255,255,255,0) 52%);
-  mix-blend-mode:screen;
-  opacity:.34;
+  background:linear-gradient(180deg, rgba(248,253,255,.15) 0%, rgba(248,253,255,.06) 24%, rgba(248,253,255,.01) 44%, rgba(248,253,255,0) 62%);
+  opacity:.42;
 }
 
 .log-detail-header::after{
-  top:-34%;
+  top:-30%;
   left:50%;
-  width:138%;
-  height:92%;
+  width:132%;
+  height:86%;
   transform:translateX(-50%);
-  border-radius:0 0 56% 56%;
-  background:radial-gradient(ellipse at center, rgba(255,255,255,.16) 0%, rgba(255,255,255,.06) 38%, rgba(255,255,255,0) 74%);
-  opacity:.19;
+  border-radius:0 0 54% 54%;
+  background:radial-gradient(ellipse at center, rgba(244,250,255,.15) 0%, rgba(244,250,255,.06) 35%, rgba(244,250,255,0) 76%);
+  opacity:.2;
+}
+
+body[data-theme="day"] .log-detail-header{
+  border-color:rgba(126,146,173,.18);
+  background:linear-gradient(178deg, #f6f9fd 0%, #eef3f9 52%, #e7edf5 100%);
+  box-shadow:
+    0 8px 18px rgba(23,40,72,.07),
+    0 1px 3px rgba(23,40,72,.05),
+    inset 0 1px 0 rgba(255,255,255,.85),
+    inset 0 -10px 15px rgba(157,174,200,.11);
+}
+
+body[data-theme="day"] .log-detail-header::before{
+  background:linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.58) 26%, rgba(255,255,255,.1) 48%, rgba(255,255,255,0) 66%);
+  opacity:.62;
+}
+
+body[data-theme="day"] .log-detail-header::after{
+  background:radial-gradient(ellipse at center, rgba(255,255,255,.7) 0%, rgba(255,255,255,.28) 32%, rgba(255,255,255,0) 74%);
+  opacity:.28;
 }
 
 .log-detail-header > *{
@@ -1541,27 +1560,40 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-hero-weekday{
-  font-size:13px;
-  color:color-mix(in srgb, var(--muted) 88%, #b6c2d3 12%);
-  font-weight:520;
-  letter-spacing:.025em;
-  line-height:1.2;
+  font-size:12px;
+  color:color-mix(in srgb, var(--muted) 92%, #bfcce0 8%);
+  font-weight:560;
+  letter-spacing:.03em;
+  line-height:1.15;
+  text-transform:uppercase;
 }
 
 .log-detail-hero-date{
-  margin-top:0;
-  font-size:35px;
-  font-weight:730;
-  line-height:1.08;
-  letter-spacing:.008em;
+  margin-top:1px;
+  font-size:34px;
+  font-weight:690;
+  line-height:1.03;
+  letter-spacing:.003em;
 }
 
 .log-detail-hero-time{
-  margin-top:0;
-  font-size:15px;
-  color:color-mix(in srgb, var(--muted) 90%, #d4deea 10%);
-  letter-spacing:.01em;
-  line-height:1.2;
+  margin-top:2px;
+  font-size:14px;
+  color:color-mix(in srgb, var(--muted) 94%, #d2deeb 6%);
+  letter-spacing:.018em;
+  line-height:1.18;
+}
+
+body[data-theme="day"] .log-detail-hero-weekday{
+  color:color-mix(in srgb, var(--muted) 90%, #516582 10%);
+}
+
+body[data-theme="day"] .log-detail-hero-date{
+  color:color-mix(in srgb, var(--text) 96%, #2d3f59 4%);
+}
+
+body[data-theme="day"] .log-detail-hero-time{
+  color:color-mix(in srgb, var(--muted) 92%, #667a96 8%);
 }
 
 
