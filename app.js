@@ -6312,7 +6312,6 @@ function renderSettlementSheet(id){
       ${isFixed ? `<div class="section section-tight"><div class="summary-row"><span class="label" style="color:rgba(147,88,220,.9);">Vaste kwartaalafrekening</span><span class="num mono" style="color:rgba(147,88,220,.9);">${esc(quarterLabel)}</span></div></div>` : ""}
       ${(!isEdit && (s.note || '').trim()) ? `<div class="section section-tight settlement-note-top"><div class="settlement-note-text">${esc(s.note.trim())}</div></div>` : ``}
       <div class="section stack section-tight">
-        ${!isEdit ? `<div class="summary-row"><span class="label">Datum</span><span class="num">${esc(formatDatePretty(s.date))}${s.dateOverride ? `<span class="subtle-tag mono">aangepast</span>` : ""}</span></div>` : ""}
         <div class="summary-row"><span class="label">Totale werkuren</span><span class="num mono tabular">${formatDurationCompact(Math.floor(logbookTotals.totalWorkMs / 60000))}</span></div>
         <div class="summary-row"><span class="label">Totale groen eenheden</span><span class="num mono tabular">${esc(String(formatQuickQty(logbookTotals.totalGreenUnits)))}</span></div>
         ${logbookTotals.totalExtraProducts > 0 ? `<div class="summary-row"><span class="label">Totale extra producten</span><span class="num mono tabular">${esc(String(formatQuickQty(logbookTotals.totalExtraProducts)))}</span></div>` : ''}
