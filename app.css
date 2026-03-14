@@ -451,16 +451,44 @@ label{ display:block; font-size:12px; color:var(--muted); margin: 0 0 6px 0; }
   margin:0 auto;
   display:flex;
   align-items:center;
-  justify-content:space-between;
+  justify-content:flex-end;
   min-height:44px;
-  gap:16px;
+  gap:0;
+}
+
+.settlement-detail-action-row{
+  width:100%;
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+}
+
+.settlement-detail-action-left,
+.settlement-detail-action-right{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+}
+
+.settlement-detail-action-left{
+  flex:1 1 auto;
+  min-width:0;
+  gap:12px;
+}
+
+.settlement-detail-action-right{
+  flex:0 0 auto;
+  justify-content:flex-end;
+  gap:12px;
 }
 
 .status-tabbar .settlement-status-bar{
   min-height:44px;
-  flex:1 1 auto;
+  flex:0 0 auto;
   min-width:0;
-  gap:16px;
+  gap:12px;
 }
 
 .status-tabbar .status-icon-chip,
