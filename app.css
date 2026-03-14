@@ -599,6 +599,27 @@ body:not([data-view="meer"]) #moreActionBar{
   align-items:center;
 }
 
+.log-detail-actionbar .detail-actionbar-inner{
+  justify-content:space-between;
+}
+
+.log-detail-actionbar-left,
+.log-detail-actionbar-right{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+}
+
+.log-detail-actionbar-right{
+  justify-content:flex-end;
+  gap:16px;
+}
+
+.log-detail-actionbar .more-action-btn:disabled{
+  opacity:.35;
+  cursor:default;
+}
+
 .client-detail-actionbar-right{
   justify-content:flex-end;
   gap:8px;

@@ -5450,8 +5450,6 @@ function renderLogSheet(id){
   const locked = false;
   $("#sheetActions").innerHTML = "";
 
-  const settlementOptions = buildSettlementSelectOptions(log.customerId, af?.id);
-
   const visual = getLogVisualState(log);
   const statusPillClass = visual.state === "paid" ? "pill-paid" : visual.state === "calculated" ? "pill-calc" : visual.state === "linked" ? "pill-open" : visual.state === "fixed" ? "pill-fixed" : "pill-neutral";
   const statusLabel = visual.state === "free" ? "vrij" : visual.state === "linked" ? "gekoppeld" : visual.state === "calculated" ? "berekend" : visual.state === "fixed" ? "vaste klant" : "betaald";
@@ -5551,16 +5549,6 @@ function renderLogSheet(id){
     `;
   }
 
-  function onTapLinkedAfrekening(afrekeningId){
-    const settlement = getAfrekeningById(afrekeningId);
-    if (!settlement) return;
-    openSheet("settlement", settlement.id);
-  }
-
-  const linkedAfrekeningMetaParts = [];
-  if (linkedAfrekening?.date) linkedAfrekeningMetaParts.push(formatDatePretty(linkedAfrekening.date));
-  if (linkedAfrekening?.id) linkedAfrekeningMetaParts.push(`#${String(linkedAfrekening.id).slice(0, 8)}`);
-
   const noteText = String(log.note || "").trim();
   const noteSection = isEditing
     ? `
@@ -5602,39 +5590,40 @@ function renderLogSheet(id){
     </div>
   `;
 
-  setStatusTabbar(`
-    <div class="status-log-link-wrap">
-      <button class="statusbtn status-link status-icon-chip" id="btnLogSettlementPicker" type="button" aria-label="Koppel aan afrekening" title="Koppel aan afrekening">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M10.6 13.4l2.8-2.8" stroke-linecap="round"/><path d="M7.8 16.2l-1.4 1.4a3 3 0 1 1-4.2-4.2l1.4-1.4a3 3 0 0 1 4.2 0" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.2 7.8l1.4-1.4a3 3 0 1 1 4.2 4.2l-1.4 1.4a3 3 0 0 1-4.2 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  setDetailActionBar({
+    className: "log-detail-actionbar",
+    html: `
+    <div class="log-detail-actionbar-left">
+      <button class="more-action-btn" id="btnOpenLogCustomer" type="button" aria-label="Open gekoppelde klant" title="Open gekoppelde klant" ${log.customerId ? "" : "disabled"}>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke-linecap="round"/><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/></svg>
       </button>
-      <select id="logSettlementPicker" class="status-picker-select" ${locked ? "disabled" : ""} aria-label="Afrekening koppelen">
-        ${settlementOptions}
-      </select>
     </div>
-    ${linkedAfrekening?.id ? `
-      <button class="status-linked-chip" id="btnOpenLinkedAfrekeningFromStatus" type="button" aria-label="Open gekoppelde afrekening" title="Open gekoppelde afrekening">
-        <span class="title">Afrekening</span>
-        <span class="meta mono">${esc(linkedAfrekeningMetaParts.join(" · "))}</span>
+    <div class="log-detail-actionbar-right">
+      <button class="more-action-btn" id="btnLogSettlementPicker" type="button" aria-label="Koppel aan afrekening" title="Koppel aan afrekening" ${locked ? "disabled" : ""}>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.6 13.4l2.8-2.8" stroke-linecap="round"/><path d="M7.8 16.2l-1.4 1.4a3 3 0 1 1-4.2-4.2l1.4-1.4a3 3 0 0 1 4.2 0" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.2 7.8l1.4-1.4a3 3 0 1 1 4.2 4.2l-1.4 1.4a3 3 0 0 1-4.2 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-    ` : ""}
-    <div style="flex:1"></div>
-    <button class="iconbtn" id="btnLogEdit" type="button" aria-label="${isEditing ? "Gereed" : "Bewerk"}" title="${isEditing ? "Gereed" : "Bewerk"}">
+      <button class="more-action-btn" id="btnLogEdit" type="button" aria-label="${isEditing ? "Gereed" : "Bewerk"}" title="${isEditing ? "Gereed" : "Bewerk"}">
       ${isEditing
         ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
         : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21l3.5-.8L19 7.7a1.8 1.8 0 0 0 0-2.5l-.2-.2a1.8 1.8 0 0 0-2.5 0L3.8 17.5z"></path><path d="M14 5l5 5"></path></svg>`}
-    </button>
-  `);
+      </button>
+    </div>
+  `});
+  $("#sheetBody").style.paddingBottom = "calc(var(--detail-actionbar-height) + 18px)";
+
+  const linkedCustomerId = log.customerId || "";
+  document.getElementById("btnOpenLogCustomer")?.addEventListener("click", ()=>{
+    if (!linkedCustomerId) return;
+    if (ui.navStack.some(v => v.view === "customerDetail" && v.id === linkedCustomerId)) return;
+    pushView({ view: "customerDetail", id: linkedCustomerId });
+  });
   document.getElementById("btnLogEdit")?.addEventListener("click", () => {
     toggleEditLog(id);
     renderSheet();
   });
   document.getElementById("btnLogSettlementPicker")?.addEventListener("click", ()=>{
     if (locked) return;
-    openAfrekeningPickerForLog(log.id, { anchorEl: document.getElementById("logSettlementPicker") });
-  });
-  document.getElementById("btnOpenLinkedAfrekeningFromStatus")?.addEventListener("click", ()=>{
-    if (!linkedAfrekening?.id) return;
-    onTapLinkedAfrekening(linkedAfrekening.id);
+    openAfrekeningPickerForLog(log.id, { anchorEl: document.getElementById("btnLogSettlementPicker") });
   });
 
   // wire (autosave)
@@ -5812,13 +5801,6 @@ function renderLogSheet(id){
       }
     );
   });
-
-  $("#logSettlementPicker").onchange = ()=>{
-    if (locked) return;
-    const v = $("#logSettlementPicker").value;
-    actions.linkLogToSettlement(log.id, v);
-    renderSheet();
-  };
 
   $("#delLog")?.addEventListener("click", ()=>{
     if (state.activeLogId === log.id){ alert("Stop eerst je actieve log."); return; }
