@@ -2172,6 +2172,7 @@ function renderTopbar(){
   let linkedCustomerId = "";
   topbar.classList.remove("nav--free", "nav--linked", "nav--calculated", "nav--paid", "nav--fixed", "topbar--period-only");
   topbar.classList.remove("topbar--log-detail");
+  topbar.classList.remove("hidden");
   subtitleEl.classList.add("hidden");
   subtitleEl.textContent = "";
   metricEl.classList.add("hidden");
@@ -2181,6 +2182,7 @@ function renderTopbar(){
   btnNew.classList.remove("topbar-edit");
 
   if (active.view === "logDetail"){
+    topbar.classList.add("hidden");
     const log = state.logs.find(x => x.id === active.id);
     if (log){
       $("#topbarTitle").textContent = viewTitle(active);
@@ -5569,10 +5571,10 @@ function renderLogSheet(id){
 
   $("#sheetBody").innerHTML = `
     <div class="stack log-detail-compact log-detail-view">
-      ${noteSection}
       <div class="log-detail-flow">
         ${renderLogHeader(log, isEditing)}
       </div>
+      ${noteSection}
       <div class="log-detail-flow">
         ${renderSegments(log, isEditing)}
       </div>
