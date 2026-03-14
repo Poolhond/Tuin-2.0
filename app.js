@@ -5601,6 +5601,9 @@ function renderLogSheet(id){
       </button>
     </div>
     <div class="log-detail-actionbar-right">
+      ${linkedAfrekeningId ? `<button class="more-action-btn" id="btnOpenLogSettlement" type="button" aria-label="Open gekoppelde afrekening" title="Open gekoppelde afrekening">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="5.5" width="19" height="13" rx="2.5"></rect><path d="M2.5 10h19" stroke-linecap="round"></path><path d="M7 14.5h4" stroke-linecap="round"></path></svg>
+      </button>` : ""}
       <div class="status-log-link-wrap log-detail-link-wrap">
         <button class="more-action-btn status-link" id="btnLogSettlementPicker" type="button" aria-label="Koppel aan afrekening" title="Koppel aan afrekening" ${locked ? "disabled" : ""}>
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.6 13.4l2.8-2.8" stroke-linecap="round"/><path d="M7.8 16.2l-1.4 1.4a3 3 0 1 1-4.2-4.2l1.4-1.4a3 3 0 0 1 4.2 0" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.2 7.8l1.4-1.4a3 3 0 1 1 4.2 4.2l-1.4 1.4a3 3 0 0 1-4.2 0" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -5631,6 +5634,10 @@ function renderLogSheet(id){
   document.getElementById("btnLogSettlementPicker")?.addEventListener("click", ()=>{
     if (locked) return;
     openAfrekeningPickerForLog(log.id, { anchorEl: document.getElementById("logSettlementPicker") });
+  });
+  document.getElementById("btnOpenLogSettlement")?.addEventListener("click", ()=>{
+    if (!linkedAfrekeningId) return;
+    openSheet("settlement", linkedAfrekeningId);
   });
 
   // wire (autosave)
