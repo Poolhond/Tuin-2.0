@@ -1487,32 +1487,80 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-header{
-  padding:6px 0 8px;
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  margin:6px 16px 10px;
+  padding:25px 21px;
+  border-radius:24px;
+  border:1px solid rgba(255,255,255,.1);
+  background:
+    linear-gradient(180deg, rgba(43,48,57,.94) 0%, rgba(24,28,36,.96) 52%, rgba(16,19,26,.97) 100%);
+  box-shadow:
+    0 18px 38px rgba(0,0,0,.34),
+    0 4px 10px rgba(0,0,0,.22),
+    inset 0 1px 0 rgba(255,255,255,.075),
+    inset 0 -14px 24px rgba(0,0,0,.16);
   display:flex;
   flex-direction:column;
   align-items:center;
   text-align:center;
-  gap:2px;
+  justify-content:center;
+  gap:7px;
+}
+
+.log-detail-header::before,
+.log-detail-header::after{
+  content:"";
+  position:absolute;
+  pointer-events:none;
+}
+
+.log-detail-header::before{
+  inset:0;
+  border-radius:inherit;
+  background:linear-gradient(180deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 26%, rgba(255,255,255,0) 52%);
+  mix-blend-mode:screen;
+  opacity:.34;
+}
+
+.log-detail-header::after{
+  top:-34%;
+  left:50%;
+  width:138%;
+  height:92%;
+  transform:translateX(-50%);
+  border-radius:0 0 56% 56%;
+  background:radial-gradient(ellipse at center, rgba(255,255,255,.16) 0%, rgba(255,255,255,.06) 38%, rgba(255,255,255,0) 74%);
+  opacity:.19;
+}
+
+.log-detail-header > *{
+  position:relative;
+  z-index:1;
 }
 
 .log-detail-hero-weekday{
-  font-size:14px;
-  color:var(--muted);
+  font-size:13px;
+  color:color-mix(in srgb, var(--muted) 88%, #b6c2d3 12%);
+  font-weight:520;
+  letter-spacing:.025em;
   line-height:1.2;
 }
 
 .log-detail-hero-date{
-  margin-top:1px;
-  font-size:30px;
-  font-weight:720;
-  line-height:1.15;
-  letter-spacing:.01em;
+  margin-top:0;
+  font-size:35px;
+  font-weight:730;
+  line-height:1.08;
+  letter-spacing:.008em;
 }
 
 .log-detail-hero-time{
-  margin-top:2px;
+  margin-top:0;
   font-size:15px;
-  color:var(--muted);
+  color:color-mix(in srgb, var(--muted) 90%, #d4deea 10%);
+  letter-spacing:.01em;
   line-height:1.2;
 }
 
