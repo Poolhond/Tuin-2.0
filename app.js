@@ -189,10 +189,61 @@ function parseLogTimeToMs(isoDate, value){
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function cloneLog(log){
+  if (!log || typeof log !== "object") return null;
+  return {
+    ...log,
+    breaks: (log.breaks || []).map(br => ({ ...br })),
+    items: (log.items || []).map(it => ({ ...it }))
+  };
+}
+
+function toTimestamp(value){
+  const ts = Number(value);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function getLogStartMs(log){
+  if (!log) return null;
+  const direct = toTimestamp(log.startAt);
+  if (direct != null) return direct;
+  return parseLogTimeToMs(log.date, log.startTime);
+}
+
+function getLogEndMs(log){
+  if (!log) return null;
+  const direct = toTimestamp(log.endAt);
+  if (direct != null) return direct;
+  return parseLogTimeToMs(log.date, log.endTime);
+}
+
+function getBreakStartMs(log, br){
+  const direct = toTimestamp(br?.startAt);
+  if (direct != null) return direct;
+  return parseLogTimeToMs(log?.date, br?.startTime);
+}
+
+function getBreakEndMs(log, br){
+  const direct = toTimestamp(br?.endAt);
+  if (direct != null) return direct;
+  return parseLogTimeToMs(log?.date, br?.endTime);
+}
+
+function getLogValidationLevel(log){
+  return log?.endTime ? "completed" : "runtime";
+}
+
 function setLogDay(log, newYMD){
   if (!log || !newYMD) return false;
   if (log.date === newYMD) return false;
   log.date = newYMD;
+  log.startAt = parseLogTimeToMs(newYMD, log.startTime);
+  log.endAt = parseLogTimeToMs(newYMD, log.endTime);
+  log.breaks = (log.breaks || []).map(br => ({
+    ...br,
+    startAt: parseLogTimeToMs(newYMD, br?.startTime),
+    endAt: parseLogTimeToMs(newYMD, br?.endTime)
+  }));
   return true;
 }
 
@@ -508,10 +559,14 @@ function loadState(){
     if (!l.date) l.date = todayISO();
     if (!("startTime" in l)) l.startTime = "";
     if (!("endTime" in l)) l.endTime = "";
+    if (!("startAt" in l)) l.startAt = parseLogTimeToMs(l.date, l.startTime);
+    if (!("endAt" in l)) l.endAt = parseLogTimeToMs(l.date, l.endTime);
     l.breaks = l.breaks.map(br => ({
       id: br?.id || uid(),
       startTime: String(br?.startTime || ""),
-      endTime: String(br?.endTime || "")
+      endTime: String(br?.endTime || ""),
+      startAt: ("startAt" in (br || {})) ? toTimestamp(br?.startAt) : parseLogTimeToMs(l.date, br?.startTime),
+      endAt: ("endAt" in (br || {})) ? toTimestamp(br?.endAt) : parseLogTimeToMs(l.date, br?.endTime)
     }));
   }
 
@@ -565,6 +620,10 @@ function ensureStateSafetyAfterMutations(st){
     s.logIds = (s.logIds||[]).filter(id => logIds.has(id));
   }
   if (st.activeLogId && !logIds.has(st.activeLogId)) st.activeLogId = null;
+  if (st.activeLogId){
+    const activeLog = st.logs.find(l => l.id === st.activeLogId);
+    if (!activeLog || activeLog.endTime) st.activeLogId = null;
+  }
   const active = currentView();
   if (active.view === "logDetail" && !logIds.has(active.id)) popView();
   if (active.view === "customerDetail" && !st.customers.some(c => c.id === active.id)) popView();
@@ -795,52 +854,66 @@ function getOpenBreak(log){
   return (log?.breaks || []).find(br => br && br.startTime && !br.endTime) || null;
 }
 function sumBreakMinutes(log){
-  return (log?.breaks || []).reduce((total, br)=> total + diffClockMinutes(br?.startTime, br?.endTime), 0);
+  const level = getLogValidationLevel(log);
+  const validation = validateLogModel(log, { level, nowMs: now() });
+  if (!validation.ok) return 0;
+  return validation.breakMinutes;
 }
-function validateLogModel(log){
+function validateLogModel(log, options = {}){
   if (!log) return { ok:false, reason:"missing_log" };
-  const gross = diffClockMinutes(log.startTime, log.endTime);
-  if (!log.startTime || !log.endTime) return { ok:false, reason:"missing_times" };
-  if (gross <= 0) return { ok:false, reason:"invalid_range" };
+  const level = options.level || "completed";
+  const nowMs = Number(options.nowMs) || now();
 
-  const breaks = [...(log.breaks || [])].map(br => ({
-    start: parseClockToMinutes(br?.startTime),
-    end: parseClockToMinutes(br?.endTime)
-  }));
-  for (const br of breaks){
-    if (br.start == null || br.end == null) return { ok:false, reason:"invalid_break" };
-    if (br.end <= br.start) return { ok:false, reason:"invalid_break_order" };
-    if (br.start < parseClockToMinutes(log.startTime) || br.end > parseClockToMinutes(log.endTime)) return { ok:false, reason:"break_outside_log" };
+  const startMs = getLogStartMs(log);
+  if (startMs == null) return { ok:false, reason:"missing_start" };
+
+  const hasEnd = Boolean(log.endTime);
+  const endMs = hasEnd ? getLogEndMs(log) : nowMs;
+  if (hasEnd && endMs == null) return { ok:false, reason:"invalid_end" };
+  if (level === "completed" && !hasEnd) return { ok:false, reason:"missing_end" };
+  if (endMs <= startMs) return { ok:false, reason:"invalid_range" };
+
+  const breakRanges = [];
+  for (const br of (log.breaks || [])){
+    const start = getBreakStartMs(log, br);
+    if (start == null) return { ok:false, reason:"invalid_break" };
+
+    const hasBreakEnd = Boolean(br?.endTime);
+    if (level === "completed" && !hasBreakEnd) return { ok:false, reason:"open_break" };
+
+    const end = hasBreakEnd ? getBreakEndMs(log, br) : nowMs;
+    if (end == null) return { ok:false, reason:"invalid_break" };
+    if (end <= start) return { ok:false, reason:"invalid_break_order" };
+    if (start < startMs || end > endMs) return { ok:false, reason:"break_outside_log" };
+    breakRanges.push({ start, end });
   }
-  breaks.sort((a,b)=>a.start-b.start);
-  for (let i=1;i<breaks.length;i++){
-    if (breaks[i].start < breaks[i-1].end) return { ok:false, reason:"break_overlap" };
+
+  breakRanges.sort((a,b)=>a.start-b.start);
+  for (let i=1;i<breakRanges.length;i++){
+    if (breakRanges[i].start < breakRanges[i-1].end) return { ok:false, reason:"break_overlap" };
   }
-  const breakMinutes = breaks.reduce((sum, br)=> sum + (br.end-br.start), 0);
-  const net = gross - breakMinutes;
-  if (net < 0) return { ok:false, reason:"negative_net" };
-  return { ok:true, grossMinutes:gross, breakMinutes, netMinutes:net };
+
+  const grossMs = endMs - startMs;
+  const breakMs = breakRanges.reduce((sum, br)=> sum + (br.end-br.start), 0);
+  const netMs = grossMs - breakMs;
+  if (netMs < 0) return { ok:false, reason:"negative_net" };
+
+  return {
+    ok:true,
+    grossMinutes: Math.floor(grossMs / 60000),
+    breakMinutes: Math.floor(breakMs / 60000),
+    netMinutes: Math.floor(netMs / 60000),
+    grossMs,
+    breakMs,
+    netMs
+  };
 }
 function sumWorkMs(log){
   if (!log?.startTime) return 0;
-  if (log.endTime){
-    const validated = validateLogModel(log);
-    return validated.ok ? validated.netMinutes * 60000 : 0;
-  }
-  const start = parseClockToMinutes(log.startTime);
-  if (start == null) return 0;
-  const current = new Date();
-  const nowMinutes = current.getHours() * 60 + current.getMinutes();
-  const gross = Math.max(0, nowMinutes - start);
-  const breakMinutes = (log.breaks || []).reduce((sum, br)=>{
-    const bs = parseClockToMinutes(br?.startTime);
-    if (bs == null) return sum;
-    const be = parseClockToMinutes(br?.endTime);
-    const end = be == null ? nowMinutes : be;
-    if (end <= bs) return sum;
-    return sum + (end - bs);
-  }, 0);
-  return Math.max(0, gross - breakMinutes) * 60000;
+  const level = getLogValidationLevel(log);
+  const validation = validateLogModel(log, { level, nowMs: now() });
+  if (!validation.ok) return 0;
+  return validation.netMs;
 }
 function customerMinutesLastYear(){
   const totals = new Map();
@@ -1679,6 +1752,7 @@ ui.insightsDashboardMode = resolveInitialInsightsDashboardMode();
 // Guardrail: keep state mutations inside actions + commit.
 function commit(){
   state = validateAndRepairState(state);
+  ensureStateSafetyAfterMutations(state);
   // Sync fixed quarter settlements on every commit (idempotent, safe to run repeatedly)
   try {
     syncAllFixedQuarterSettlements(state);
@@ -1698,9 +1772,10 @@ function commit(){
 const actions = {
   startLog(customerId){
     if (!customerId || state.activeLogId) return null;
+    const startedAt = now();
     const log = {
-      id: uid(), customerId, date: todayISO(), createdAt: now(), updatedAt: now(),
-      startTime: fmtClock(now()), endTime: "", breaks: [],
+      id: uid(), customerId, date: todayISO(), createdAt: startedAt, updatedAt: startedAt,
+      startTime: fmtClock(startedAt), endTime: "", startAt: startedAt, endAt: null, breaks: [],
       note: "", items: [], settlementId: null
     };
     state.logs.unshift(log);
@@ -1711,28 +1786,52 @@ const actions = {
   pauseLog(logId){
     const log = state.logs.find(l => l.id === logId);
     if (!log || log.endTime) return;
-    const openBreak = getOpenBreak(log);
+
+    const ts = now();
+    const draft = cloneLog(log);
+    const openBreak = getOpenBreak(draft);
     if (openBreak){
-      openBreak.endTime = fmtClock(now());
+      openBreak.endTime = fmtClock(ts);
+      openBreak.endAt = ts;
     } else {
-      log.breaks = log.breaks || [];
-      log.breaks.push({ id: uid(), startTime: fmtClock(now()), endTime: "" });
+      draft.breaks = draft.breaks || [];
+      draft.breaks.push({ id: uid(), startTime: fmtClock(ts), endTime: "", startAt: ts, endAt: null });
     }
-    log.updatedAt = now();
+
+    const validity = validateLogModel(draft, { level: "runtime", nowMs: ts });
+    if (!validity.ok){
+      alert("Log ongeldig. Controleer start/einde en pauzes.");
+      return;
+    }
+
+    log.breaks = draft.breaks;
+    log.updatedAt = ts;
     commit();
   },
   stopLog(logId){
     const log = state.logs.find(l => l.id === logId);
     if (!log) return;
-    const openBreak = getOpenBreak(log);
-    if (openBreak) openBreak.endTime = fmtClock(now());
-    log.endTime = fmtClock(now());
-    const validity = validateLogModel(log);
+
+    const ts = now();
+    const draft = cloneLog(log);
+    const openBreak = getOpenBreak(draft);
+    if (openBreak){
+      openBreak.endTime = fmtClock(ts);
+      openBreak.endAt = ts;
+    }
+    draft.endTime = fmtClock(ts);
+    draft.endAt = ts;
+
+    const validity = validateLogModel(draft, { level: "completed", nowMs: ts });
     if (!validity.ok){
       alert("Log ongeldig. Controleer start/einde en pauzes.");
       return;
     }
-    log.updatedAt = now();
+
+    log.breaks = draft.breaks;
+    log.endTime = draft.endTime;
+    log.endAt = draft.endAt;
+    log.updatedAt = ts;
     state.activeLogId = null;
     ui.activeLogQuickAdd.open = false;
     commit();
@@ -5453,7 +5552,9 @@ function renderLogSheet(id){
     const prettyDate = formatLogDatePretty(currentLog.date || "");
     const dateInputValue = formatLocalYMD(new Date(currentLog.date));
     const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
-    const summary = validateLogModel(currentLog);
+    const summary = validateLogModel(currentLog, { level: getLogValidationLevel(currentLog), nowMs: now() });
+    const isActiveLog = state.activeLogId === currentLog.id && !currentLog.endTime;
+    const endLabel = isActiveLog ? "—" : (currentLog.endTime || "—");
     const dateHeader = editing
       ? `
         <div class="log-detail-date-edit" role="group" aria-label="Datum bewerken">
@@ -5467,7 +5568,7 @@ function renderLogSheet(id){
     return `
       <section class="compact-section log-detail-header">
         ${dateHeader}
-        <div class="log-detail-header-sub mono">Start ${esc(currentLog.startTime || "—")} · Einde ${esc(currentLog.endTime || "—")}</div>
+        <div class="log-detail-header-sub mono">Start ${esc(currentLog.startTime || "—")} · Einde ${esc(endLabel)}</div>
         <div class="small mono">Pauzes ${formatMinutesAsDuration(sumBreakMinutes(currentLog))} · Netto ${summary.ok ? formatMinutesAsDuration(summary.netMinutes) : "—"}</div>
       </section>
     `;
@@ -5572,11 +5673,16 @@ function renderLogSheet(id){
 
   $("#sheetBody").querySelectorAll("#logStartTime, #logEndTime").forEach(inp=>{
     inp.addEventListener("change", ()=>{
-      const field = inp.id === "logStartTime" ? "startTime" : "endTime";
-      actions.editLog(log.id, (draft)=>{ draft[field] = inp.value; });
+      const isStart = inp.id === "logStartTime";
+      const field = isStart ? "startTime" : "endTime";
+      const tsField = isStart ? "startAt" : "endAt";
+      actions.editLog(log.id, (draft)=>{
+        draft[field] = inp.value;
+        draft[tsField] = parseLogTimeToMs(draft.date, inp.value);
+      });
       const updated = state.logs.find(x => x.id === log.id);
       if (updated?.endTime){
-        const validation = validateLogModel(updated);
+        const validation = validateLogModel(updated, { level: "completed", nowMs: now() });
         if (!validation.ok) alert("Log ongeldig: controleer start/einde en pauzes.");
       }
       renderSheet();
@@ -5586,7 +5692,7 @@ function renderLogSheet(id){
   $("#addBreak")?.addEventListener("click", ()=>{
     actions.editLog(log.id, (draft)=>{
       draft.breaks = draft.breaks || [];
-      draft.breaks.push({ id: uid(), startTime: "", endTime: "" });
+      draft.breaks.push({ id: uid(), startTime: "", endTime: "", startAt: null, endAt: null });
     });
     renderSheet();
   });
@@ -5599,10 +5705,12 @@ function renderLogSheet(id){
         const target = (draft.breaks||[]).find(br => br.id === breakId);
         if (!target) return;
         target[field] = inp.value;
+        const tsField = field === "startTime" ? "startAt" : "endAt";
+        target[tsField] = parseLogTimeToMs(draft.date, inp.value);
       });
       const updated = state.logs.find(x => x.id === log.id);
       if (updated?.endTime){
-        const validation = validateLogModel(updated);
+        const validation = validateLogModel(updated, { level: "completed", nowMs: now() });
         if (!validation.ok) alert("Pauzes ongeldig: overlap of buiten logduur.");
       }
       renderSheet();
