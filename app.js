@@ -5511,16 +5511,16 @@ function renderLogSheet(id){
 
   function renderBreaks(currentLog, editing){
     const breaks = currentLog.breaks || [];
+    if (!editing || !breaks.length) return "";
     return `
-      <section class="compact-section stack">
-        <div class="row space"><div class="item-title">Pauzes</div>${editing ? `<button class="btn" id="addBreak" type="button">+ pauze</button>` : ""}</div>
+      <section class="compact-section stack log-edit-breaks">
         <div class="compact-lines">
           ${breaks.map(br => {
             const start = br.startTime || "…";
             const end = br.endTime || "…";
             const pauseDuration = formatMinutesAsDuration(diffClockMinutes(start, end));
-            return `<div class="segment-row segment-row-static mono"><div class="segment-row-main"><span>Pauze ${start}–${end}</span><span class="segment-duration">${pauseDuration}</span></div>${editing ? `<div class="row"><input type="time" value="${esc(start)}" data-edit-break="${br.id}" data-field="startTime" /><input type="time" value="${esc(end)}" data-edit-break="${br.id}" data-field="endTime" /><button class="iconbtn iconbtn-sm danger" type="button" data-del-break="${br.id}" aria-label="Verwijder pauze">×</button></div>` : ""}</div>`;
-          }).join("") || `<div class="small">Geen pauzes.</div>`}
+            return `<div class="segment-row segment-row-static mono"><div class="segment-row-main"><span>Pauze ${start}–${end}</span><span class="segment-duration">${pauseDuration}</span></div><div class="row"><input type="time" value="${esc(start)}" data-edit-break="${br.id}" data-field="startTime" /><input type="time" value="${esc(end)}" data-edit-break="${br.id}" data-field="endTime" /><button class="iconbtn iconbtn-sm danger" type="button" data-del-break="${br.id}" aria-label="Verwijder pauze">×</button></div></div>`;
+          }).join("")}
         </div>
       </section>
     `;
@@ -5587,7 +5587,7 @@ function renderLogSheet(id){
   const hasNote = Boolean((log.note || "").trim());
 
   $("#sheetBody").innerHTML = `
-    <div class="stack log-detail-compact">
+    <div class="stack log-detail-compact ${isEditing ? "is-editing" : ""}">
       ${(!isEditing && hasNote) ? `
         <section class="compact-section stack">
           <div class="item-title">Notitie</div>
@@ -5596,9 +5596,18 @@ function renderLogSheet(id){
       ` : ""}
       ${!isEditing ? renderLogHeader(log) : ""}
 
-      ${isEditing ? `<section class="compact-section stack"><label>Datum<input id="logDateInput" type="date" value="${esc(formatLocalYMD(new Date(log.date)))}" max="${formatLocalYMD(new Date())}" /></label></section>` : ""}
-
-      ${isEditing ? `<section class="compact-section stack"><div class="row"><label>Start<input id="logStartTime" type="time" value="${esc(log.startTime||"")}" ${isEditing ? "" : "disabled"} /></label><label>Einde<input id="logEndTime" type="time" value="${esc(log.endTime||"")}" ${isEditing ? "" : "disabled"} /></label></div></section>` : ""}
+      ${isEditing ? `
+        <section class="compact-section stack">
+          <div class="log-edit-date-row">
+            <input id="logDateInput" class="log-edit-date-input" type="date" value="${esc(formatLocalYMD(new Date(log.date)))}" max="${formatLocalYMD(new Date())}" />
+          </div>
+          <div class="log-edit-time-row">
+            <input id="logStartTime" type="time" value="${esc(log.startTime||"")}" ${isEditing ? "" : "disabled"} />
+            <input id="logEndTime" type="time" value="${esc(log.endTime||"")}" ${isEditing ? "" : "disabled"} />
+            <button class="btn" id="addBreak" type="button">+ pauze</button>
+          </div>
+        </section>
+      ` : ""}
       ${isEditing ? renderBreaks(log, isEditing) : ""}
 
       <section class="compact-section stack">
