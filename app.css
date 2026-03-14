@@ -599,6 +599,37 @@ body:not([data-view="meer"]) #moreActionBar{
   align-items:center;
 }
 
+.log-detail-actionbar .detail-actionbar-inner{
+  justify-content:space-between;
+}
+
+.log-detail-actionbar-left,
+.log-detail-actionbar-right{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+}
+
+.log-detail-actionbar-right{
+  justify-content:flex-end;
+  gap:16px;
+}
+
+
+.log-detail-link-wrap{
+  width:44px;
+  height:44px;
+}
+
+.log-detail-link-wrap .status-picker-select{
+  cursor:pointer;
+}
+
+.log-detail-actionbar .more-action-btn:disabled{
+  opacity:.35;
+  cursor:default;
+}
+
 .client-detail-actionbar-right{
   justify-content:flex-end;
   gap:8px;
