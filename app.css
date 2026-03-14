@@ -1487,15 +1487,20 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-header{
+  --hero-accent: rgba(90,110,138,.5);
+  --hero-accent-deep: rgba(54,70,92,.56);
   position:relative;
   isolation:isolate;
   overflow:hidden;
   margin:6px 16px 10px;
-  padding:23px 22px 22px;
+  padding:19px 20px 22px;
   border-radius:20px;
   border:1px solid rgba(214,226,242,.13);
   background:
-    linear-gradient(176deg, rgba(52,60,74,.92) 0%, rgba(34,41,52,.94) 50%, rgba(24,30,40,.96) 100%);
+    linear-gradient(176deg,
+      color-mix(in srgb, var(--hero-accent) 56%, rgba(52,60,74,.92) 44%) 0%,
+      color-mix(in srgb, var(--hero-accent-deep) 44%, rgba(34,41,52,.94) 56%) 52%,
+      rgba(24,30,40,.96) 100%);
   box-shadow:
     0 10px 24px rgba(2,7,15,.16),
     0 2px 6px rgba(2,7,15,.12),
@@ -1503,12 +1508,74 @@ body:not([data-view="meer"]) #moreActionBar{
     inset 0 -10px 18px rgba(8,12,20,.15);
   display:flex;
   flex-direction:column;
-  align-items:center;
-  text-align:center;
-  justify-content:center;
   gap:6px;
 }
 
+
+.log-detail-header--free{
+  --hero-accent: rgba(82,116,158,.52);
+  --hero-accent-deep: rgba(56,78,109,.58);
+}
+
+.log-detail-header--linked{
+  --hero-accent: rgba(255,204,0,.48);
+  --hero-accent-deep: rgba(191,137,9,.52);
+}
+
+.log-detail-header--calculated{
+  --hero-accent: rgba(255,149,0,.48);
+  --hero-accent-deep: rgba(184,102,2,.54);
+}
+
+.log-detail-header--paid{
+  --hero-accent: rgba(0,171,96,.44);
+  --hero-accent-deep: rgba(4,120,78,.52);
+}
+
+.log-detail-header--fixed{
+  --hero-accent: rgba(147,88,220,.46);
+  --hero-accent-deep: rgba(102,59,158,.54);
+}
+
+.log-detail-hero-context-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  width:100%;
+  margin-bottom:10px;
+  gap:10px;
+}
+
+.log-detail-hero-customer,
+.log-detail-hero-total{
+  font-weight:600;
+  line-height:1.15;
+}
+
+.log-detail-hero-customer{
+  font-size:17px;
+  text-align:left;
+  max-width:72%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.log-detail-hero-total{
+  font-size:16px;
+  text-align:right;
+  flex-shrink:0;
+}
+
+.log-detail-hero-center{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+  justify-content:center;
+  width:100%;
+  gap:6px;
+}
 .log-detail-header::before,
 .log-detail-header::after{
   content:"";
@@ -1536,7 +1603,10 @@ body:not([data-view="meer"]) #moreActionBar{
 
 body[data-theme="day"] .log-detail-header{
   border-color:rgba(126,146,173,.18);
-  background:linear-gradient(178deg, #f6f9fd 0%, #eef3f9 52%, #e7edf5 100%);
+  background:linear-gradient(178deg,
+    color-mix(in srgb, var(--hero-accent) 32%, #f6f9fd 68%) 0%,
+    color-mix(in srgb, var(--hero-accent-deep) 20%, #eef3f9 80%) 52%,
+    #e7edf5 100%);
   box-shadow:
     0 8px 18px rgba(23,40,72,.07),
     0 1px 3px rgba(23,40,72,.05),

@@ -2183,15 +2183,7 @@ function renderTopbar(){
   if (active.view === "logDetail"){
     const log = state.logs.find(x => x.id === active.id);
     if (log){
-      const visual = getLogVisualState(log);
-      topbar.classList.add(`nav--${visual.state}`);
-      $("#topbarTitle").textContent = cname(log.customerId);
-      const totalMinutes = Math.floor(sumWorkMs(log) / 60000);
-      if (rightInfoEl){
-        rightInfoEl.textContent = formatDurationCompact(totalMinutes);
-        rightInfoEl.classList.remove("hidden");
-      }
-      topbar.classList.add("topbar--log-detail");
+      $("#topbarTitle").textContent = viewTitle(active);
       linkedCustomerId = log.customerId || "";
     } else {
       $("#topbarTitle").textContent = viewTitle(active);
@@ -5528,9 +5520,12 @@ function renderLogSheet(id){
   }
 
   function renderLogHeader(currentLog, editing){
+    const visual = getLogVisualState(currentLog);
     const prettyDate = formatDateDayMonthShortYear(currentLog.date || "");
     const weekday = formatDateWeekdayLong(currentLog.date || "");
     const globalRange = formatLogGlobalTimeRange(currentLog);
+    const totalMinutes = Math.floor(sumWorkMs(currentLog) / 60000);
+    const customerName = cname(currentLog.customerId) || "—";
     const dateInputValue = formatLocalYMD(new Date(currentLog.date));
     const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
     const dateHeader = editing
@@ -5543,10 +5538,16 @@ function renderLogSheet(id){
       : `<div class="log-detail-hero-date">${esc(prettyDate || currentLog.date || "—")}</div>`;
 
     return `
-      <section class="compact-section log-detail-header">
-        <div class="log-detail-hero-weekday">${esc(weekday || "—")}</div>
-        ${dateHeader}
-        <div class="log-detail-hero-time">${esc(globalRange)}</div>
+      <section class="compact-section log-detail-header log-detail-header--${esc(visual.state)}">
+        <div class="log-detail-hero-context-row">
+          <div class="log-detail-hero-customer">${esc(customerName)}</div>
+          <div class="log-detail-hero-total">${esc(formatDurationCompact(totalMinutes))}</div>
+        </div>
+        <div class="log-detail-hero-center">
+          <div class="log-detail-hero-weekday">${esc(weekday || "—")}</div>
+          ${dateHeader}
+          <div class="log-detail-hero-time">${esc(globalRange)}</div>
+        </div>
       </section>
     `;
   }
