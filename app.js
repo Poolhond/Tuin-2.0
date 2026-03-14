@@ -6368,6 +6368,9 @@ function renderSettlementSheet(id){
   `;
 
   setStatusTabbar(`
+    <button class="iconbtn settlement-detail-action-btn" id="btnOpenSettlementCustomer" type="button" aria-label="Open gekoppelde klant" title="Open gekoppelde klant" ${s.customerId ? "" : "disabled"}>
+      <svg class="icon settlement-detail-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke-linecap="round"/><path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/></svg>
+    </button>
     <div class="settlement-status-bar">
       ${renderSettlementStatusIcons(s)}
     </div>
@@ -6423,6 +6426,11 @@ function renderSettlementSheet(id){
   $('#toggleCashPaid')?.addEventListener('click', ()=>{
     actions.setCashPaid(s.id, !s.cashPaid);
     renderSheet();
+  });
+  $('#btnOpenSettlementCustomer')?.addEventListener('click', ()=>{
+    if (!s.customerId) return;
+    if (ui.navStack.some(v => v.view === 'customerDetail' && v.id === s.customerId)) return;
+    pushView({ view: 'customerDetail', id: s.customerId });
   });
   $('#btnSettlementEdit')?.addEventListener('click', ()=>{
     toggleEditSettlement(s.id);
