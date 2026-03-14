@@ -211,10 +211,18 @@ body{
   margin: 0 auto;
 }
 
+body[data-view="logDetail"] .page-inner{
+  padding-top: calc(env(safe-area-inset-top) + 12px);
+}
+
 .detail-head{
   display:flex;
   justify-content:flex-end;
   padding-bottom:10px;
+}
+
+body[data-view="logDetail"] .detail-head{
+  display:none;
 }
 
 [data-view="settlementDetail"] .detail-head{
@@ -1492,8 +1500,8 @@ body:not([data-view="meer"]) #moreActionBar{
   position:relative;
   isolation:isolate;
   overflow:hidden;
-  margin:6px 16px 10px;
-  padding:19px 20px 22px;
+  margin:0 0 10px;
+  padding:20px 24px 26px;
   border-radius:20px;
   border:1px solid rgba(214,226,242,.13);
   background:
@@ -1542,8 +1550,8 @@ body:not([data-view="meer"]) #moreActionBar{
   justify-content:space-between;
   align-items:center;
   width:100%;
-  margin-bottom:10px;
-  gap:10px;
+  margin-bottom:16px;
+  gap:12px;
 }
 
 .log-detail-hero-customer,
@@ -1553,7 +1561,7 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-hero-customer{
-  font-size:17px;
+  font-size:15px;
   text-align:left;
   max-width:72%;
   white-space:nowrap;
@@ -1562,7 +1570,7 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-hero-total{
-  font-size:16px;
+  font-size:15px;
   text-align:right;
   flex-shrink:0;
 }
@@ -1574,7 +1582,7 @@ body:not([data-view="meer"]) #moreActionBar{
   text-align:center;
   justify-content:center;
   width:100%;
-  gap:6px;
+  gap:7px;
 }
 .log-detail-header::before,
 .log-detail-header::after{
