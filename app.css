@@ -1356,42 +1356,62 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-header{
-  padding-top:4px;
+  padding-top:6px;
   padding-bottom:10px;
 }
 
-.log-detail-header-main{
-  margin-top:2px;
-  font-size:22px;
-  font-weight:700;
-  line-height:1.2;
+.log-detail-note-text{
+  font-size:14px;
+  line-height:1.45;
+  white-space:pre-wrap;
 }
 
-.log-detail-header-sub{
+.log-detail-hero{
+  gap:4px;
+}
+
+.log-detail-hero-day{
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:var(--muted);
+}
+
+.log-detail-hero-date{
+  font-size:28px;
+  font-weight:700;
+  line-height:1.15;
+}
+
+.log-detail-hero-time{
   margin-top:2px;
+  font-size:16px;
+}
+
+.log-detail-hero-pause{
   font-size:13px;
   color:var(--muted);
 }
 
-
 .log-detail-date-edit{
-  display:inline-flex;
+  display:flex;
   align-items:center;
   gap:8px;
-  max-width:160px;
+  width:100%;
   margin-top:2px;
 }
 
 .log-detail-date-icon{
-  width:15px;
-  height:15px;
+  width:16px;
+  height:16px;
   color:var(--muted);
   flex:0 0 auto;
 }
 
 .log-detail-date-input{
   width:100%;
-  max-width:160px;
+  max-width:none;
   font-size:22px;
   font-weight:700;
   line-height:1.2;

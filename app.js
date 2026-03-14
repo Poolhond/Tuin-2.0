@@ -5549,12 +5549,17 @@ function renderLogSheet(id){
   }
 
   function renderLogHeader(currentLog, editing){
-    const prettyDate = formatLogDatePretty(currentLog.date || "");
     const dateInputValue = formatLocalYMD(new Date(currentLog.date));
     const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
-    const summary = validateLogModel(currentLog, { level: getLogValidationLevel(currentLog), nowMs: now() });
-    const isActiveLog = state.activeLogId === currentLog.id && !currentLog.endTime;
-    const endLabel = isActiveLog ? "—" : (currentLog.endTime || "—");
+    const dateValue = parseLocalYMD(currentLog.date);
+    const dayNamesLong = ["Zondag", "Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag"];
+    const monthNamesLong = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+    const heroDay = dateValue ? dayNamesLong[dateValue.getDay()] : "—";
+    const heroDate = dateValue
+      ? `${dateValue.getDate()} ${monthNamesLong[dateValue.getMonth()]} ${String(dateValue.getFullYear()).slice(-2)}`
+      : (currentLog.date || "—");
+    const timeRange = `${currentLog.startTime || "—"} – ${currentLog.endTime || "—"}`;
+    const pauseMinutes = Number(currentLog.pauseTotal ?? sumBreakMinutes(currentLog)) || 0;
     const dateHeader = editing
       ? `
         <div class="log-detail-date-edit" role="group" aria-label="Datum bewerken">
@@ -5563,13 +5568,18 @@ function renderLogSheet(id){
           <button class="iconbtn iconbtn-sm" id="btnCommitLogDate" type="button" aria-label="Bevestig datum" title="Bevestig datum"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
         </div>
       `
-      : `<div class="log-detail-header-main">${esc(prettyDate || currentLog.date || "—")}</div>`;
+      : `
+        <div class="stack log-detail-hero">
+          <div class="log-detail-hero-day">${esc(heroDay)}</div>
+          <div class="log-detail-hero-date">${esc(heroDate)}</div>
+          <div class="log-detail-hero-time mono">${esc(timeRange)}</div>
+          ${pauseMinutes > 0 ? `<div class="log-detail-hero-pause mono">pauze ${esc(formatMinutesAsDurationCompact(pauseMinutes))}</div>` : ""}
+        </div>
+      `;
 
     return `
       <section class="compact-section log-detail-header">
         ${dateHeader}
-        <div class="log-detail-header-sub mono">Start ${esc(currentLog.startTime || "—")} · Einde ${esc(endLabel)}</div>
-        <div class="small mono">Pauzes ${formatMinutesAsDuration(sumBreakMinutes(currentLog))} · Netto ${summary.ok ? formatMinutesAsDuration(summary.netMinutes) : "—"}</div>
       </section>
     `;
   }
@@ -5584,11 +5594,20 @@ function renderLogSheet(id){
   if (linkedAfrekening?.date) linkedAfrekeningMetaParts.push(formatDatePretty(linkedAfrekening.date));
   if (linkedAfrekening?.id) linkedAfrekeningMetaParts.push(`#${String(linkedAfrekening.id).slice(0, 8)}`);
 
+  const hasNote = Boolean((log.note || "").trim());
+
   $("#sheetBody").innerHTML = `
     <div class="stack log-detail-compact">
+      ${(!isEditing && hasNote) ? `
+        <section class="compact-section stack">
+          <div class="item-title">Notitie</div>
+          <div class="log-detail-note-text">${esc(log.note.trim())}</div>
+        </section>
+      ` : ""}
       ${renderLogHeader(log, isEditing)}
-      <section class="compact-section stack"><div class="row"><label>Start<input id="logStartTime" type="time" value="${esc(log.startTime||"")}" ${isEditing ? "" : "disabled"} /></label><label>Einde<input id="logEndTime" type="time" value="${esc(log.endTime||"")}" ${isEditing ? "" : "disabled"} /></label></div></section>
-      ${renderBreaks(log, isEditing)}
+
+      ${isEditing ? `<section class="compact-section stack"><div class="row"><label>Start<input id="logStartTime" type="time" value="${esc(log.startTime||"")}" ${isEditing ? "" : "disabled"} /></label><label>Einde<input id="logEndTime" type="time" value="${esc(log.endTime||"")}" ${isEditing ? "" : "disabled"} /></label></div></section>` : ""}
+      ${isEditing ? renderBreaks(log, isEditing) : ""}
 
       <section class="compact-section stack">
         <div class="row space">
@@ -5599,10 +5618,12 @@ function renderLogSheet(id){
         </div>
       </section>
 
-      <section class="compact-section">
-        <label>Notitie</label>
-        <input id="logNote" value="${esc(log.note||"")}" />
-      </section>
+      ${isEditing ? `
+        <section class="compact-section">
+          <label>Notitie</label>
+          <input id="logNote" value="${esc(log.note||"")}" />
+        </section>
+      ` : ""}
 
       <section class="compact-section log-detail-footer-actions">
         <span class="pill ${statusPillClass}">${statusLabel}</span>
@@ -5647,7 +5668,7 @@ function renderLogSheet(id){
   });
 
   // wire (autosave)
-  $("#logNote").addEventListener("change", ()=>{
+  $("#logNote")?.addEventListener("change", ()=>{
     actions.editLog(log.id, (draft)=>{
       draft.note = ($("#logNote").value||"").trim();
     });
