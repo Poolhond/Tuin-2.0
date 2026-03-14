@@ -1516,6 +1516,7 @@ body:not([data-view="meer"]) #moreActionBar{
     inset 0 -10px 18px rgba(8,12,20,.15);
   display:flex;
   flex-direction:column;
+  align-items:center;
   gap:6px;
 }
 
@@ -1545,34 +1546,26 @@ body:not([data-view="meer"]) #moreActionBar{
   --hero-accent-deep: rgba(102,59,158,.54);
 }
 
-.log-detail-hero-context-row{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
+.log-detail-hero-context{
   width:100%;
-  margin-bottom:16px;
-  gap:12px;
-}
-
-.log-detail-hero-customer,
-.log-detail-hero-total{
+  margin-bottom:12px;
+  text-align:center;
+  font-size:17px;
   font-weight:600;
-  line-height:1.15;
-}
-
-.log-detail-hero-customer{
-  font-size:15px;
-  text-align:left;
-  max-width:72%;
+  line-height:1.2;
+  opacity:.9;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
 }
 
+.log-detail-hero-customer,
 .log-detail-hero-total{
-  font-size:15px;
-  text-align:right;
-  flex-shrink:0;
+  line-height:inherit;
+}
+
+.log-detail-hero-context-separator{
+  opacity:.7;
 }
 
 .log-detail-hero-center{
