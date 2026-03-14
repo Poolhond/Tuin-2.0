@@ -123,6 +123,15 @@ body{
   opacity:.72;
   white-space:nowrap;
 }
+.topbar--log-detail .topbar-right-info{
+  font-size:17px;
+  font-weight:650;
+  line-height:1;
+  opacity:.9;
+  display:flex;
+  align-items:center;
+  min-height:22px;
+}
 .topbar-left{ gap:10px; min-width:0; flex:1; }
 .titlewrap{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
 .topbar-headline{
@@ -1355,44 +1364,63 @@ body:not([data-view="meer"]) #moreActionBar{
   padding:8px 0;
 }
 
-.log-detail-header{
-  padding-top:4px;
-  padding-bottom:10px;
+.log-detail-view .log-detail-flow.compact-section,
+.log-detail-view .log-detail-flow .compact-section{
+  border-bottom:0;
 }
 
-.log-detail-header-main{
+.log-detail-view .log-detail-flow{
   margin-top:2px;
-  font-size:22px;
-  font-weight:700;
+}
+
+.log-detail-view .log-detail-flow + .log-detail-flow{
+  margin-top:10px;
+}
+
+.log-detail-header{
+  padding:6px 0 8px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+  gap:2px;
+}
+
+.log-detail-hero-weekday{
+  font-size:14px;
+  color:var(--muted);
   line-height:1.2;
 }
 
-.log-detail-header-sub{
+.log-detail-hero-date{
+  margin-top:1px;
+  font-size:30px;
+  font-weight:720;
+  line-height:1.15;
+  letter-spacing:.01em;
+}
+
+.log-detail-hero-time{
   margin-top:2px;
-  font-size:13px;
+  font-size:15px;
   color:var(--muted);
+  line-height:1.2;
 }
 
 
 .log-detail-date-edit{
-  display:inline-flex;
+  display:flex;
   align-items:center;
   gap:8px;
-  max-width:160px;
-  margin-top:2px;
-}
-
-.log-detail-date-icon{
-  width:15px;
-  height:15px;
-  color:var(--muted);
-  flex:0 0 auto;
+  justify-content:center;
+  width:100%;
+  margin-top:1px;
 }
 
 .log-detail-date-input{
-  width:100%;
-  max-width:160px;
-  font-size:22px;
+  width:auto;
+  max-width:210px;
+  font-size:26px;
   font-weight:700;
   line-height:1.2;
   color:var(--text);
@@ -1411,7 +1439,7 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-date-input::-webkit-date-and-time-value{
-  text-align:left;
+  text-align:center;
 }
 
 .log-detail-compact .compact-section:last-child{
@@ -1458,7 +1486,7 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .segment-row-static{
-  padding:5px 0;
+  padding:4px 0;
   font-size:13px;
 }
 
@@ -1469,7 +1497,7 @@ body:not([data-view="meer"]) #moreActionBar{
   background:transparent;
   color:var(--text);
   font-size:13px;
-  padding:5px 0;
+  padding:4px 0;
 }
 
 .segment-row-main{
@@ -1483,6 +1511,23 @@ body:not([data-view="meer"]) #moreActionBar{
   margin-left:auto;
   color:var(--muted);
   text-align:right;
+}
+
+.log-detail-note-section{
+  border-bottom:0;
+  padding-top:2px;
+  padding-bottom:6px;
+}
+
+.log-detail-note-text{
+  font-size:14px;
+  line-height:1.45;
+  color:var(--muted);
+  white-space:pre-wrap;
+}
+
+.log-detail-note-input{
+  width:100%;
 }
 
 .linked-afrekening-section{
@@ -3414,4 +3459,3 @@ body[data-theme="day"] .ins-cust-section:active{
   cursor: default;
   pointer-events: none;
 }
-

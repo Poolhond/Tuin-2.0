@@ -166,6 +166,36 @@ function formatDateNoWeekday(isoDate){
 function formatLogDatePretty(isoDate){
   return formatDatePretty(isoDate);
 }
+function formatDateWeekdayLong(isoDate){
+  const dt = parseLocalYMD(isoDate) || new Date(isoDate);
+  if (!Number.isFinite(dt.getTime())) return "";
+  const weekdayNames = ["Zondag", "Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag"];
+  return weekdayNames[dt.getDay()] || "";
+}
+function formatDateDayMonthShortYear(isoDate){
+  if (!isoDate) return "";
+  const ymd = /^\d{4}-\d{2}-\d{2}$/.test(String(isoDate))
+    ? String(isoDate)
+    : formatLocalYMD(new Date(isoDate));
+  if (!ymd) return String(isoDate);
+  const [y, m, d] = ymd.split("-").map(Number);
+  const monthNames = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
+  const yy = String(y).slice(-2);
+  return `${d} ${monthNames[m - 1]} ${yy}`;
+}
+function formatClockDot(ms){
+  if (!Number.isFinite(ms)) return "";
+  return fmtClock(ms).replace(":", ".");
+}
+function formatLogGlobalTimeRange(log){
+  const segments = log?.segments || [];
+  const starts = segments.map(s => s?.start).filter(Number.isFinite);
+  const ends = segments.map(s => s?.end).filter(Number.isFinite);
+  if (!starts.length || !ends.length) return "—";
+  const firstStart = Math.min(...starts);
+  const lastEnd = Math.max(...ends);
+  return `${formatClockDot(firstStart)} - ${formatClockDot(lastEnd)}`;
+}
 function formatMoneyEUR(amount){
   return fmtMoney(amount);
 }
@@ -2141,6 +2171,7 @@ function renderTopbar(){
   const topbarRight = topbar.querySelector(".topbar-right");
   let linkedCustomerId = "";
   topbar.classList.remove("nav--free", "nav--linked", "nav--calculated", "nav--paid", "nav--fixed", "topbar--period-only");
+  topbar.classList.remove("topbar--log-detail");
   subtitleEl.classList.add("hidden");
   subtitleEl.textContent = "";
   metricEl.classList.add("hidden");
@@ -2160,6 +2191,7 @@ function renderTopbar(){
         rightInfoEl.textContent = formatDurationCompact(totalMinutes);
         rightInfoEl.classList.remove("hidden");
       }
+      topbar.classList.add("topbar--log-detail");
       linkedCustomerId = log.customerId || "";
     } else {
       $("#topbarTitle").textContent = viewTitle(active);
@@ -5496,24 +5528,25 @@ function renderLogSheet(id){
   }
 
   function renderLogHeader(currentLog, editing){
-    const prettyDate = formatLogDatePretty(currentLog.date || "");
-    const startTime = getStartTime(currentLog);
+    const prettyDate = formatDateDayMonthShortYear(currentLog.date || "");
+    const weekday = formatDateWeekdayLong(currentLog.date || "");
+    const globalRange = formatLogGlobalTimeRange(currentLog);
     const dateInputValue = formatLocalYMD(new Date(currentLog.date));
     const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
     const dateHeader = editing
       ? `
         <div class="log-detail-date-edit" role="group" aria-label="Datum bewerken">
-          <svg class="icon log-detail-date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18" stroke-linecap="round"></path></svg>
           <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(draftDate)}" max="${formatLocalYMD(new Date())}" />
           <button class="iconbtn iconbtn-sm" id="btnCommitLogDate" type="button" aria-label="Bevestig datum" title="Bevestig datum"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
         </div>
       `
-      : `<div class="log-detail-header-main">${esc(prettyDate || currentLog.date || "—")}</div>`;
+      : `<div class="log-detail-hero-date">${esc(prettyDate || currentLog.date || "—")}</div>`;
 
     return `
       <section class="compact-section log-detail-header">
+        <div class="log-detail-hero-weekday">${esc(weekday || "—")}</div>
         ${dateHeader}
-        <div class="log-detail-header-sub mono">${esc(startTime)}</div>
+        <div class="log-detail-hero-time">${esc(globalRange)}</div>
       </section>
     `;
   }
@@ -5528,23 +5561,38 @@ function renderLogSheet(id){
   if (linkedAfrekening?.date) linkedAfrekeningMetaParts.push(formatDatePretty(linkedAfrekening.date));
   if (linkedAfrekening?.id) linkedAfrekeningMetaParts.push(`#${String(linkedAfrekening.id).slice(0, 8)}`);
 
-  $("#sheetBody").innerHTML = `
-    <div class="stack log-detail-compact">
-      ${renderLogHeader(log, isEditing)}
-      ${renderSegments(log, isEditing)}
+  const noteText = String(log.note || "").trim();
+  const noteSection = isEditing
+    ? `
+      <section class="compact-section log-detail-flow log-detail-note-section">
+        <input id="logNote" class="log-detail-note-input" value="${esc(log.note || "")}" placeholder="Notitie" />
+      </section>
+    `
+    : (noteText
+      ? `
+      <section class="compact-section log-detail-flow log-detail-note-section">
+        <div class="log-detail-note-text">${esc(noteText)}</div>
+      </section>
+    `
+      : "");
 
-      <section class="compact-section stack">
+  $("#sheetBody").innerHTML = `
+    <div class="stack log-detail-compact log-detail-view">
+      ${noteSection}
+      <div class="log-detail-flow">
+        ${renderLogHeader(log, isEditing)}
+      </div>
+      <div class="log-detail-flow">
+        ${renderSegments(log, isEditing)}
+      </div>
+
+      <section class="compact-section stack log-detail-flow">
         <div class="row space">
           <div class="item-title">Producten</div>
         </div>
         <div class="log-lines-wrap">
           ${renderProducts(log, { context: "log", isEditing })}
         </div>
-      </section>
-
-      <section class="compact-section">
-        <label>Notitie</label>
-        <input id="logNote" value="${esc(log.note||"")}" />
       </section>
 
       <section class="compact-section log-detail-footer-actions">
@@ -5590,7 +5638,7 @@ function renderLogSheet(id){
   });
 
   // wire (autosave)
-  $("#logNote").addEventListener("change", ()=>{
+  $("#logNote")?.addEventListener("change", ()=>{
     actions.editLog(log.id, (draft)=>{
       draft.note = ($("#logNote").value||"").trim();
     });
