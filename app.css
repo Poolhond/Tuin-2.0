@@ -1355,6 +1355,11 @@ body:not([data-view="meer"]) #moreActionBar{
   padding:8px 0;
 }
 
+.log-detail-compact.is-editing .compact-section{
+  border-bottom:0;
+  padding:6px 0;
+}
+
 .log-detail-header{
   padding-top:6px;
   padding-bottom:10px;
@@ -1436,6 +1441,41 @@ body:not([data-view="meer"]) #moreActionBar{
 
 .log-detail-compact .compact-section:last-child{
   border-bottom:0;
+}
+
+.log-edit-date-row{
+  display:flex;
+  justify-content:flex-start;
+}
+
+.log-edit-date-input{
+  width:auto;
+  max-width:100%;
+  min-width:140px;
+}
+
+.log-edit-time-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:nowrap;
+}
+
+.log-edit-time-row input[type="time"]{
+  width:78px;
+  flex:0 1 auto;
+  min-width:0;
+}
+
+.log-edit-time-row #addBreak{
+  margin-left:auto;
+  white-space:nowrap;
+  min-height:32px;
+  padding:6px 10px;
+}
+
+.log-edit-breaks{
+  padding-top:2px;
 }
 
 .log-detail-footer-actions{
@@ -3434,4 +3474,3 @@ body[data-theme="day"] .ins-cust-section:active{
   cursor: default;
   pointer-events: none;
 }
-
