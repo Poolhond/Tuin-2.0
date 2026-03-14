@@ -6030,24 +6030,21 @@ function syncSettlementAmounts(settlement){
 function renderSettlementStatusIcons(settlement){
   // Vaste kwartaalafrekening: geen berekenflow, geen betaaltoggle — toon vaste status.
   if (isFixedQuarterlySettlement(settlement)){
-    return `<div class="status-icon-chip" style="color:rgba(147,88,220,.9);border-color:rgba(147,88,220,.45);background:rgba(147,88,220,.10);cursor:default;" aria-label="Vaste kwartaalafrekening" tabindex="-1">
+    return `<div class="status-icon-chip" style="color:rgba(147,88,220,.9);cursor:default;" aria-label="Vaste kwartaalafrekening" tabindex="-1">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none"/></svg>
     </div>`;
   }
 
   const isCalculated = isSettlementCalculated(settlement);
   const isEdit = isSettlementEditing(settlement?.id);
-  const showCalculateIcon = settlement?.status !== "calculated" || isEdit === true;
+  const showCalculateIcon = !isCalculated || isEdit === true;
   const calcStateClass = isCalculated ? "is-open" : "";
-  const calcStateStyle = isCalculated
-    ? ""
-    : ' style="color:#ffcc00;border-color:rgba(255,204,0,.55);background:rgba(255,204,0,.10);"';
   const calcDisabled = !isEdit && isCalculated ? " disabled aria-disabled=\"true\"" : "";
   const iconPresentation = getSettlementIconPresentation(settlement);
   const chips = [
     showCalculateIcon
       ? `
-    <button class="status-icon-chip status-icon-calc ${calcStateClass}" id="toggleCalculated" type="button" aria-label="Bereken afrekening"${calcStateStyle}${calcDisabled}>
+    <button class="status-icon-chip status-icon-calc ${calcStateClass}" id="toggleCalculated" type="button" aria-label="Bereken afrekening"${calcDisabled}>
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="4" y="3" width="16" height="18" rx="2"></rect><path d="M8 7h8M8 12h3M13 12h3M8 16h8" stroke-linecap="round"></path></svg>
     </button>
   `
