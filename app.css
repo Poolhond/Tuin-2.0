@@ -1856,6 +1856,25 @@ body[data-theme="day"] .log-detail-hero-time{
   gap:8px;
 }
 
+.pause-editor{
+  border-top:1px dashed var(--border);
+  padding:8px 0 10px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.pause-editor .btn.ghost{
+  border-color:var(--border);
+}
+
+.segment-editor-actions{
+  display:flex;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
 .segment-grid{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));

@@ -217,6 +217,102 @@ function parseLogTimeToMs(isoDate, value){
   const parsed = new Date(`${baseDate}T${value}:00`).getTime();
   return Number.isFinite(parsed) ? parsed : null;
 }
+function cloneSegment(segment, patch = {}){
+  return { ...segment, ...patch, id: patch.id ?? segment?.id ?? uid() };
+}
+function sortSegmentsChronologically(segments){
+  return [...(segments || [])].sort((a, b) => {
+    const aStart = Number.isFinite(a?.start) ? a.start : Number.POSITIVE_INFINITY;
+    const bStart = Number.isFinite(b?.start) ? b.start : Number.POSITIVE_INFINITY;
+    if (aStart !== bStart) return aStart - bStart;
+    const aEnd = Number.isFinite(a?.end) ? a.end : Number.POSITIVE_INFINITY;
+    const bEnd = Number.isFinite(b?.end) ? b.end : Number.POSITIVE_INFINITY;
+    return aEnd - bEnd;
+  });
+}
+function normalizeSegments(segments){
+  const cleaned = sortSegmentsChronologically(segments)
+    .filter(segment => segment && ["work", "break"].includes(segment.type))
+    .map(segment => cloneSegment(segment))
+    .filter(segment => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start);
+
+  return mergeAdjacentSegments(cleaned);
+}
+function mergeAdjacentSegments(segments){
+  const merged = [];
+  for (const segment of sortSegmentsChronologically(segments)){
+    const prev = merged[merged.length - 1];
+    if (prev && prev.type === segment.type && prev.end === segment.start){
+      prev.end = segment.end;
+      continue;
+    }
+    merged.push(cloneSegment(segment));
+  }
+  return merged;
+}
+function getLogTimelineBounds(log){
+  const normalized = normalizeSegments(log?.segments || []);
+  if (!normalized.length) return { start: null, end: null };
+  return {
+    start: normalized[0].start,
+    end: normalized[normalized.length - 1].end
+  };
+}
+function insertPauseIntoLog(log, pauseStart, pauseEnd){
+  const segments = normalizeSegments(log?.segments || []);
+  if (!segments.length){
+    return { ok: false, reason: 'no_segments' };
+  }
+  if (!Number.isFinite(pauseStart) || !Number.isFinite(pauseEnd) || pauseEnd <= pauseStart){
+    return { ok: false, reason: 'invalid_range' };
+  }
+
+  const timeline = getLogTimelineBounds(log);
+  if (!Number.isFinite(timeline.start) || !Number.isFinite(timeline.end)){
+    return { ok: false, reason: 'no_segments' };
+  }
+  if (pauseStart < timeline.start || pauseEnd > timeline.end){
+    return { ok: false, reason: 'outside_timeline', timeline };
+  }
+
+  let touchedWork = false;
+  const nextSegments = [];
+
+  for (const segment of segments){
+    const overlapStart = Math.max(segment.start, pauseStart);
+    const overlapEnd = Math.min(segment.end, pauseEnd);
+    const overlaps = overlapEnd > overlapStart;
+
+    if (!overlaps){
+      nextSegments.push(cloneSegment(segment));
+      continue;
+    }
+
+    if (segment.type !== 'work'){
+      nextSegments.push(cloneSegment(segment));
+      continue;
+    }
+
+    touchedWork = true;
+    if (segment.start < overlapStart){
+      nextSegments.push(cloneSegment(segment, { id: uid(), end: overlapStart }));
+    }
+    nextSegments.push({ id: uid(), type: 'break', start: overlapStart, end: overlapEnd });
+    if (overlapEnd < segment.end){
+      nextSegments.push(cloneSegment(segment, { id: uid(), start: overlapEnd }));
+    }
+  }
+
+  if (!touchedWork){
+    return { ok: false, reason: 'no_work_overlap', timeline };
+  }
+
+  return {
+    ok: true,
+    segments: normalizeSegments(nextSegments),
+    timeline
+  };
+}
 
 function setLogDay(log, newYMD){
   if (!log || !newYMD) return false;
@@ -1677,6 +1773,7 @@ const ui = {
   navStack: [{ view: "logs" }],
   transition: null,
   logDetailSegmentEditId: null,
+  logDetailPauseDraft: null,
   logDateEditSnapshot: {},
   logDateDraft: {},
   segmentDrafts: {},
@@ -2008,6 +2105,7 @@ function toggleEditLog(logId){
     delete ui.logDateEditSnapshot[logId];
     delete ui.logDateDraft[logId];
   }
+  ui.logDetailPauseDraft = null;
   actions.setEditLog(logId);
 }
 
@@ -5453,10 +5551,27 @@ function renderLogSheet(id){
 
   function renderSegments(currentLog, editing){
     const segments = currentLog.segments || [];
+    const pauseDraft = ui.logDetailPauseDraft;
 
     return `
       <section class="compact-section stack">
-        ${editing ? `<div class="row row-actions-end"><button class="btn" id="addSegment" type="button">+ segment</button></div>` : ""}
+        ${editing ? `
+          <div class="row row-actions-end">
+            <button class="btn" id="addPause" type="button">+ pauze</button>
+          </div>
+          ${pauseDraft ? `
+            <div class="pause-editor" role="group" aria-label="Pauze invoeren">
+              <div class="segment-grid">
+                <label>Start<input type="time" value="${esc(pauseDraft.start || "")}" id="pauseStartInput" /></label>
+                <label>Einde<input type="time" value="${esc(pauseDraft.end || "")}" id="pauseEndInput" /></label>
+              </div>
+              <div class="segment-editor-actions">
+                <button class="btn" type="button" id="confirmPause">Bevestig</button>
+                <button class="btn ghost" type="button" id="cancelPause">Annuleer</button>
+              </div>
+            </div>
+          ` : ""}
+        ` : ""}
         <div class="compact-lines">
           ${segments.map(s=>{
             const start = s.start ? fmtClock(s.start) : "…";
@@ -5669,13 +5784,60 @@ function renderLogSheet(id){
   });
 
 
-  $("#addSegment")?.addEventListener("click", ()=>{
-    const segId = uid();
+  $("#addPause")?.addEventListener("click", ()=>{
+    const timeline = getLogTimelineBounds(log);
+    ui.logDetailSegmentEditId = null;
+    ui.logDetailPauseDraft = {
+      start: fmtTimeInput(timeline.start),
+      end: fmtTimeInput(timeline.end)
+    };
+    renderSheet();
+  });
+
+  $("#pauseStartInput")?.addEventListener("change", (event)=>{
+    ui.logDetailPauseDraft = ui.logDetailPauseDraft || { start: "", end: "" };
+    ui.logDetailPauseDraft.start = event.target?.value || "";
+  });
+
+  $("#pauseEndInput")?.addEventListener("change", (event)=>{
+    ui.logDetailPauseDraft = ui.logDetailPauseDraft || { start: "", end: "" };
+    ui.logDetailPauseDraft.end = event.target?.value || "";
+  });
+
+  $("#cancelPause")?.addEventListener("click", ()=>{
+    ui.logDetailPauseDraft = null;
+    renderSheet();
+  });
+
+  $("#confirmPause")?.addEventListener("click", ()=>{
+    const pauseDraft = ui.logDetailPauseDraft;
+    if (!pauseDraft) return;
+    const pauseStart = parseLogTimeToMs(log.date, pauseDraft.start);
+    const pauseEnd = parseLogTimeToMs(log.date, pauseDraft.end);
+    if (pauseStart == null || pauseEnd == null || !(pauseEnd > pauseStart)){
+      alert("Pauze ongeldig: einde moet later zijn dan start.");
+      return;
+    }
+
+    const result = insertPauseIntoLog(log, pauseStart, pauseEnd);
+    if (!result.ok){
+      if (result.reason === 'outside_timeline'){
+        alert('Pauze valt buiten de logtijdslijn. Kies een tijd binnen de bestaande segmenten.');
+        return;
+      }
+      if (result.reason === 'no_work_overlap'){
+        alert('Deze pauze raakt geen werksegmenten, er is niets aangepast.');
+        return;
+      }
+      alert('Pauze kon niet worden ingevoegd.');
+      return;
+    }
+
     actions.editLog(log.id, (draft)=>{
-      draft.segments = draft.segments || [];
-      draft.segments.push({ id: segId, type: "work", start: null, end: null });
+      draft.segments = result.segments;
     });
-    ui.logDetailSegmentEditId = segId;
+    ui.logDetailPauseDraft = null;
+    ui.logDetailSegmentEditId = null;
     renderSheet();
   });
 
@@ -5686,6 +5848,7 @@ function renderLogSheet(id){
         delete ui.segmentDrafts[segmentId];
         ui.logDetailSegmentEditId = null;
       } else {
+        ui.logDetailPauseDraft = null;
         const seg = (log.segments || []).find(x => x.id === segmentId);
         if (seg) ui.segmentDrafts[segmentId] = { start: fmtTimeInput(seg.start), end: fmtTimeInput(seg.end) };
         ui.logDetailSegmentEditId = segmentId;
