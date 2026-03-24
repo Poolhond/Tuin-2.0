@@ -1,7 +1,6 @@
-/* 🌿 TUINLOG v2 - Volledig Hersteld & Verfijnd voor iPhone 16 Pro Max */
-
 :root {
-  --bg: #05070a; /* OLED Zwart */
+  /* Kleuren hersteld naar OLED Diepzwart */
+  --bg: #000000;
   --surface: #111825;
   --surface2: #0f1520;
   --bg-elevated: #14171b;
@@ -13,15 +12,20 @@
   --blue-muted: #7ba7c4;
   --rose-muted: #b98baa;
   --danger: #ff4d4d;
-  --chrome-bg: #05070a;
-  --topbar-bg: rgba(5,7,10,.85);
+  --chrome-bg: #000000;
+  --topbar-bg: rgba(0,0,0,.85);
   --topsubtitle: rgba(233,238,246,.86);
-  --tabbar-height: 90px;
-  --bottom-tabbar-height: 90px;
+  --tabbar-height: 72px;
+  --bottom-tabbar-height: 72px;
+  --status-tabbar-height: 0px;
+  --detail-actionbar-height: 0px;
+  --more-actionbar-height: 0px;
   --topbar-height: 56px;
+
   --r: 18px;
   --pad: 16px;
 
+  /* Status kleuren zoals ze waren */
   --status-linked-bg: rgba(255, 204, 0, 0.12);
   --status-calculated-bg: rgba(255, 140, 0, 0.14);
   --status-paid-bg: rgba(0, 160, 90, 0.14);
@@ -32,111 +36,89 @@
   --status-fixed-border: rgba(147, 88, 220, 0.88);
 }
 
-body[data-theme="day"] {
-  --bg: #f4f7fb;
-  --surface: #ffffff;
-  --surface2: #eef3fa;
-  --bg-elevated: #ffffff;
-  --text: #182131;
-  --muted: rgba(24,33,49,.68);
-  --border: rgba(24,33,49,.14);
-  --chrome-bg: #f4f7fb;
-  --topbar-bg: rgba(244,247,251,.92);
+/* --- Tactiele Feedback (De "mooiere" laag) --- */
+.tab, .item, .cloud-chip, .btn, .ipc-btn, .cms-btn, .more-action-btn, .status-icon-chip {
+  transition: transform 0.1s cubic-bezier(0.2, 0, 0.2, 1);
+}
+.tab:active, .item:active, .btn:active, .ipc-btn:active, .more-action-btn:active {
+  transform: scale(0.96);
 }
 
-/* --- Tactiele Feedback --- */
-button, a, .tab, .item, .cloud-chip, .btn, .ipc-btn, .cms-btn {
-  transition: transform 0.1s cubic-bezier(0, 0, 0.2, 1);
-  cursor: pointer;
-}
-button:active:not(:disabled), .tab:active:not(.active), .item:active, .btn:active, .ipc-btn:active {
-  transform: scale(0.97);
-}
-
-/* --- Fundament (NIET VERANDEREN: JS DEPENDENCY) --- */
+/* --- Foundation (Niet aankomen, essentieel voor JS) --- */
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; touch-action: manipulation; overflow: hidden; margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; }
 
-.viewport { position: fixed; inset: 0; overflow: hidden; background: var(--chrome-bg); display: flex; flex-direction: column; }
+.viewport { position: fixed; inset: 0; overflow: hidden; background: var(--chrome-bg); }
 .hidden { display: none !important; }
 
-/* --- Topbar & Tabbar (Glassmorphism) --- */
+/* --- Topbar & Tabbar Herstel --- */
 .topbar {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 30;
   height: calc(var(--topbar-height) + env(safe-area-inset-top));
   padding: env(safe-area-inset-top) var(--pad) 0;
-  background: var(--topbar-bg);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  border-bottom: 0.5px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
+  background: var(--topbar-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;
 }
 
 .tabs {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-  height: calc(var(--tabbar-height) + env(safe-area-inset-bottom));
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-  background: var(--topbar-bg);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  border-top: 0.5px solid var(--border);
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  background: var(--topbar-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--border);
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom)) 10px;
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
 }
 
-/* --- Layout Pagina --- */
-.page { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--bg); overflow: hidden; }
+.tab {
+  background: transparent; border: 1px solid transparent; color: var(--muted);
+  border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 56px; gap: 4px;
+}
+.tab.active { color: var(--text); background: rgba(255, 255, 255, 0.05); border-color: var(--border); }
+.tab .icon { width: 24px; height: 24px; }
+.tab span { font-size: 10px; }
+
+/* --- Meer Scherm: De zwevende actiebalk (Cruciaal voor Backup) --- */
+.more-actionbar {
+  position: fixed; left: 0; right: 0; z-index: 21;
+  bottom: calc(var(--bottom-tabbar-height) + env(safe-area-inset-bottom));
+  background: var(--topbar-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--border); padding: 8px 10px;
+}
+.more-actionbar-inner { width: min(760px, 100%); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+.more-nav-actions { display: flex; align-items: center; gap: 16px; }
+.more-action-btn { width: 44px; height: 44px; border: 0; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; }
+.more-action-btn.is-active { color: var(--accent); }
+
+/* --- Inzichten & Dashboard Herstel --- */
+.insights-period-ctrl { display: flex; width: min(100%, 420px); margin: 0 auto 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; }
+.ipc-btn { flex: 1; border: none; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; padding: 7px 4px; border-radius: 8px; }
+.ipc-btn.ipc-active { background: var(--bg-elevated); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+
+.insights-hero { text-align: center; margin-bottom: 20px; }
+.insights-hero-amount { font-size: 42px; font-weight: 800; letter-spacing: -1px; color: var(--text); }
+.insights-hero-worked { font-size: 14px; color: var(--muted); }
+
+/* Grafiek SVG */
+.rhythm-svg { display: block; width: 100%; height: 60px; overflow: visible; }
+.rhythm-area { fill: var(--accent); fill-opacity: 0.1; }
+.rhythm-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+
+/* Klanten bars */
+.ins-bar-row { display: grid; grid-template-columns: 85px 1fr 52px 30px; align-items: center; gap: 8px; padding: 8px 0; }
+.ins-bar-track { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.ins-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+/* --- Pagina Structuur --- */
+.page { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
 .page-inner {
   height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;
-  padding: calc(var(--topbar-height) + env(safe-area-inset-top) + 20px) var(--pad) calc(var(--tabbar-height) + 100px);
+  padding: calc(var(--topbar-height) + env(safe-area-inset-top) + 12px) var(--pad) calc(var(--tabbar-height) + 100px);
   max-width: 760px; margin: 0 auto;
 }
 
-/* --- Inzichten (Restauratie van alle kapotte elementen) --- */
-.insights-period-ctrl { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 3px; gap: 2px; }
-.ipc-btn { flex: 1; border: none; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; padding: 8px 4px; border-radius: 9px; }
-.ipc-btn.ipc-active { background: var(--bg-elevated); color: var(--text); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-
-.insights-nav { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
-.ins-nav-label { font-size: 15px; font-weight: 700; color: var(--text); background: none; border: none; padding: 8px 12px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; }
-
-.insights-hero { text-align: center; padding: 10px 0 20px; }
-.insights-hero-amount { font-size: 48px; font-weight: 800; letter-spacing: -2px; line-height: 1; }
-.insights-hero-worked { font-size: 14px; color: var(--muted); margin-top: 6px; }
-
-/* Grafiek & Bars */
-.rhythm-svg { width: 100%; height: 80px; overflow: visible; }
-.rhythm-area { fill: var(--accent); fill-opacity: 0.1; }
-.rhythm-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
-
-.ins-bars-list { display: flex; flex-direction: column; gap: 12px; }
-.ins-bar-row { display: grid; grid-template-columns: 90px 1fr 60px 40px; align-items: center; gap: 10px; padding: 4px 0; }
-.ins-bar-track { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.ins-bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-.ins-bar-name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ins-bar-amount { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
-.ins-bar-pct { font-size: 12px; color: var(--muted); text-align: right; }
-
-/* --- Meer Pagina Acties (Backup fix) --- */
-.more-actionbar { position: fixed; bottom: var(--bottom-tabbar-height); left: 0; right: 0; background: var(--topbar-bg); backdrop-filter: blur(20px); border-top: 0.5px solid var(--border); padding: 12px; z-index: 101; display: flex; justify-content: center; }
-.more-actionbar-inner { width: 100%; max-width: 760px; display: flex; justify-content: space-between; align-items: center; }
-.more-action-btn { width: 44px; height: 44px; border-radius: 50%; border: none; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; }
-.more-action-btn.is-active { color: var(--accent); }
-
-/* --- Kaarten & Lists --- */
-.item {
-  padding: 16px; border-radius: 16px; border: 1px solid var(--border);
-  background: var(--surface); display: flex; gap: 12px; justify-content: space-between; margin-bottom: 8px;
-}
-.item-title { font-weight: 700; font-size: 16px; }
-.amount-prominent { font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; }
-
-/* Status Randjes */
-.status-linked { border-left: 4px solid var(--status-linked-border); }
-.status-calculated { border-left: 4px solid var(--status-calculated-border); }
-.status-paid { border-left: 4px solid var(--status-paid-border); }
-.status-fixed { border-left: 4px solid var(--status-fixed-border); }
-
-/* --- Algemene UI Componenten --- */
-.btn { height: 48px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-weight: 700; padding: 0 16px; display: inline-flex; align-items: center; gap: 8px; }
-.btn.primary { background: rgba(0, 200, 120, 0.15); border-color: rgba(0, 200, 120, 0.3); color: var(--accent); }
+/* --- Knoppen & Algemeen --- */
+.btn { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-weight: 700; gap: 8px; }
+.btn.primary { background: rgba(0, 200, 120, 0.12); border-color: rgba(0, 200, 120, 0.3); color: var(--accent); }
+.item { padding: 14px; border-radius: 16px; border: 1px solid var(--border); background: rgba(255,255,255,0.02); display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
 .icon { width: 24px; height: 24px; }
-.tab .icon { width: 26px; height: 26px; }
-.mono { font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, monospace; }
