@@ -188,7 +188,7 @@ function formatClockDot(ms){
   return fmtClock(ms).replace(":", ".");
 }
 function formatLogGlobalTimeRange(log){
-  const segments = log?.segments || [];
+  const segments = generateSegmentsFromLog(log);
   const starts = segments.map(s => s?.start).filter(Number.isFinite);
   const ends = segments.map(s => s?.end).filter(Number.isFinite);
   if (!starts.length || !ends.length) return "—";
@@ -216,6 +216,89 @@ function parseLogTimeToMs(isoDate, value){
   if (!baseDate) return null;
   const parsed = new Date(`${baseDate}T${value}:00`).getTime();
   return Number.isFinite(parsed) ? parsed : null;
+}
+function isValidTimeValue(value){
+  return /^\d{2}:\d{2}$/.test(String(value || ""));
+}
+function parseTimeValueToMinutes(value){
+  if (!isValidTimeValue(value)) return null;
+  const [h, m] = String(value).split(":").map(Number);
+  if (![h, m].every(Number.isFinite)) return null;
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
+}
+function normalizeLogPauses(log){
+  if (!Array.isArray(log?.pauses)) return [];
+  return log.pauses
+    .map(pause => ({ start: String(pause?.start || ""), end: String(pause?.end || "") }))
+    .filter(pause => parseTimeValueToMinutes(pause.start) != null && parseTimeValueToMinutes(pause.end) != null)
+    .map(pause => ({ start: pause.start, end: pause.end }))
+    .filter(pause => parseTimeValueToMinutes(pause.end) > parseTimeValueToMinutes(pause.start))
+    .sort((a, b) => parseTimeValueToMinutes(a.start) - parseTimeValueToMinutes(b.start));
+}
+function mergeOverlappingPauseRanges(ranges){
+  const merged = [];
+  for (const range of ranges){
+    const prev = merged[merged.length - 1];
+    if (!prev || range.start > prev.end){
+      merged.push({ ...range });
+      continue;
+    }
+    prev.end = Math.max(prev.end, range.end);
+  }
+  return merged;
+}
+function getLogDateYMD(log){
+  return formatLocalYMD(new Date(log?.date)) || todayISO();
+}
+function minuteRangeToSegment(log, type, startMin, endMin){
+  const base = getLogDateYMD(log);
+  const start = parseLogTimeToMs(base, `${pad2(Math.floor(startMin / 60))}:${pad2(startMin % 60)}`);
+  const end = parseLogTimeToMs(base, `${pad2(Math.floor(endMin / 60))}:${pad2(endMin % 60)}`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  return { id: uid(), type, start, end };
+}
+function syncLogTimeFieldsFromSegments(log){
+  const normalized = normalizeSegments(log?.segments || []);
+  const first = normalized[0];
+  const last = normalized[normalized.length - 1];
+  if (!first?.start || !last?.end) return;
+  log.startTime = fmtTimeInput(first.start);
+  log.endTime = fmtTimeInput(last.end);
+  log.pauses = normalized
+    .filter(segment => segment.type === "break")
+    .map(segment => ({ start: fmtTimeInput(segment.start), end: fmtTimeInput(segment.end) }))
+    .filter(pause => isValidTimeValue(pause.start) && isValidTimeValue(pause.end));
+}
+function generateSegmentsFromLog(log){
+  const startMin = parseTimeValueToMinutes(log?.startTime);
+  const endMin = parseTimeValueToMinutes(log?.endTime);
+  if (startMin == null || endMin == null || endMin <= startMin) return [];
+
+  const pauses = normalizeLogPauses(log)
+    .map(pause => ({
+      start: Math.max(startMin, Math.min(endMin, parseTimeValueToMinutes(pause.start))),
+      end: Math.max(startMin, Math.min(endMin, parseTimeValueToMinutes(pause.end)))
+    }))
+    .filter(pause => pause.end > pause.start);
+
+  const mergedPauses = mergeOverlappingPauseRanges(pauses);
+  const segments = [];
+  let cursor = startMin;
+  for (const pause of mergedPauses){
+    if (pause.start > cursor){
+      const workSegment = minuteRangeToSegment(log, "work", cursor, pause.start);
+      if (workSegment) segments.push(workSegment);
+    }
+    const breakSegment = minuteRangeToSegment(log, "break", pause.start, pause.end);
+    if (breakSegment) segments.push(breakSegment);
+    cursor = Math.max(cursor, pause.end);
+  }
+  if (cursor < endMin){
+    const tailWork = minuteRangeToSegment(log, "work", cursor, endMin);
+    if (tailWork) segments.push(tailWork);
+  }
+  return mergeAdjacentSegments(sortSegmentsChronologically(segments));
 }
 function cloneSegment(segment, patch = {}){
   return { ...segment, ...patch, id: patch.id ?? segment?.id ?? uid() };
@@ -251,7 +334,7 @@ function mergeAdjacentSegments(segments){
   return merged;
 }
 function getLogTimelineBounds(log){
-  const normalized = normalizeSegments(log?.segments || []);
+  const normalized = generateSegmentsFromLog(log);
   if (!normalized.length) return { start: null, end: null };
   return {
     start: normalized[0].start,
@@ -259,7 +342,7 @@ function getLogTimelineBounds(log){
   };
 }
 function insertPauseIntoLog(log, pauseStart, pauseEnd){
-  const segments = normalizeSegments(log?.segments || []);
+  const segments = generateSegmentsFromLog(log);
   if (!segments.length){
     return { ok: false, reason: 'no_segments' };
   }
@@ -275,41 +358,22 @@ function insertPauseIntoLog(log, pauseStart, pauseEnd){
     return { ok: false, reason: 'outside_timeline', timeline };
   }
 
-  let touchedWork = false;
-  const nextSegments = [];
-
-  for (const segment of segments){
-    const overlapStart = Math.max(segment.start, pauseStart);
-    const overlapEnd = Math.min(segment.end, pauseEnd);
-    const overlaps = overlapEnd > overlapStart;
-
-    if (!overlaps){
-      nextSegments.push(cloneSegment(segment));
-      continue;
-    }
-
-    if (segment.type !== 'work'){
-      nextSegments.push(cloneSegment(segment));
-      continue;
-    }
-
-    touchedWork = true;
-    if (segment.start < overlapStart){
-      nextSegments.push(cloneSegment(segment, { id: uid(), end: overlapStart }));
-    }
-    nextSegments.push({ id: uid(), type: 'break', start: overlapStart, end: overlapEnd });
-    if (overlapEnd < segment.end){
-      nextSegments.push(cloneSegment(segment, { id: uid(), start: overlapEnd }));
-    }
-  }
+  const touchedWork = segments.some(segment =>
+    segment.type === "work" &&
+    Math.min(segment.end, pauseEnd) > Math.max(segment.start, pauseStart)
+  );
 
   if (!touchedWork){
     return { ok: false, reason: 'no_work_overlap', timeline };
   }
 
+  const startText = fmtTimeInput(pauseStart);
+  const endText = fmtTimeInput(pauseEnd);
+  const nextPauses = normalizeLogPauses(log).concat([{ start: startText, end: endText }]);
+
   return {
     ok: true,
-    segments: normalizeSegments(nextSegments),
+    pauses: nextPauses,
     timeline
   };
 }
@@ -338,6 +402,7 @@ function setLogDay(log, newYMD){
       }
     }
   }
+  log.segments = generateSegmentsFromLog(log);
 
   return true;
 }
@@ -667,6 +732,26 @@ function loadState(){
     if (!l.segments) l.segments = [];
     if (!l.items) l.items = [];
     if (!l.date) l.date = todayISO();
+    if (!isValidTimeValue(l.startTime) || !isValidTimeValue(l.endTime)){
+      const normalized = normalizeSegments(l.segments || []);
+      const first = normalized[0];
+      const last = normalized[normalized.length - 1];
+      if (first?.start && last?.end){
+        l.startTime = fmtTimeInput(first.start);
+        l.endTime = fmtTimeInput(last.end);
+        l.pauses = normalized
+          .filter(segment => segment.type === "break")
+          .map(segment => ({ start: fmtTimeInput(segment.start), end: fmtTimeInput(segment.end) }))
+          .filter(pause => isValidTimeValue(pause.start) && isValidTimeValue(pause.end));
+        l._migrated = true;
+      } else {
+        l.startTime = l.startTime || "08:00";
+        l.endTime = l.endTime || "08:00";
+        l.pauses = Array.isArray(l.pauses) ? l.pauses : [];
+      }
+    } else {
+      l.pauses = normalizeLogPauses(l);
+    }
   }
 
   ensureUIPreferences(st);
@@ -947,7 +1032,7 @@ let state = loadState();
 // ---------- Computations ----------
 function sumWorkMs(log){
   let t=0;
-  for (const s of (log.segments||[])){
+  for (const s of generateSegmentsFromLog(log)){
     if (s.type !== "work") continue;
     const end = s.end ?? now();
     t += Math.max(0, end - s.start);
@@ -970,7 +1055,7 @@ function customerMinutesLastYear(){
 }
 function sumBreakMs(log){
   let t=0;
-  for (const s of (log.segments||[])){
+  for (const s of generateSegmentsFromLog(log)){
     if (s.type !== "break") continue;
     const end = s.end ?? now();
     t += Math.max(0, end - s.start);
@@ -981,7 +1066,7 @@ function sumItemsAmount(log){
   return round2((log.items||[]).reduce((acc,it)=> acc + (Number(it.qty)||0)*(Number(it.unitPrice)||0), 0));
 }
 function getStartTime(log){
-  const firstWorkSegment = (log.segments || [])
+  const firstWorkSegment = generateSegmentsFromLog(log)
     .filter(segment => segment?.type === "work" && Number.isFinite(segment.start))
     .sort((a, b) => a.start - b.start)[0];
   const startMs = firstWorkSegment?.start ?? log.startAt ?? log.startedAt ?? null;
@@ -1836,9 +1921,10 @@ const actions = {
     if (!customerId || state.activeLogId) return null;
     const log = {
       id: uid(), customerId, date: todayISO(), createdAt: now(), closedAt: null,
-      note: "", segments: [], items: []
+      note: "", segments: [], startTime: fmtClock(now()), endTime: fmtClock(now()), pauses: [], items: []
     };
     openSegment(log, "work");
+    syncLogTimeFieldsFromSegments(log);
     state.logs.unshift(log);
     state.activeLogId = log.id;
     commit();
@@ -1851,6 +1937,7 @@ const actions = {
     if (!seg) openSegment(log, "work");
     else if (seg.type === "work"){ closeOpenSegment(log); openSegment(log, "break"); }
     else { closeOpenSegment(log); openSegment(log, "work"); }
+    syncLogTimeFieldsFromSegments(log);
     commit();
   },
   stopLog(logId){
@@ -1858,6 +1945,7 @@ const actions = {
     if (!log) return;
     closeOpenSegment(log);
     log.closedAt = now();
+    syncLogTimeFieldsFromSegments(log);
     state.activeLogId = null;
     ui.activeLogQuickAdd.open = false;
     commit();
@@ -2087,21 +2175,6 @@ function toggleEditLog(logId){
       }
     }
 
-    // Auto-commit pending segment drafts (als gebruiker tijden aanpaste maar vinkje niet klikte)
-    if (log) {
-      (log.segments || []).forEach(s => {
-        const draft = ui.segmentDrafts[s.id];
-        if (!draft) return;
-        const nextStart = parseLogTimeToMs(log.date, draft.start);
-        const nextEnd = parseLogTimeToMs(log.date, draft.end);
-        if (nextStart != null && nextEnd != null && nextEnd > nextStart) {
-          s.start = nextStart;
-          s.end = nextEnd;
-        }
-        delete ui.segmentDrafts[s.id];
-      });
-    }
-
     delete ui.logDateEditSnapshot[logId];
     delete ui.logDateDraft[logId];
   }
@@ -2127,7 +2200,6 @@ function cancelLogDateEditIfNeeded(){
   ui.logDetailSegmentEditId = null;
   delete ui.logDateEditSnapshot[logId];
   delete ui.logDateDraft[logId];
-  if (log) (log.segments || []).forEach(s => delete ui.segmentDrafts[s.id]);
 }
 
 function cancelDetailEditIfNeeded(){
@@ -5549,67 +5621,26 @@ function renderLogSheet(id){
   const statusLabel = visual.state === "free" ? "vrij" : visual.state === "linked" ? "gekoppeld" : visual.state === "calculated" ? "berekend" : visual.state === "fixed" ? "vaste klant" : "betaald";
   const isEditing = state.ui.editLogId === log.id;
 
-  function renderSegments(currentLog, editing){
-    const segments = currentLog.segments || [];
+  function renderPauseSection(currentLog){
     const pauseDraft = ui.logDetailPauseDraft;
-
+    const pauseCount = normalizeLogPauses(currentLog).length;
     return `
       <section class="compact-section stack">
-        ${editing ? `
-          <div class="row row-actions-end">
-            <button class="btn" id="addPause" type="button">+ pauze</button>
-          </div>
-          ${pauseDraft ? `
-            <div class="pause-editor" role="group" aria-label="Pauze invoeren">
-              <div class="segment-grid">
-                <label>Start<input type="time" value="${esc(pauseDraft.start || "")}" id="pauseStartInput" /></label>
-                <label>Einde<input type="time" value="${esc(pauseDraft.end || "")}" id="pauseEndInput" /></label>
-              </div>
-              <div class="segment-editor-actions">
-                <button class="btn" type="button" id="confirmPause">Bevestig</button>
-                <button class="btn ghost" type="button" id="cancelPause">Annuleer</button>
-              </div>
-            </div>
-          ` : ""}
-        ` : ""}
-        <div class="compact-lines">
-          ${segments.map(s=>{
-            const start = s.start ? fmtClock(s.start) : "…";
-            const end = s.end ? fmtClock(s.end) : "…";
-            const segmentDuration = calculateDuration(start, end);
-            if (!editing){
-              return `<div class="segment-row segment-row-static mono"><div class="segment-row-main"><span>${s.type === "break" ? "Pauze" : "Werk"} ${start}–${end}</span><span class="segment-duration">${segmentDuration}</span></div></div>`;
-            }
-            const isOpen = ui.logDetailSegmentEditId === s.id;
-            return `
-              <div class="segment-row ${isOpen ? "is-open" : ""}">
-                <button class="segment-row-btn mono" type="button" data-toggle-segment="${s.id}">
-                  <span class="segment-row-main"><span>${s.type === "break" ? "Pauze" : "Werk"} ${start}–${end}</span><span class="segment-duration">${segmentDuration}</span></span>
-                </button>
-                ${isOpen ? `
-                  <div class="segment-editor" data-segment-editor="${s.id}">
-                    <div class="segment-grid">
-                      <label>Start<input type="time" value="${esc((ui.segmentDrafts[s.id] || {}).start ?? fmtTimeInput(s.start))}" data-edit-segment="${s.id}" data-field="start" /></label>
-                      <label>Einde<input type="time" value="${esc((ui.segmentDrafts[s.id] || {}).end ?? fmtTimeInput(s.end))}" data-edit-segment="${s.id}" data-field="end" /></label>
-                      <label>Type
-                        <select data-edit-segment="${s.id}" data-field="type">
-                          <option value="work" ${s.type === "work" ? "selected" : ""}>work</option>
-                          <option value="break" ${s.type === "break" ? "selected" : ""}>break</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div class="segment-editor-actions">
-                      <button class="iconbtn iconbtn-sm" type="button" data-commit-segment="${s.id}" title="Bevestig tijden" aria-label="Bevestig tijden"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
-                      <button class="iconbtn iconbtn-sm danger" type="button" data-del-segment="${s.id}" title="Verwijder segment" aria-label="Verwijder segment">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 6h18" stroke-linecap="round"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6" stroke-linecap="round"/></svg>
-                      </button>
-                    </div>
-                  </div>
-                ` : ""}
-              </div>
-            `;
-          }).join("") || `<div class="small">Geen segmenten.</div>`}
+        <div class="row row-actions-end">
+          <button class="btn" id="addPause" type="button">+ pauze</button>
         </div>
+        ${pauseDraft ? `
+          <div class="pause-editor" role="group" aria-label="Pauze invoeren">
+            <div class="segment-grid">
+              <label>Start<input type="time" value="${esc(pauseDraft.start || "")}" id="pauseStartInput" /></label>
+              <label>Einde<input type="time" value="${esc(pauseDraft.end || "")}" id="pauseEndInput" /></label>
+            </div>
+            <div class="segment-editor-actions">
+              <button class="btn" type="button" id="confirmPause">Bevestig</button>
+              <button class="btn ghost" type="button" id="cancelPause">Annuleer</button>
+            </div>
+          </div>
+        ` : `<div class="small">Pauzes: ${pauseCount}</div>`}
       </section>
     `;
   }
@@ -5640,19 +5671,13 @@ function renderLogSheet(id){
     const visual = getLogVisualState(currentLog);
     const prettyDate = formatDateDayMonthShortYear(currentLog.date || "");
     const weekday = formatDateWeekdayLong(currentLog.date || "");
-    const globalRange = formatLogGlobalTimeRange(currentLog);
+    const startLabel = isValidTimeValue(currentLog.startTime) ? currentLog.startTime : "—";
+    const endLabel = isValidTimeValue(currentLog.endTime) ? currentLog.endTime : "—";
     const totalMinutes = Math.floor(sumWorkMs(currentLog) / 60000);
     const customerName = cname(currentLog.customerId) || "—";
     const dateInputValue = formatLocalYMD(new Date(currentLog.date));
     const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
-    const dateHeader = editing
-      ? `
-        <div class="log-detail-date-edit" role="group" aria-label="Datum bewerken">
-          <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(draftDate)}" max="${formatLocalYMD(new Date())}" />
-          <button class="iconbtn iconbtn-sm" id="btnCommitLogDate" type="button" aria-label="Bevestig datum" title="Bevestig datum"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
-        </div>
-      `
-      : `<div class="log-detail-hero-date">${esc(prettyDate || currentLog.date || "—")}</div>`;
+    const dateHeader = `<button class="log-detail-hero-date" id="logDateTap" type="button">${esc(prettyDate || currentLog.date || "—")}</button>`;
 
     return `
       <section class="compact-section log-detail-header log-detail-header--${esc(visual.state)}">
@@ -5664,8 +5689,15 @@ function renderLogSheet(id){
         <div class="log-detail-hero-center">
           <div class="log-detail-hero-weekday">${esc(weekday || "—")}</div>
           ${dateHeader}
-          <div class="log-detail-hero-time">${esc(globalRange)}</div>
+          <div class="log-detail-hero-time">
+            <button id="logStartTap" type="button">${esc(startLabel)}</button>
+            <span aria-hidden="true"> - </span>
+            <button id="logEndTap" type="button">${esc(endLabel)}</button>
+          </div>
         </div>
+        <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(draftDate)}" max="${formatLocalYMD(new Date())}" hidden />
+        <input id="logStartInput" type="time" value="${esc(startLabel === "—" ? "08:00" : startLabel)}" hidden />
+        <input id="logEndInput" type="time" value="${esc(endLabel === "—" ? "09:00" : endLabel)}" hidden />
       </section>
     `;
   }
@@ -5692,7 +5724,7 @@ function renderLogSheet(id){
       </div>
       ${noteSection}
       <div class="log-detail-flow">
-        ${renderSegments(log, isEditing)}
+        ${renderPauseSection(log)}
       </div>
 
       <section class="compact-section stack log-detail-flow">
@@ -5766,21 +5798,55 @@ function renderLogSheet(id){
     });
   });
 
+  $("#logDateTap")?.addEventListener("click", ()=>{
+    $("#logDateInput")?.showPicker?.();
+  });
   $("#logDateInput")?.addEventListener("change", (event)=>{
     const nextDate = event.target?.value;
-    if (!nextDate) return;
-    if (nextDate > formatLocalYMD(new Date())) return;
-    ui.logDateDraft[log.id] = nextDate;
-  });
-
-  $("#btnCommitLogDate")?.addEventListener("click", ()=>{
-    const nextDate = ui.logDateDraft[log.id];
     if (!nextDate) return;
     if (nextDate > formatLocalYMD(new Date())) return;
     actions.editLog(log.id, (draft)=>{
       setLogDay(draft, nextDate);
     });
-    delete ui.logDateDraft[log.id];
+  });
+
+  $("#logStartTap")?.addEventListener("click", ()=>{
+    $("#logStartInput")?.showPicker?.();
+  });
+  $("#logEndTap")?.addEventListener("click", ()=>{
+    $("#logEndInput")?.showPicker?.();
+  });
+  $("#logStartInput")?.addEventListener("change", (event)=>{
+    const nextStart = event.target?.value || "";
+    const endValue = $("#logEndInput")?.value || log.endTime || "";
+    if (parseTimeValueToMinutes(nextStart) == null || parseTimeValueToMinutes(endValue) == null) return;
+    if (parseTimeValueToMinutes(nextStart) >= parseTimeValueToMinutes(endValue)){
+      alert("Starttijd moet vroeger zijn dan eindtijd.");
+      return;
+    }
+    actions.editLog(log.id, (draft)=>{
+      draft.startTime = nextStart;
+      draft.endTime = endValue;
+      draft.pauses = normalizeLogPauses(draft);
+      draft.segments = generateSegmentsFromLog(draft);
+    });
+    renderSheet();
+  });
+  $("#logEndInput")?.addEventListener("change", (event)=>{
+    const nextEnd = event.target?.value || "";
+    const startValue = $("#logStartInput")?.value || log.startTime || "";
+    if (parseTimeValueToMinutes(nextEnd) == null || parseTimeValueToMinutes(startValue) == null) return;
+    if (parseTimeValueToMinutes(startValue) >= parseTimeValueToMinutes(nextEnd)){
+      alert("Eindtijd moet later zijn dan starttijd.");
+      return;
+    }
+    actions.editLog(log.id, (draft)=>{
+      draft.startTime = startValue;
+      draft.endTime = nextEnd;
+      draft.pauses = normalizeLogPauses(draft);
+      draft.segments = generateSegmentsFromLog(draft);
+    });
+    renderSheet();
   });
 
 
@@ -5834,94 +5900,12 @@ function renderLogSheet(id){
     }
 
     actions.editLog(log.id, (draft)=>{
-      draft.segments = result.segments;
+      draft.pauses = result.pauses;
+      draft.segments = generateSegmentsFromLog(draft);
     });
     ui.logDetailPauseDraft = null;
     ui.logDetailSegmentEditId = null;
     renderSheet();
-  });
-
-  $("#sheetBody").querySelectorAll("[data-toggle-segment]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      const segmentId = btn.getAttribute("data-toggle-segment");
-      if (ui.logDetailSegmentEditId === segmentId){
-        delete ui.segmentDrafts[segmentId];
-        ui.logDetailSegmentEditId = null;
-      } else {
-        ui.logDetailPauseDraft = null;
-        const seg = (log.segments || []).find(x => x.id === segmentId);
-        if (seg) ui.segmentDrafts[segmentId] = { start: fmtTimeInput(seg.start), end: fmtTimeInput(seg.end) };
-        ui.logDetailSegmentEditId = segmentId;
-      }
-      renderSheet();
-    });
-  });
-
-  $("#sheetBody").querySelectorAll("[data-edit-segment]").forEach(inp=>{
-    inp.addEventListener("change", ()=>{
-      const segmentId = inp.getAttribute("data-edit-segment");
-      const field = inp.getAttribute("data-field");
-      const seg = (log.segments||[]).find(x => x.id === segmentId);
-      if (!seg) return;
-
-      if (field === "start" || field === "end"){
-        // Draft only — geen directe opslag
-        ui.segmentDrafts[segmentId] = ui.segmentDrafts[segmentId] || { start: fmtTimeInput(seg.start), end: fmtTimeInput(seg.end) };
-        ui.segmentDrafts[segmentId][field] = inp.value;
-        return;
-      }
-
-      if (field === "type"){
-        if (!["work", "break"].includes(inp.value)){
-          alert('Type moet "work" of "break" zijn.');
-          renderSheet();
-          return;
-        }
-        actions.editLog(log.id, (draft)=>{
-          const target = (draft.segments||[]).find(x => x.id === segmentId);
-          if (!target) return;
-          target.type = inp.value;
-        });
-        renderSheet();
-      }
-    });
-  });
-
-  $("#sheetBody").querySelectorAll("[data-commit-segment]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      const segmentId = btn.getAttribute("data-commit-segment");
-      const seg = (log.segments||[]).find(x => x.id === segmentId);
-      if (!seg) return;
-      const draft = ui.segmentDrafts[segmentId];
-      if (!draft) return;
-      const nextStart = parseLogTimeToMs(log.date, draft.start);
-      const nextEnd = parseLogTimeToMs(log.date, draft.end);
-      if (nextStart == null || nextEnd == null || !(nextEnd > nextStart)){
-        alert("Segment ongeldig: einde moet later zijn dan start.");
-        return;
-      }
-      actions.editLog(log.id, (appDraft)=>{
-        const target = (appDraft.segments||[]).find(x => x.id === segmentId);
-        if (!target) return;
-        target.start = nextStart;
-        target.end = nextEnd;
-      });
-      delete ui.segmentDrafts[segmentId];
-      ui.logDetailSegmentEditId = null;
-      renderSheet();
-    });
-  });
-
-  $("#sheetBody").querySelectorAll("[data-del-segment]").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      const segmentId = btn.getAttribute("data-del-segment");
-      if (!confirmDelete("Segment verwijderen")) return;
-      actions.editLog(log.id, (draft)=>{
-        draft.segments = (draft.segments||[]).filter(s => s.id !== segmentId);
-      });
-      if (ui.logDetailSegmentEditId === segmentId) ui.logDetailSegmentEditId = null;
-      renderSheet();
-    });
   });
 
   if (isEditing){
