@@ -1883,6 +1883,35 @@ const ui = {
   customerDetailRhythmSelectedKey: null
 };
 
+let hiddenHeroDateInput = null;
+let hiddenHeroTimeInput = null;
+
+function ensureHiddenHeroInputs(){
+  if (!document.body) return;
+
+  if (!hiddenHeroDateInput){
+    hiddenHeroDateInput = document.createElement("input");
+    hiddenHeroDateInput.type = "date";
+    hiddenHeroDateInput.style.position = "absolute";
+    hiddenHeroDateInput.style.opacity = "0";
+    hiddenHeroDateInput.style.pointerEvents = "none";
+    hiddenHeroDateInput.style.left = "-9999px";
+    hiddenHeroDateInput.style.top = "-9999px";
+    document.body.appendChild(hiddenHeroDateInput);
+  }
+
+  if (!hiddenHeroTimeInput){
+    hiddenHeroTimeInput = document.createElement("input");
+    hiddenHeroTimeInput.type = "time";
+    hiddenHeroTimeInput.style.position = "absolute";
+    hiddenHeroTimeInput.style.opacity = "0";
+    hiddenHeroTimeInput.style.pointerEvents = "none";
+    hiddenHeroTimeInput.style.left = "-9999px";
+    hiddenHeroTimeInput.style.top = "-9999px";
+    document.body.appendChild(hiddenHeroTimeInput);
+  }
+}
+
 function normalizeInsightsDashboardMode(mode){
   return ["logs", "settlements"].includes(mode) ? mode : null;
 }
@@ -5675,10 +5704,6 @@ function renderLogSheet(id){
     const endLabel = isValidTimeValue(currentLog.endTime) ? currentLog.endTime : "—";
     const totalMinutes = Math.floor(sumWorkMs(currentLog) / 60000);
     const customerName = cname(currentLog.customerId) || "—";
-    const dateInputValue = formatLocalYMD(new Date(currentLog.date));
-    const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
-    const dateHeader = `<button class="log-detail-hero-date" id="logDateTap" type="button">${esc(prettyDate || currentLog.date || "—")}</button>`;
-
     return `
       <section class="compact-section log-detail-header log-detail-header--${esc(visual.state)}">
         <div class="log-detail-hero-context">
@@ -5688,16 +5713,13 @@ function renderLogSheet(id){
         </div>
         <div class="log-detail-hero-center">
           <div class="log-detail-hero-weekday">${esc(weekday || "—")}</div>
-          ${dateHeader}
-          <div class="log-detail-hero-time">
-            <button id="logStartTap" type="button">${esc(startLabel)}</button>
-            <span aria-hidden="true"> - </span>
-            <button id="logEndTap" type="button">${esc(endLabel)}</button>
+          <div class="hero-date" data-action="edit-date">${esc(prettyDate || currentLog.date || "—")}</div>
+          <div class="hero-time">
+            <span data-action="edit-start">${esc(startLabel)}</span>
+            <span aria-hidden="true"> – </span>
+            <span data-action="edit-end">${esc(endLabel)}</span>
           </div>
         </div>
-        <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(draftDate)}" max="${formatLocalYMD(new Date())}" hidden />
-        <input id="logStartInput" type="time" value="${esc(startLabel === "—" ? "08:00" : startLabel)}" hidden />
-        <input id="logEndInput" type="time" value="${esc(endLabel === "—" ? "09:00" : endLabel)}" hidden />
       </section>
     `;
   }
@@ -5798,55 +5820,77 @@ function renderLogSheet(id){
     });
   });
 
-  $("#logDateTap")?.addEventListener("click", ()=>{
-    $("#logDateInput")?.showPicker?.();
-  });
-  $("#logDateInput")?.addEventListener("change", (event)=>{
-    const nextDate = event.target?.value;
-    if (!nextDate) return;
-    if (nextDate > formatLocalYMD(new Date())) return;
-    actions.editLog(log.id, (draft)=>{
-      setLogDay(draft, nextDate);
-    });
-  });
+  const heroCenter = $("#sheetBody")?.querySelector(".log-detail-hero-center");
+  heroCenter?.addEventListener("click", (event)=>{
+    ensureHiddenHeroInputs();
+    if (!hiddenHeroDateInput || !hiddenHeroTimeInput) return;
 
-  $("#logStartTap")?.addEventListener("click", ()=>{
-    $("#logStartInput")?.showPicker?.();
-  });
-  $("#logEndTap")?.addEventListener("click", ()=>{
-    $("#logEndInput")?.showPicker?.();
-  });
-  $("#logStartInput")?.addEventListener("change", (event)=>{
-    const nextStart = event.target?.value || "";
-    const endValue = $("#logEndInput")?.value || log.endTime || "";
-    if (parseTimeValueToMinutes(nextStart) == null || parseTimeValueToMinutes(endValue) == null) return;
-    if (parseTimeValueToMinutes(nextStart) >= parseTimeValueToMinutes(endValue)){
-      alert("Starttijd moet vroeger zijn dan eindtijd.");
+    const actionEl = event.target?.closest?.("[data-action]");
+    const action = actionEl?.dataset?.action;
+    if (!action) return;
+
+    if (action === "edit-date"){
+      const inputDateValue = formatLocalYMD(new Date(log.date));
+      hiddenHeroDateInput.value = inputDateValue || todayISO();
+      hiddenHeroDateInput.max = formatLocalYMD(new Date());
+      hiddenHeroDateInput.onchange = ()=>{
+        const nextDate = hiddenHeroDateInput.value;
+        if (!nextDate) return;
+        if (nextDate > formatLocalYMD(new Date())) return;
+        actions.editLog(log.id, (draft)=>{
+          setLogDay(draft, nextDate);
+        });
+        renderSheet();
+      };
+      hiddenHeroDateInput.showPicker?.();
+      hiddenHeroDateInput.click();
       return;
     }
-    actions.editLog(log.id, (draft)=>{
-      draft.startTime = nextStart;
-      draft.endTime = endValue;
-      draft.pauses = normalizeLogPauses(draft);
-      draft.segments = generateSegmentsFromLog(draft);
-    });
-    renderSheet();
-  });
-  $("#logEndInput")?.addEventListener("change", (event)=>{
-    const nextEnd = event.target?.value || "";
-    const startValue = $("#logStartInput")?.value || log.startTime || "";
-    if (parseTimeValueToMinutes(nextEnd) == null || parseTimeValueToMinutes(startValue) == null) return;
-    if (parseTimeValueToMinutes(startValue) >= parseTimeValueToMinutes(nextEnd)){
-      alert("Eindtijd moet later zijn dan starttijd.");
+
+    if (action === "edit-start"){
+      hiddenHeroTimeInput.value = isValidTimeValue(log.startTime) ? log.startTime : "08:00";
+      hiddenHeroTimeInput.onchange = ()=>{
+        const nextStart = hiddenHeroTimeInput.value || "";
+        const endValue = isValidTimeValue(log.endTime) ? log.endTime : "";
+        if (parseTimeValueToMinutes(nextStart) == null || parseTimeValueToMinutes(endValue) == null) return;
+        if (parseTimeValueToMinutes(nextStart) >= parseTimeValueToMinutes(endValue)){
+          alert("Starttijd moet vroeger zijn dan eindtijd.");
+          return;
+        }
+        actions.editLog(log.id, (draft)=>{
+          draft.startTime = nextStart;
+          draft.endTime = endValue;
+          draft.pauses = normalizeLogPauses(draft);
+          draft.segments = generateSegmentsFromLog(draft);
+        });
+        renderSheet();
+      };
+      hiddenHeroTimeInput.showPicker?.();
+      hiddenHeroTimeInput.click();
       return;
     }
-    actions.editLog(log.id, (draft)=>{
-      draft.startTime = startValue;
-      draft.endTime = nextEnd;
-      draft.pauses = normalizeLogPauses(draft);
-      draft.segments = generateSegmentsFromLog(draft);
-    });
-    renderSheet();
+
+    if (action === "edit-end"){
+      hiddenHeroTimeInput.value = isValidTimeValue(log.endTime) ? log.endTime : "09:00";
+      hiddenHeroTimeInput.onchange = ()=>{
+        const nextEnd = hiddenHeroTimeInput.value || "";
+        const startValue = isValidTimeValue(log.startTime) ? log.startTime : "";
+        if (parseTimeValueToMinutes(nextEnd) == null || parseTimeValueToMinutes(startValue) == null) return;
+        if (parseTimeValueToMinutes(startValue) >= parseTimeValueToMinutes(nextEnd)){
+          alert("Eindtijd moet later zijn dan starttijd.");
+          return;
+        }
+        actions.editLog(log.id, (draft)=>{
+          draft.startTime = startValue;
+          draft.endTime = nextEnd;
+          draft.pauses = normalizeLogPauses(draft);
+          draft.segments = generateSegmentsFromLog(draft);
+        });
+        renderSheet();
+      };
+      hiddenHeroTimeInput.showPicker?.();
+      hiddenHeroTimeInput.click();
+    }
   });
 
 
@@ -6890,6 +6934,7 @@ function installIOSNoZoomGuards(){
 // - Backup export/import still works
 // - Refresh persists state
 installIOSNoZoomGuards();
+ensureHiddenHeroInputs();
 window.addEventListener("resize", ()=>{
   syncViewUiState();
 });
