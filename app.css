@@ -1642,7 +1642,7 @@ body[data-theme="day"] .log-detail-header::after{
   text-transform:uppercase;
 }
 
-.log-detail-hero-date{
+.hero-date{
   margin-top:6px;
   font-size:34px;
   font-weight:700;
@@ -1650,7 +1650,7 @@ body[data-theme="day"] .log-detail-header::after{
   letter-spacing:-0.018em;
 }
 
-.log-detail-hero-time{
+.hero-time{
   margin-top:10px;
   font-size:17px;
   color:color-mix(in srgb, var(--muted) 94%, #d2deeb 6%);
@@ -1664,47 +1664,12 @@ body[data-theme="day"] .log-detail-hero-weekday{
   color:color-mix(in srgb, var(--muted) 90%, #516582 10%);
 }
 
-body[data-theme="day"] .log-detail-hero-date{
+body[data-theme="day"] .hero-date{
   color:color-mix(in srgb, var(--text) 96%, #2d3f59 4%);
 }
 
-body[data-theme="day"] .log-detail-hero-time{
+body[data-theme="day"] .hero-time{
   color:color-mix(in srgb, var(--muted) 92%, #667a96 8%);
-}
-
-
-.log-detail-date-edit{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  justify-content:center;
-  width:100%;
-  margin-top:1px;
-}
-
-.log-detail-date-input{
-  width:auto;
-  max-width:210px;
-  font-size:26px;
-  font-weight:700;
-  line-height:1.2;
-  color:var(--text);
-  background:transparent;
-  border:0;
-  border-bottom:1px solid var(--line);
-  border-radius:0;
-  box-shadow:none;
-  padding:0 0 1px;
-  min-height:0;
-}
-
-.log-detail-date-input:focus{
-  outline:none;
-  border-bottom-color:var(--text);
-}
-
-.log-detail-date-input::-webkit-date-and-time-value{
-  text-align:center;
 }
 
 .log-detail-compact .compact-section:last-child{
