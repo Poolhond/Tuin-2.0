@@ -373,9 +373,6 @@ window.addEventListener("DOMContentLoaded", syncThemeColorWithChromeBg);
 function confirmDelete(label){
   return confirm(`Zeker verwijderen?\n\n${label}\n\nDit kan niet ongedaan gemaakt worden.`);
 }
-function confirmAction(label){
-  return confirm(label);
-}
 
 function ensureModalRoot(){
   let root = document.getElementById("appModalRoot");
