@@ -196,6 +196,15 @@ function formatLogGlobalTimeRange(log){
   const lastEnd = Math.max(...ends);
   return `${formatClockDot(firstStart)} - ${formatClockDot(lastEnd)}`;
 }
+function getLogBoundarySegments(log){
+  const segments = sortSegmentsChronologically(log?.segments || [])
+    .filter(segment => segment && Number.isFinite(segment.start) && Number.isFinite(segment.end));
+  if (!segments.length) return { firstSegment: null, lastSegment: null };
+  return {
+    firstSegment: segments[0],
+    lastSegment: segments[segments.length - 1]
+  };
+}
 function formatMoneyEUR(amount){
   return fmtMoney(amount);
 }
@@ -5640,7 +5649,20 @@ function renderLogSheet(id){
     const visual = getLogVisualState(currentLog);
     const prettyDate = formatDateDayMonthShortYear(currentLog.date || "");
     const weekday = formatDateWeekdayLong(currentLog.date || "");
-    const globalRange = formatLogGlobalTimeRange(currentLog);
+    const { firstSegment, lastSegment } = getLogBoundarySegments(currentLog);
+    const globalRange = firstSegment && lastSegment
+      ? `
+        <span class="hero-time-wrapper">
+          <span aria-hidden="true">${esc(formatClockDot(firstSegment.start))}</span>
+          <input type="time" class="hero-time-hidden-input" value="${esc(fmtTimeInput(firstSegment.start))}" data-quick-edit-segment="${esc(firstSegment.id)}" data-field="start" />
+        </span>
+        <span> - </span>
+        <span class="hero-time-wrapper">
+          <span aria-hidden="true">${esc(formatClockDot(lastSegment.end))}</span>
+          <input type="time" class="hero-time-hidden-input" value="${esc(fmtTimeInput(lastSegment.end))}" data-quick-edit-segment="${esc(lastSegment.id)}" data-field="end" />
+        </span>
+      `
+      : "—";
     const totalMinutes = Math.floor(sumWorkMs(currentLog) / 60000);
     const customerName = cname(currentLog.customerId) || "—";
     const dateInputValue = formatLocalYMD(new Date(currentLog.date));
@@ -5664,7 +5686,7 @@ function renderLogSheet(id){
         <div class="log-detail-hero-center">
           <div class="log-detail-hero-weekday">${esc(weekday || "—")}</div>
           ${dateHeader}
-          <div class="log-detail-hero-time">${esc(globalRange)}</div>
+          <div class="log-detail-hero-time">${globalRange}</div>
         </div>
       </section>
     `;
@@ -5781,6 +5803,37 @@ function renderLogSheet(id){
       setLogDay(draft, nextDate);
     });
     delete ui.logDateDraft[log.id];
+  });
+
+  $("#sheetBody").querySelectorAll(".hero-time-hidden-input").forEach(inp=>{
+    inp.addEventListener("change", (event)=>{
+      const target = event.target;
+      const nextTime = target?.value;
+      const segmentId = target?.dataset?.quickEditSegment;
+      const field = target?.dataset?.field;
+      if (!nextTime || !segmentId || !["start", "end"].includes(field)) return;
+
+      actions.editLog(log.id, (draft)=>{
+        const segment = (draft.segments || []).find(s => s.id === segmentId);
+        if (!segment) return;
+        const nextMs = parseLogTimeToMs(draft.date || log.date, nextTime);
+        if (!Number.isFinite(nextMs)) return;
+
+        if (field === "start"){
+          segment.start = nextMs;
+          if (!Number.isFinite(segment.end) || segment.start >= segment.end){
+            segment.end = segment.start + 60000;
+          }
+          return;
+        }
+
+        segment.end = nextMs;
+        if (!Number.isFinite(segment.start) || segment.end <= segment.start){
+          segment.start = segment.end - 60000;
+        }
+      });
+      renderSheet();
+    });
   });
 
 
