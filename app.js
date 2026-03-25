@@ -5857,7 +5857,7 @@ function renderLogSheet(id){
           ${dateHeader}
           <div class="log-detail-hero-time">${globalRange}</div>
         </div>
-        <div style="width: 100%; border-top: 1px solid rgba(255,255,255,0.15); margin-top: 18px; padding-top: 10px;">
+        <div style="width: 100%; margin-top: 18px; padding-top: 10px;">
           ${renderSegments(currentLog, editing)}
           ${renderGreenRow(currentLog)}
         </div>
