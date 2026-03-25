@@ -5603,6 +5603,9 @@ function renderLogSheet(id){
 
     return `
       <section class="compact-section stack">
+        <div class="row row-actions-end">
+          <button class="btn" id="addPause" type="button">+ pauze</button>
+        </div>
         ${pauseDraft ? `
           <div class="pause-editor" role="group" aria-label="Pauze invoeren">
             <div class="segment-grid">
