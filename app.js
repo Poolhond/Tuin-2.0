@@ -5861,20 +5861,25 @@ function renderLogSheet(id){
           ${dateHeader}
           <div class="log-detail-hero-time">${globalRange}</div>
         </div>
+        <div style="width: 100%; border-top: 1px solid rgba(255,255,255,0.15); margin-top: 18px; padding-top: 10px;">
+          ${renderSegments(currentLog, editing)}
+          ${renderGreenRow(currentLog)}
+        </div>
       </section>
     `;
   }
 
+  const noteSection = `
+    <div class="log-ghost-note-container">
+      <textarea id="logNote" class="log-ghost-note-input" placeholder="Notitie..." rows="1">${esc(log.note || "")}</textarea>
+    </div>
+  `;
+
   $("#sheetBody").innerHTML = `
     <div class="stack log-detail-compact log-detail-view">
-      <div class="log-ghost-note-container">
-        <textarea id="logNote" class="log-ghost-note-input" placeholder="Notitie..." rows="1">${esc(log.note || "")}</textarea>
-      </div>
+      ${noteSection}
       <div class="log-detail-flow">
         ${renderLogHeader(log, isEditing)}
-      </div>
-      <div class="log-detail-flow">
-        ${renderSegments(log, isEditing)}
       </div>
 
       <section class="compact-section stack log-detail-flow">
@@ -6210,10 +6215,26 @@ function renderLogSheet(id){
   });
 }
 
+function renderGreenRow(log) {
+  const { greenItemQty } = splitLogItems(log);
+  return `
+    <div class="log-green-row green-row no-select" style="margin-top: 12px; width: 100%; display: grid; grid-template-columns: 20px auto auto; align-items: center; gap: 8px;">
+      <span class="log-green-icon" aria-hidden="true">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 15c2.2-6.2 8.4-8.7 14-9-1.1 5.7-3 11.8-9 14-4 1.4-7-1.3-5-5Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 14.5c2 .2 4.6-.4 7.5-2.4" stroke-linecap="round"/></svg>
+      </span>
+      <div class="log-green-qty mono tabular">${esc(String(greenItemQty))}</div>
+      <div class="log-green-controls" style="justify-self: end; display: inline-flex; gap: 6px;">
+        <button class="iconbtn iconbtn-sm" type="button" data-green-qty-step="-1" aria-label="Groen min">−</button>
+        <button class="iconbtn iconbtn-sm" type="button" data-green-qty-step="1" aria-label="Groen plus">+</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderProducts(log, { context = "log", isEditing = false } = {}){
   if (context !== "log") return renderLogItems(log);
 
-  const { greenItemQty, otherItems } = splitLogItems(log);
+  const { otherItems } = splitLogItems(log);
   const productOptions = state.products
     .filter(product => isOtherProduct(product))
     .map(p => `<option value="${p.id}">${esc(p.name)}${p.unit ? ` (${esc(p.unit)})` : ""}</option>`)
@@ -6265,16 +6286,6 @@ function renderProducts(log, { context = "log", isEditing = false } = {}){
 
   return `
     <div class="log-items-list log-items-list-minimal">
-      <div class="log-green-row green-row no-select">
-        <span class="log-green-icon" aria-hidden="true">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 15c2.2-6.2 8.4-8.7 14-9-1.1 5.7-3 11.8-9 14-4 1.4-7-1.3-5-5Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 14.5c2 .2 4.6-.4 7.5-2.4" stroke-linecap="round"/></svg>
-        </span>
-        <div class="log-green-qty mono tabular">${esc(String(greenItemQty))}</div>
-        <div class="log-green-controls">
-          <button class="iconbtn iconbtn-sm" type="button" data-green-qty-step="-1" aria-label="Groen min">−</button>
-          <button class="iconbtn iconbtn-sm" type="button" data-green-qty-step="1" aria-label="Groen plus">+</button>
-        </div>
-      </div>
       ${showOtherSection ? `
         <div class="log-other-items-wrap">
           <div class="log-other-head">
