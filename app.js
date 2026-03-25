@@ -5599,13 +5599,14 @@ function renderLogSheet(id){
 
   function renderSegments(currentLog, editing){
     const segments = currentLog.segments || [];
+    const breakSegments = segments.filter(s => s.type === "break");
     const pauseDraft = ui.logDetailPauseDraft;
 
     return `
       <section class="compact-section stack">
-        <div class="row row-actions-end">
-          <button id="addPause" type="button" style="background: transparent; border: none; color: var(--text); padding: 8px; display: inline-flex; align-items: center; justify-content: center; opacity: 0.7;" aria-label="Pauze toevoegen">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <div class="row row-actions-end" style="margin-bottom: -4px;">
+          <button class="iconbtn ghost" id="addPause" type="button" aria-label="Pauze toevoegen" title="Pauze toevoegen">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
               <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
               <line x1="6" y1="1" x2="6" y2="4"></line>
@@ -5629,18 +5630,15 @@ function renderLogSheet(id){
           </div>
         ` : ""}
         <div class="compact-lines">
-          ${segments.map(s=>{
+          ${breakSegments.map(s=>{
             const start = s.start ? fmtClock(s.start) : "…";
             const end = s.end ? fmtClock(s.end) : "…";
             const segmentDuration = calculateDuration(start, end);
-            if (!editing){
-              return `<div class="segment-row segment-row-static mono"><div class="segment-row-main"><span>${s.type === "break" ? "Pauze" : "Werk"} ${start}–${end}</span><span class="segment-duration">${segmentDuration}</span></div></div>`;
-            }
             const isOpen = ui.logDetailSegmentEditId === s.id;
             return `
               <div class="segment-row ${isOpen ? "is-open" : ""}">
                 <button class="segment-row-btn mono" type="button" data-toggle-segment="${s.id}">
-                  <span class="segment-row-main"><span>${s.type === "break" ? "Pauze" : "Werk"} ${start}–${end}</span><span class="segment-duration">${segmentDuration}</span></span>
+                  <span class="segment-row-main"><span>Pauze ${start}–${end}</span><span class="segment-duration">${segmentDuration}</span></span>
                 </button>
                 ${isOpen ? `
                   <div class="segment-editor" data-segment-editor="${s.id}" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border-top:1px dashed var(--border); padding:10px 0 6px;">
@@ -5659,7 +5657,7 @@ function renderLogSheet(id){
                 ` : ""}
               </div>
             `;
-          }).join("") || `<div class="small">Geen segmenten.</div>`}
+          }).join("")}
         </div>
       </section>
     `;
