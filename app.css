@@ -1495,87 +1495,52 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-header {
-  position: relative;
-  overflow: hidden;
-  margin: 0 0 16px;
-  padding: 24px 20px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  /* Verwijder complexe gradients, gebruik een solide basis die reageert op de status */
-  background: var(--surface2);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  --hero-accent: rgba(90,110,138,.5);
+  --hero-accent-deep: rgba(54,70,92,.56);
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  margin:0 0 10px;
+  padding:20px 24px 26px;
+  border-radius:20px;
+  border: none; /* Rand verwijderd voor meer rust */
+  background:
+    linear-gradient(176deg,
+      color-mix(in srgb, var(--hero-accent) 56%, rgba(52,60,74,.92) 44%) 0%,
+      color-mix(in srgb, var(--hero-accent-deep) 44%, rgba(34,41,52,.94) 56%) 52%,
+      rgba(24,30,40,.96) 100%);
+  box-shadow:
+    0 10px 24px rgba(2,7,15,.16),
+    0 2px 6px rgba(2,7,15,.12),
+    inset 0 1px 0 rgba(245,250,255,.12),
+    inset 0 -10px 18px rgba(8,12,20,.15);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
 }
-
-/* Status-specifieke vlakke achtergronden met de bestaande kleurbasis */
-.log-detail-header--free       { background: rgba(82, 116, 158, 0.15); border-color: rgba(82, 116, 158, 0.3); }
-.log-detail-header--linked     { background: rgba(255, 204, 0, 0.15); border-color: rgba(255, 204, 0, 0.4); }
-.log-detail-header--calculated { background: rgba(255, 149, 0, 0.15); border-color: rgba(255, 149, 0, 0.4); }
-.log-detail-header--paid       { background: rgba(0, 171, 96, 0.15); border-color: rgba(0, 171, 96, 0.4); }
-.log-detail-header--fixed      { background: rgba(147, 88, 220, 0.15); border-color: rgba(147, 88, 220, 0.4); }
 
 .log-detail-hero-context {
-  width: 100%;
-  text-align: center;
-  font-size: 28px; /* Iets verfijnder dan de 34px */
+  width:100%;
+  margin-bottom:0;
+  text-align:center;
+  font-size:34px;
+  font-weight:700;
+  line-height:1.04;
+  letter-spacing:-0.018em;
+  opacity:1;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.log-detail-hero-customer {
   font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.log-detail-hero-customer,
-.log-detail-hero-total{
-  line-height:inherit;
-}
-
-.log-detail-hero-context-separator{
-  opacity:.7;
-}
-
-.log-detail-hero-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  width: 100%;
-}
-
-/* Verwijder de glanseffecten (before/after) volledig */
-.log-detail-header::before,
-.log-detail-header::after {
-  content: none !important;
-  display: none !important;
-}
-
-.log-detail-hero-weekday {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--muted);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.log-detail-hero-date {
-  margin-top: 4px;
-  font-size: 32px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-
-.log-detail-hero-time {
-  margin-top: 8px;
-  font-size: 15px;
-  color: var(--muted);
-  font-weight: 500;
+.log-detail-hero-total {
+  font-weight: 400; /* Lichter lettertype voor de tijd */
+  opacity: 0.9;
 }
 
 .hero-time-wrapper{
