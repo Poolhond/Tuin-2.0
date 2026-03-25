@@ -5620,7 +5620,7 @@ function renderLogSheet(id){
             const start = s.start ? fmtClock(s.start) : "…";
             const end = s.end ? fmtClock(s.end) : "…";
             const segmentDuration = calculateDuration(start, end);
-            if (!editing){
+            if (!editing && s.type !== "break"){
               return `<div class="segment-row segment-row-static mono"><div class="segment-row-main"><span>${s.type === "break" ? "Pauze" : "Werk"} ${start}–${end}</span><span class="segment-duration">${segmentDuration}</span></div></div>`;
             }
             const isOpen = ui.logDetailSegmentEditId === s.id;
