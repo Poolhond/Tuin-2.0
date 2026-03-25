@@ -5603,17 +5603,6 @@ function renderLogSheet(id){
 
     return `
       <section class="compact-section stack">
-        <div class="row row-actions-end">
-          <button id="addPause" type="button" style="background: transparent; border: none; color: var(--text); padding: 8px; display: inline-flex; align-items: center; justify-content: center; opacity: 0.7;" aria-label="Pauze toevoegen">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
-              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
-              <line x1="6" y1="1" x2="6" y2="4"></line>
-              <line x1="10" y1="1" x2="10" y2="4"></line>
-              <line x1="14" y1="1" x2="14" y2="4"></line>
-            </svg>
-          </button>
-        </div>
         ${pauseDraft ? `
           <div class="pause-editor" role="group" aria-label="Pauze invoeren">
             <div class="segment-grid">
@@ -5794,6 +5783,17 @@ function renderLogSheet(id){
           ${settlementOptions}
         </select>
       </div>
+      ${isEditing ? `
+      <button class="more-action-btn" id="addPause" type="button" aria-label="Pauze toevoegen">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+          <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+          <line x1="6" y1="1" x2="6" y2="4"></line>
+          <line x1="10" y1="1" x2="10" y2="4"></line>
+          <line x1="14" y1="1" x2="14" y2="4"></line>
+        </svg>
+      </button>
+      ` : ""}
       <button class="more-action-btn" id="btnLogEdit" type="button" aria-label="${isEditing ? "Gereed" : "Bewerk"}" title="${isEditing ? "Gereed" : "Bewerk"}">
       ${isEditing
         ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg>`
