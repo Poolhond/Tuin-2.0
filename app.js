@@ -5592,7 +5592,7 @@ function renderLogSheet(id){
                 ` : ""}
               </div>
             `;
-          }).join("") || `<div class="small">Geen pauzes geregistreerd.</div>`}
+          }).join("")}
         </div>
       </section>
     `;
