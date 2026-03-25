@@ -1550,9 +1550,12 @@ body:not([data-view="meer"]) #moreActionBar{
   text-overflow:ellipsis;
 }
 
-.log-detail-hero-customer,
+.log-detail-hero-customer{
+  line-height:inherit;
+}
 .log-detail-hero-total{
   line-height:inherit;
+  font-weight: 400;
 }
 
 .log-detail-hero-context-separator{
