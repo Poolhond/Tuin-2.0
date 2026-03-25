@@ -1477,13 +1477,18 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-compact .compact-section{
-  border-bottom:1px solid var(--border);
-  padding:12px 24px;
+  border-bottom:0;
+  padding:8px 0;
 }
 
 .log-detail-view .log-detail-flow.compact-section,
 .log-detail-view .log-detail-flow .compact-section{
   border-bottom:0;
+}
+
+.log-detail-view hr,
+.log-detail-compact hr {
+  display: none !important;
 }
 
 .log-detail-view .log-detail-flow{
