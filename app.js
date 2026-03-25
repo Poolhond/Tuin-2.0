@@ -5720,32 +5720,22 @@ function renderLogSheet(id){
     `;
   }
 
-  const noteText = String(log.note || "").trim();
-  const noteSection = isEditing
-    ? `
-      <section class="compact-section log-detail-flow log-detail-note-section">
-        <input id="logNote" class="log-detail-note-input" value="${esc(log.note || "")}" placeholder="Notitie" />
-      </section>
-    `
-    : (noteText
-      ? `
-      <section class="compact-section log-detail-flow log-detail-note-section">
-        <div class="log-detail-note-text">${esc(noteText)}</div>
-      </section>
-    `
-      : "");
-
   $("#sheetBody").innerHTML = `
     <div class="stack log-detail-compact log-detail-view">
+      <div class="log-ghost-note-container">
+        <textarea id="logNote" class="log-ghost-note-input" placeholder="Notitie..." rows="1">${esc(log.note || "")}</textarea>
+      </div>
       <div class="log-detail-flow">
         ${renderLogHeader(log, isEditing)}
       </div>
-      ${noteSection}
       <div class="log-detail-flow">
         ${renderSegments(log, isEditing)}
       </div>
 
       <section class="compact-section stack log-detail-flow">
+        <div class="row space">
+          <div class="item-title">Producten</div>
+        </div>
         <div class="log-lines-wrap">
           ${renderProducts(log, { context: "log", isEditing })}
         </div>

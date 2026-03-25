@@ -1802,21 +1802,41 @@ body[data-theme="day"] .log-detail-hero-time{
   text-align:right;
 }
 
-.log-detail-note-section{
-  border-bottom:0;
-  padding-top:2px;
-  padding-bottom:6px;
+.log-ghost-note-container {
+  padding: 0 20px;
+  margin-bottom: -5px;
+  display: flex;
+  justify-content: center;
 }
 
-.log-detail-note-text{
-  font-size:14px;
-  line-height:1.45;
-  color:var(--muted);
-  white-space:pre-wrap;
+.log-ghost-note-input {
+  width: 100%;
+  max-width: 300px;
+  background: transparent !important;
+  border: none !important;
+  color: var(--muted) !important;
+  font-size: 13px;
+  text-align: center;
+  resize: none;
+  overflow: hidden;
+  padding: 8px;
+  min-height: 34px;
+  border-radius: 0;
+  transition: color 0.2s;
+  font-family: inherit;
 }
 
-.log-detail-note-input{
-  width:100%;
+.log-ghost-note-input::placeholder {
+  color: transparent;
+}
+
+.log-ghost-note-input:focus {
+  color: var(--text) !important;
+  outline: none;
+}
+
+.log-ghost-note-input:focus::placeholder {
+  color: rgba(233,238,246,0.2);
 }
 
 .linked-afrekening-section{
