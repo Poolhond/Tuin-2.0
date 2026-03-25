@@ -5977,12 +5977,22 @@ function renderLogSheet(id){
     });
 
     $("#addProductItem")?.addEventListener("click", ()=>{
+      if (locked) return;
       const nextProduct = (state.products || []).find(product => isOtherProduct(product)) || null;
       if (!nextProduct) return;
+
       actions.editLog(log.id, (draft)=>{
         draft.items = draft.items || [];
-        draft.items.push({ id: uid(), productId: nextProduct.id, qty: null, unitPrice: Number(nextProduct.unitPrice||0), note:"" });
+        draft.items.push({
+          id: uid(),
+          productId: nextProduct.id,
+          qty: null,
+          unitPrice: Number(nextProduct.unitPrice || 0),
+          note: ""
+        });
       });
+
+      // Geen edit-mode mutatie; behoud huidige modus en render enkel de nieuwe state.
       renderSheet();
     });
   }
