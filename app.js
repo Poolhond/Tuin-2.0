@@ -5533,22 +5533,28 @@ function renderLogSheet(id){
 
     return `
       <section class="compact-section stack">
-        ${editing ? `
-          <div class="row row-actions-end">
-            <button class="btn" id="addPause" type="button">+ pauze</button>
-          </div>
-          ${pauseDraft ? `
-            <div class="pause-editor" role="group" aria-label="Pauze invoeren">
-              <div class="segment-grid">
-                <label>Start<input type="time" value="${esc(pauseDraft.start || "")}" id="pauseStartInput" /></label>
-                <label>Einde<input type="time" value="${esc(pauseDraft.end || "")}" id="pauseEndInput" /></label>
-              </div>
-              <div class="segment-editor-actions">
-                <button class="btn" type="button" id="confirmPause">Bevestig</button>
-                <button class="btn ghost" type="button" id="cancelPause">Annuleer</button>
-              </div>
+        <div class="row row-actions-end">
+          <button id="addPause" type="button" style="background: transparent; border: none; color: var(--text); padding: 8px; display: inline-flex; align-items: center; justify-content: center; opacity: 0.7;" aria-label="Pauze toevoegen">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+              <line x1="6" y1="1" x2="6" y2="4"></line>
+              <line x1="10" y1="1" x2="10" y2="4"></line>
+              <line x1="14" y1="1" x2="14" y2="4"></line>
+            </svg>
+          </button>
+        </div>
+        ${pauseDraft ? `
+          <div class="pause-editor" role="group" aria-label="Pauze invoeren">
+            <div class="segment-grid">
+              <label>Start<input type="time" value="${esc(pauseDraft.start || "")}" id="pauseStartInput" /></label>
+              <label>Einde<input type="time" value="${esc(pauseDraft.end || "")}" id="pauseEndInput" /></label>
             </div>
-          ` : ""}
+            <div class="segment-editor-actions">
+              <button class="btn" type="button" id="confirmPause">Bevestig</button>
+              <button class="btn ghost" type="button" id="cancelPause">Annuleer</button>
+            </div>
+          </div>
         ` : ""}
         <div class="compact-lines">
           ${segments.map(s=>{
