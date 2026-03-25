@@ -5615,23 +5615,25 @@ function renderLogSheet(id){
           </button>
         </div>
         ${pauseDraft ? `
-          <div class="pause-editor" role="group" aria-label="Pauze invoeren">
-            <div class="segment-grid">
-              <label>Start<input type="time" value="${esc(pauseDraft.start || "")}" id="pauseStartInput" /></label>
-              <label>Einde<input type="time" value="${esc(pauseDraft.end || "")}" id="pauseEndInput" /></label>
+          <div class="pause-editor" role="group" aria-label="Pauze invoeren" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border-top:1px dashed var(--border); padding:12px 0 8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:13px; color:var(--muted); font-weight:600; margin-right:4px;">Pauze:</span>
+              <input type="time" class="log-detail-date-input" style="font-size:18px; width:auto; text-align:center;" value="${esc(pauseDraft.start || "")}" id="pauseStartInput" />
+              <span style="opacity:0.5; font-size:18px;">–</span>
+              <input type="time" class="log-detail-date-input" style="font-size:18px; width:auto; text-align:center;" value="${esc(pauseDraft.end || "")}" id="pauseEndInput" />
             </div>
-            <div class="segment-editor-actions">
-              <button class="btn" type="button" id="confirmPause">Bevestig</button>
-              <button class="btn ghost" type="button" id="cancelPause">Annuleer</button>
+            <div class="segment-editor-actions" style="margin:0;">
+              <button class="iconbtn iconbtn-sm" type="button" id="confirmPause" title="Bevestig" aria-label="Bevestig"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+              <button class="iconbtn iconbtn-sm ghost" type="button" id="cancelPause" title="Annuleer" aria-label="Annuleer" style="border-color:var(--border);"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
           </div>
         ` : ""}
         <div class="compact-lines">
-          ${segments.filter(s => s.type === "break").map(s=>{
+          ${segments.map(s=>{
             const start = s.start ? fmtClock(s.start) : "…";
             const end = s.end ? fmtClock(s.end) : "…";
             const segmentDuration = calculateDuration(start, end);
-            if (!editing && s.type !== "break"){
+            if (!editing){
               return `<div class="segment-row segment-row-static mono"><div class="segment-row-main"><span>${s.type === "break" ? "Pauze" : "Werk"} ${start}–${end}</span><span class="segment-duration">${segmentDuration}</span></div></div>`;
             }
             const isOpen = ui.logDetailSegmentEditId === s.id;
@@ -5641,18 +5643,13 @@ function renderLogSheet(id){
                   <span class="segment-row-main"><span>${s.type === "break" ? "Pauze" : "Werk"} ${start}–${end}</span><span class="segment-duration">${segmentDuration}</span></span>
                 </button>
                 ${isOpen ? `
-                  <div class="segment-editor" data-segment-editor="${s.id}">
-                    <div class="segment-grid">
-                      <label>Start<input type="time" value="${esc((ui.segmentDrafts[s.id] || {}).start ?? fmtTimeInput(s.start))}" data-edit-segment="${s.id}" data-field="start" /></label>
-                      <label>Einde<input type="time" value="${esc((ui.segmentDrafts[s.id] || {}).end ?? fmtTimeInput(s.end))}" data-edit-segment="${s.id}" data-field="end" /></label>
-                      <label>Type
-                        <select data-edit-segment="${s.id}" data-field="type">
-                          <option value="work" ${s.type === "work" ? "selected" : ""}>work</option>
-                          <option value="break" ${s.type === "break" ? "selected" : ""}>break</option>
-                        </select>
-                      </label>
+                  <div class="segment-editor" data-segment-editor="${s.id}" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border-top:1px dashed var(--border); padding:10px 0 6px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <input type="time" class="log-detail-date-input" style="font-size:18px; width:auto; text-align:center;" value="${esc((ui.segmentDrafts[s.id] || {}).start ?? fmtTimeInput(s.start))}" data-edit-segment="${s.id}" data-field="start" />
+                      <span style="opacity:0.5; font-size:18px;">–</span>
+                      <input type="time" class="log-detail-date-input" style="font-size:18px; width:auto; text-align:center;" value="${esc((ui.segmentDrafts[s.id] || {}).end ?? fmtTimeInput(s.end))}" data-edit-segment="${s.id}" data-field="end" />
                     </div>
-                    <div class="segment-editor-actions">
+                    <div class="segment-editor-actions" style="margin:0;">
                       <button class="iconbtn iconbtn-sm" type="button" data-commit-segment="${s.id}" title="Bevestig tijden" aria-label="Bevestig tijden"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
                       <button class="iconbtn iconbtn-sm danger" type="button" data-del-segment="${s.id}" title="Verwijder segment" aria-label="Verwijder segment">
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 6h18" stroke-linecap="round"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6" stroke-linecap="round"/></svg>
@@ -5662,7 +5659,7 @@ function renderLogSheet(id){
                 ` : ""}
               </div>
             `;
-          }).join("")}
+          }).join("") || `<div class="small">Geen segmenten.</div>`}
         </div>
       </section>
     `;
