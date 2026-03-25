@@ -5536,6 +5536,7 @@ function renderLogSheet(id){
         ${editing ? `
           <div class="row row-actions-end">
             <button class="btn" id="addPause" type="button">+ pauze</button>
+            <button class="btn" id="btnSheetAddBreak" type="button">☕ Pauze</button>
           </div>
           ${pauseDraft ? `
             <div class="pause-editor" role="group" aria-label="Pauze invoeren">
@@ -5809,6 +5810,33 @@ function renderLogSheet(id){
     };
     renderSheet();
   });
+  document.getElementById("btnSheetAddBreak")?.addEventListener("click", () => {
+    actions.editLog(log.id, (draft) => {
+      if (!draft.segments) draft.segments = [];
+
+      let newStart = Date.now();
+      const ends = draft.segments
+        .filter(s => Number.isFinite(s.end))
+        .sort((a, b) => b.end - a.end);
+      if (ends.length > 0) {
+        newStart = ends[0].end;
+      } else {
+        const baseDate = draft.date ? new Date(draft.date) : new Date();
+        baseDate.setHours(12, 0, 0, 0);
+        newStart = baseDate.getTime();
+      }
+
+      draft.segments.push({
+        id: crypto.randomUUID(),
+        type: "break",
+        start: newStart,
+        end: newStart + 1800000,
+      });
+    });
+
+    renderSheet();
+  });
+
 
   $("#pauseStartInput")?.addEventListener("change", (event)=>{
     ui.logDetailPauseDraft = ui.logDetailPauseDraft || { start: "", end: "" };
