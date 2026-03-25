@@ -3268,6 +3268,14 @@ function renderSettlements(){
 
 // ---------- Inzichten helpers ----------
 
+function getISOWeekNum(d) {
+  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = tmp.getUTCDay() || 7;
+  tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+  return Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+}
+
 function getInsightsPeriodRange(period, anchorDate) {
   const d = anchorDate instanceof Date ? anchorDate : new Date();
   if (period === "week") {
@@ -3433,7 +3441,31 @@ function getCustomerRhythmSeries(customerId, range, period, mode) {
       return { buckets, period };
     }
 
-    if (period === "kwartaal" || period === "jaar") {
+    if (period === "kwartaal") {
+      const startDate = parseLocalYMD(range.start);
+      const endDate = parseLocalYMD(range.end);
+      if (!startDate || !endDate) return { buckets: [], period };
+      const buckets = [];
+      let cur = new Date(startDate);
+      const dow = cur.getDay();
+      cur.setDate(cur.getDate() + (dow === 0 ? -6 : 1 - dow));
+      while (cur < endDate) {
+        const wStart = new Date(cur);
+        const wEnd = new Date(cur);
+        wEnd.setDate(wEnd.getDate() + 6);
+        const key = formatLocalYMD(wStart);
+        const value = settlements.filter(x => {
+          const d = parseLocalYMD(x.date);
+          return d && d >= wStart && d <= wEnd;
+        }).reduce((sum, x) => sum + (getSettlementAmounts(x).invoice || 0) + (getSettlementAmounts(x).cash || 0), 0);
+        const wn = getISOWeekNum(wStart);
+        const detailLabel = `Week ${wn} (${wStart.getDate()} ${MONTH_NAMES[wStart.getMonth()]} - ${wEnd.getDate()} ${MONTH_NAMES[wEnd.getMonth()]})`;
+        buckets.push({ key, label: `W${wn}`, detailLabel, value });
+        cur.setDate(cur.getDate() + 7);
+      }
+      return { buckets, period };
+    }
+    if (period === "jaar") {
       const startDate = parseLocalYMD(range.start);
       const endDate = parseLocalYMD(range.end);
       if (!startDate || !endDate) return { buckets: [], period };
@@ -3443,13 +3475,10 @@ function getCustomerRhythmSeries(customerId, range, period, mode) {
         const year = cur.getFullYear();
         const month = cur.getMonth();
         const key = `${year}-${pad2(month + 1)}`;
-        const value = settlements.filter(s => {
-          const d = parseLocalYMD(s.date);
+        const value = settlements.filter(x => {
+          const d = parseLocalYMD(x.date);
           return d && d.getFullYear() === year && d.getMonth() === month;
-        }).reduce((sum, s) => {
-          const a = getSettlementAmounts(s);
-          return sum + (a.invoice || 0) + (a.cash || 0);
-        }, 0);
+        }).reduce((sum, x) => sum + (getSettlementAmounts(x).invoice || 0) + (getSettlementAmounts(x).cash || 0), 0);
         buckets.push({ key, label: MONTH_NAMES[month], detailLabel: `${MONTH_NAMES_LONG[month]} ${year}`, value });
         cur.setMonth(cur.getMonth() + 1);
       }
@@ -3490,7 +3519,31 @@ function getCustomerRhythmSeries(customerId, range, period, mode) {
       return { buckets, period };
     }
 
-    if (period === "kwartaal" || period === "jaar") {
+    if (period === "kwartaal") {
+      const startDate = parseLocalYMD(range.start);
+      const endDate = parseLocalYMD(range.end);
+      if (!startDate || !endDate) return { buckets: [], period };
+      const buckets = [];
+      let cur = new Date(startDate);
+      const dow = cur.getDay();
+      cur.setDate(cur.getDate() + (dow === 0 ? -6 : 1 - dow));
+      while (cur < endDate) {
+        const wStart = new Date(cur);
+        const wEnd = new Date(cur);
+        wEnd.setDate(wEnd.getDate() + 6);
+        const key = formatLocalYMD(wStart);
+        const value = logs.filter(x => {
+          const d = parseLocalYMD(x.date);
+          return d && d >= wStart && d <= wEnd;
+        }).reduce((sum, x) => sum + sumWorkMs(x), 0);
+        const wn = getISOWeekNum(wStart);
+        const detailLabel = `Week ${wn} (${wStart.getDate()} ${MONTH_NAMES[wStart.getMonth()]} - ${wEnd.getDate()} ${MONTH_NAMES[wEnd.getMonth()]})`;
+        buckets.push({ key, label: `W${wn}`, detailLabel, value });
+        cur.setDate(cur.getDate() + 7);
+      }
+      return { buckets, period };
+    }
+    if (period === "jaar") {
       const startDate = parseLocalYMD(range.start);
       const endDate = parseLocalYMD(range.end);
       if (!startDate || !endDate) return { buckets: [], period };
@@ -3500,10 +3553,10 @@ function getCustomerRhythmSeries(customerId, range, period, mode) {
         const year = cur.getFullYear();
         const month = cur.getMonth();
         const key = `${year}-${pad2(month + 1)}`;
-        const value = logs.filter(l => {
-          const d = parseLocalYMD(l.date);
+        const value = logs.filter(x => {
+          const d = parseLocalYMD(x.date);
           return d && d.getFullYear() === year && d.getMonth() === month;
-        }).reduce((sum, l) => sum + sumWorkMs(l), 0);
+        }).reduce((sum, x) => sum + sumWorkMs(x), 0);
         buckets.push({ key, label: MONTH_NAMES[month], detailLabel: `${MONTH_NAMES_LONG[month]} ${year}`, value });
         cur.setMonth(cur.getMonth() + 1);
       }
@@ -3554,7 +3607,29 @@ function getWorkRhythmSeries(range, period) {
     return { labels: DAY_NAMES, values, period };
   }
 
-  if (period === "kwartaal" || period === "jaar") {
+  if (period === "kwartaal") {
+    const startDate = parseLocalYMD(range.start);
+    const endDate = parseLocalYMD(range.end);
+    if (!startDate || !endDate) return { labels: [], values: [], period };
+    const labels = [];
+    const values = [];
+    let cur = new Date(startDate);
+    const dow = cur.getDay();
+    cur.setDate(cur.getDate() + (dow === 0 ? -6 : 1 - dow));
+    while (cur < endDate) {
+      const wStart = new Date(cur);
+      const wEnd = new Date(cur);
+      wEnd.setDate(wEnd.getDate() + 6);
+      labels.push(`W${getISOWeekNum(wStart)}`);
+      values.push(logs.filter(l => {
+        const d = parseLocalYMD(l.date);
+        return d && d >= wStart && d <= wEnd;
+      }).reduce((sum, l) => sum + sumWorkMs(l), 0));
+      cur.setDate(cur.getDate() + 7);
+    }
+    return { labels, values, period };
+  }
+  if (period === "jaar") {
     const startDate = parseLocalYMD(range.start);
     const endDate = parseLocalYMD(range.end);
     if (!startDate || !endDate) return { labels: [], values: [], period };
@@ -3628,7 +3703,32 @@ function getWorkRhythmSeriesRevenue(range, period) {
     return { labels: DAY_NAMES, values, period };
   }
 
-  if (period === "kwartaal" || period === "jaar") {
+  if (period === "kwartaal") {
+    const startDate = parseLocalYMD(range.start);
+    const endDate = parseLocalYMD(range.end);
+    if (!startDate || !endDate) return { labels: [], values: [], period };
+    const labels = [];
+    const values = [];
+    let cur = new Date(startDate);
+    const dow = cur.getDay();
+    cur.setDate(cur.getDate() + (dow === 0 ? -6 : 1 - dow));
+    while (cur < endDate) {
+      const wStart = new Date(cur);
+      const wEnd = new Date(cur);
+      wEnd.setDate(wEnd.getDate() + 6);
+      labels.push(`W${getISOWeekNum(wStart)}`);
+      values.push(settlements.filter(s => {
+        const d = parseLocalYMD(s.date);
+        return d && d >= wStart && d <= wEnd;
+      }).reduce((sum, s) => {
+        const amounts = getSettlementAmounts(s);
+        return sum + (amounts.invoice || 0) + (amounts.cash || 0);
+      }, 0));
+      cur.setDate(cur.getDate() + 7);
+    }
+    return { labels, values, period };
+  }
+  if (period === "jaar") {
     const startDate = parseLocalYMD(range.start);
     const endDate = parseLocalYMD(range.end);
     if (!startDate || !endDate) return { labels: [], values: [], period };
@@ -3698,7 +3798,31 @@ function getWorkRhythmInteractiveSeries(range, period, mode) {
       return { buckets, period };
     }
 
-    if (period === "kwartaal" || period === "jaar") {
+    if (period === "kwartaal") {
+      const startDate = parseLocalYMD(range.start);
+      const endDate = parseLocalYMD(range.end);
+      if (!startDate || !endDate) return { buckets: [], period };
+      const buckets = [];
+      let cur = new Date(startDate);
+      const dow = cur.getDay();
+      cur.setDate(cur.getDate() + (dow === 0 ? -6 : 1 - dow));
+      while (cur < endDate) {
+        const wStart = new Date(cur);
+        const wEnd = new Date(cur);
+        wEnd.setDate(wEnd.getDate() + 6);
+        const key = formatLocalYMD(wStart);
+        const value = settlements.filter(x => {
+          const d = parseLocalYMD(x.date);
+          return d && d >= wStart && d <= wEnd;
+        }).reduce((sum, x) => sum + (getSettlementAmounts(x).invoice || 0) + (getSettlementAmounts(x).cash || 0), 0);
+        const wn = getISOWeekNum(wStart);
+        const detailLabel = `Week ${wn} (${wStart.getDate()} ${MONTH_NAMES[wStart.getMonth()]} - ${wEnd.getDate()} ${MONTH_NAMES[wEnd.getMonth()]})`;
+        buckets.push({ key, label: `W${wn}`, detailLabel, value });
+        cur.setDate(cur.getDate() + 7);
+      }
+      return { buckets, period };
+    }
+    if (period === "jaar") {
       const startDate = parseLocalYMD(range.start);
       const endDate = parseLocalYMD(range.end);
       if (!startDate || !endDate) return { buckets: [], period };
@@ -3708,15 +3832,10 @@ function getWorkRhythmInteractiveSeries(range, period, mode) {
         const year = cur.getFullYear();
         const month = cur.getMonth();
         const key = `${year}-${pad2(month + 1)}`;
-        const value = settlements
-          .filter(s => {
-            const d = parseLocalYMD(s.date);
-            return d && d.getFullYear() === year && d.getMonth() === month;
-          })
-          .reduce((sum, s) => {
-            const amounts = getSettlementAmounts(s);
-            return sum + (amounts.invoice || 0) + (amounts.cash || 0);
-          }, 0);
+        const value = settlements.filter(x => {
+          const d = parseLocalYMD(x.date);
+          return d && d.getFullYear() === year && d.getMonth() === month;
+        }).reduce((sum, x) => sum + (getSettlementAmounts(x).invoice || 0) + (getSettlementAmounts(x).cash || 0), 0);
         buckets.push({ key, label: MONTH_NAMES[month], detailLabel: `${MONTH_NAMES_LONG[month]} ${year}`, value });
         cur.setMonth(cur.getMonth() + 1);
       }
@@ -3759,7 +3878,31 @@ function getWorkRhythmInteractiveSeries(range, period, mode) {
       return { buckets, period };
     }
 
-    if (period === "kwartaal" || period === "jaar") {
+    if (period === "kwartaal") {
+      const startDate = parseLocalYMD(range.start);
+      const endDate = parseLocalYMD(range.end);
+      if (!startDate || !endDate) return { buckets: [], period };
+      const buckets = [];
+      let cur = new Date(startDate);
+      const dow = cur.getDay();
+      cur.setDate(cur.getDate() + (dow === 0 ? -6 : 1 - dow));
+      while (cur < endDate) {
+        const wStart = new Date(cur);
+        const wEnd = new Date(cur);
+        wEnd.setDate(wEnd.getDate() + 6);
+        const key = formatLocalYMD(wStart);
+        const value = logs.filter(x => {
+          const d = parseLocalYMD(x.date);
+          return d && d >= wStart && d <= wEnd;
+        }).reduce((sum, x) => sum + sumWorkMs(x), 0);
+        const wn = getISOWeekNum(wStart);
+        const detailLabel = `Week ${wn} (${wStart.getDate()} ${MONTH_NAMES[wStart.getMonth()]} - ${wEnd.getDate()} ${MONTH_NAMES[wEnd.getMonth()]})`;
+        buckets.push({ key, label: `W${wn}`, detailLabel, value });
+        cur.setDate(cur.getDate() + 7);
+      }
+      return { buckets, period };
+    }
+    if (period === "jaar") {
       const startDate = parseLocalYMD(range.start);
       const endDate = parseLocalYMD(range.end);
       if (!startDate || !endDate) return { buckets: [], period };
@@ -3769,12 +3912,10 @@ function getWorkRhythmInteractiveSeries(range, period, mode) {
         const year = cur.getFullYear();
         const month = cur.getMonth();
         const key = `${year}-${pad2(month + 1)}`;
-        const value = logs
-          .filter(l => {
-            const d = parseLocalYMD(l.date);
-            return d && d.getFullYear() === year && d.getMonth() === month;
-          })
-          .reduce((sum, l) => sum + sumWorkMs(l), 0);
+        const value = logs.filter(x => {
+          const d = parseLocalYMD(x.date);
+          return d && d.getFullYear() === year && d.getMonth() === month;
+        }).reduce((sum, x) => sum + sumWorkMs(x), 0);
         buckets.push({ key, label: MONTH_NAMES[month], detailLabel: `${MONTH_NAMES_LONG[month]} ${year}`, value });
         cur.setMonth(cur.getMonth() + 1);
       }
@@ -3943,7 +4084,9 @@ function getWorkRhythmBucketDetails(range, period, mode, bucketKey) {
     const allSettlements = getSettlementsForInsights(range);
     const bucketSettlements = (period === "week" || period === "maand")
       ? allSettlements.filter(s => s.date === bucketKey)
-      : allSettlements.filter(s => (s.date || "").startsWith(bucketKey + "-"));
+      : (period === "kwartaal")
+        ? allSettlements.filter(s => { const d = parseLocalYMD(s.date); if (!d) return false; const bStart = parseLocalYMD(bucketKey); const bEnd = new Date(bStart); bEnd.setDate(bEnd.getDate() + 6); return d >= bStart && d <= bEnd; })
+        : allSettlements.filter(s => (s.date || "").startsWith(bucketKey + "-"));
 
     const totalAmount = bucketSettlements.reduce((sum, s) => {
       const a = getSettlementAmounts(s);
@@ -3982,7 +4125,9 @@ function getWorkRhythmBucketDetails(range, period, mode, bucketKey) {
     const allLogs = getLogsForInsights(range);
     const bucketLogs = (period === "week" || period === "maand")
       ? allLogs.filter(l => l.date === bucketKey)
-      : allLogs.filter(l => (l.date || "").startsWith(bucketKey + "-"));
+      : (period === "kwartaal")
+        ? allLogs.filter(l => { const d = parseLocalYMD(l.date); if (!d) return false; const bStart = parseLocalYMD(bucketKey); const bEnd = new Date(bStart); bEnd.setDate(bEnd.getDate() + 6); return d >= bStart && d <= bEnd; })
+        : allLogs.filter(l => (l.date || "").startsWith(bucketKey + "-"));
 
     const totalMs = bucketLogs.reduce((sum, l) => sum + sumWorkMs(l), 0);
     const allTotalMs = allLogs.reduce((sum, l) => sum + sumWorkMs(l), 0);
