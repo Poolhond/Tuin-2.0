@@ -1478,7 +1478,7 @@ body:not([data-view="meer"]) #moreActionBar{
 
 .log-detail-compact .compact-section{
   border-bottom:1px solid var(--border);
-  padding:12px 36px;
+  padding:12px 24px;
 }
 
 .log-detail-view .log-detail-flow.compact-section,
@@ -1498,7 +1498,7 @@ body:not([data-view="meer"]) #moreActionBar{
   position:relative;
   overflow:hidden;
   margin:0 0 10px;
-  padding:36px 24px 40px;
+  padding:36px 44px;
   border-radius:20px;
   border:none;
   background: var(--surface2);
@@ -1658,7 +1658,7 @@ body:not([data-view="meer"]) #moreActionBar{
 
 .log-detail-note-section{
   border-bottom:0;
-  padding:2px 36px 6px;
+  padding:2px 24px 6px;
 }
 
 .log-detail-footer-actions{
