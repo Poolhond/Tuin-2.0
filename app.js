@@ -2100,13 +2100,53 @@ function applySegmentUpdate(segments, segmentId, nextStart, nextEnd) {
   return normalizeSegments(segments.filter(s => !s._delete).concat(newSegments));
 }
 
+function rebuildLogSegments(log) {
+  if (!log || !log.segments || log.segments.length === 0) return;
+  const openSegments = log.segments.filter(s => s.start != null && s.end == null);
+  const closedSegments = log.segments.filter(s => s.start != null && s.end != null && s.end > s.start);
+  if (closedSegments.length === 0) return;
+
+  const minStart = Math.min(...closedSegments.map(s => s.start));
+  const maxEnd = Math.max(...closedSegments.map(s => s.end));
+
+  const breaks = closedSegments.filter(s => s.type === "break");
+  breaks.sort((a, b) => a.start - b.start);
+  const mergedBreaks = [];
+  for (const b of breaks) {
+    const prev = mergedBreaks[mergedBreaks.length - 1];
+    if (prev && prev.end >= b.start) {
+      prev.end = Math.max(prev.end, b.end);
+    } else {
+      mergedBreaks.push({ ...b });
+    }
+  }
+
+  const newSegments = [];
+  let current = minStart;
+  for (const b of mergedBreaks) {
+    if (b.end <= current) continue;
+    if (b.start > current) {
+      const existingWork = closedSegments.find(s => s.type === "work" && s.start === current);
+      newSegments.push({ id: existingWork ? existingWork.id : uid(), type: "work", start: current, end: b.start });
+    }
+    const breakStart = Math.max(current, b.start);
+    const breakEnd = Math.min(maxEnd, b.end);
+    newSegments.push({ id: b.id || uid(), type: "break", start: breakStart, end: breakEnd });
+    current = breakEnd;
+  }
+  if (current < maxEnd) {
+    const existingWork = closedSegments.find(s => s.type === "work" && s.start === current);
+    newSegments.push({ id: existingWork ? existingWork.id : uid(), type: "work", start: current, end: maxEnd });
+  }
+  log.segments = [...newSegments, ...openSegments];
+}
+
 function toggleEditLog(logId){
   const isLeavingEdit = state.ui.editLogId === logId;
   if (isLeavingEdit){
     const log = state.logs.find(item => item.id === logId);
     // Auto-commit pending segment drafts (als gebruiker tijden aanpaste maar vinkje niet klikte)
     if (log) {
-      let updatedSegments = [...(log.segments || [])];
       let changed = false;
       (log.segments || []).forEach(s => {
         const draft = ui.segmentDrafts[s.id];
@@ -2114,12 +2154,13 @@ function toggleEditLog(logId){
         const nextStart = parseLogTimeToMs(log.date, draft.start);
         const nextEnd = parseLogTimeToMs(log.date, draft.end);
         if (nextStart != null && nextEnd != null && nextEnd > nextStart) {
-          updatedSegments = applySegmentUpdate(updatedSegments, s.id, nextStart, nextEnd);
+          s.start = nextStart;
+          s.end = nextEnd;
           changed = true;
         }
         delete ui.segmentDrafts[s.id];
       });
-      if (changed) log.segments = updatedSegments;
+      if (changed) rebuildLogSegments(log);
     }
   }
   ui.logDetailPauseDraft = null;
@@ -5929,7 +5970,7 @@ function renderLogSheet(id){
           const target = (draft.segments||[]).find(x => x.id === segmentId);
           if (!target) return;
           target.type = inp.value;
-          draft.segments = normalizeSegments(draft.segments);
+          rebuildLogSegments(draft);
         });
         renderSheet();
       }
@@ -5950,7 +5991,11 @@ function renderLogSheet(id){
         return;
       }
       actions.editLog(log.id, (appDraft)=>{
-        appDraft.segments = applySegmentUpdate(appDraft.segments || [], segmentId, nextStart, nextEnd);
+        const target = (appDraft.segments||[]).find(x => x.id === segmentId);
+        if (!target) return;
+        target.start = nextStart;
+        target.end = nextEnd;
+        rebuildLogSegments(appDraft);
       });
       delete ui.segmentDrafts[segmentId];
       ui.logDetailSegmentEditId = null;
@@ -5964,6 +6009,7 @@ function renderLogSheet(id){
       if (!confirmDelete("Segment verwijderen")) return;
       actions.editLog(log.id, (draft)=>{
         draft.segments = (draft.segments||[]).filter(s => s.id !== segmentId);
+        rebuildLogSegments(draft);
       });
       if (ui.logDetailSegmentEditId === segmentId) ui.logDetailSegmentEditId = null;
       renderSheet();
