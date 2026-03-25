@@ -1494,70 +1494,40 @@ body:not([data-view="meer"]) #moreActionBar{
   margin-top:10px;
 }
 
-.log-detail-header{
-  --hero-accent: rgba(90,110,138,.5);
-  --hero-accent-deep: rgba(54,70,92,.56);
-  position:relative;
-  isolation:isolate;
-  overflow:hidden;
-  margin:0 0 10px;
-  padding:20px 24px 26px;
-  border-radius:20px;
-  border:1px solid rgba(214,226,242,.13);
-  background:
-    linear-gradient(176deg,
-      color-mix(in srgb, var(--hero-accent) 56%, rgba(52,60,74,.92) 44%) 0%,
-      color-mix(in srgb, var(--hero-accent-deep) 44%, rgba(34,41,52,.94) 56%) 52%,
-      rgba(24,30,40,.96) 100%);
-  box-shadow:
-    0 10px 24px rgba(2,7,15,.16),
-    0 2px 6px rgba(2,7,15,.12),
-    inset 0 1px 0 rgba(245,250,255,.12),
-    inset 0 -10px 18px rgba(8,12,20,.15);
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:6px;
+.log-detail-header {
+  position: relative;
+  overflow: hidden;
+  margin: 0 0 16px;
+  padding: 24px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  /* Verwijder complexe gradients, gebruik een solide basis die reageert op de status */
+  background: var(--surface2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
+/* Status-specifieke vlakke achtergronden met de bestaande kleurbasis */
+.log-detail-header--free       { background: rgba(82, 116, 158, 0.15); border-color: rgba(82, 116, 158, 0.3); }
+.log-detail-header--linked     { background: rgba(255, 204, 0, 0.15); border-color: rgba(255, 204, 0, 0.4); }
+.log-detail-header--calculated { background: rgba(255, 149, 0, 0.15); border-color: rgba(255, 149, 0, 0.4); }
+.log-detail-header--paid       { background: rgba(0, 171, 96, 0.15); border-color: rgba(0, 171, 96, 0.4); }
+.log-detail-header--fixed      { background: rgba(147, 88, 220, 0.15); border-color: rgba(147, 88, 220, 0.4); }
 
-.log-detail-header--free{
-  --hero-accent: rgba(82,116,158,.52);
-  --hero-accent-deep: rgba(56,78,109,.58);
-}
-
-.log-detail-header--linked{
-  --hero-accent: rgba(255,204,0,.48);
-  --hero-accent-deep: rgba(191,137,9,.52);
-}
-
-.log-detail-header--calculated{
-  --hero-accent: rgba(255,149,0,.48);
-  --hero-accent-deep: rgba(184,102,2,.54);
-}
-
-.log-detail-header--paid{
-  --hero-accent: rgba(0,171,96,.44);
-  --hero-accent-deep: rgba(4,120,78,.52);
-}
-
-.log-detail-header--fixed{
-  --hero-accent: rgba(147,88,220,.46);
-  --hero-accent-deep: rgba(102,59,158,.54);
-}
-
-.log-detail-hero-context{
-  width:100%;
-  margin-bottom:0;
-  text-align:center;
-  font-size:34px;
-  font-weight:700;
-  line-height:1.04;
-  letter-spacing:-0.018em;
-  opacity:1;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+.log-detail-hero-context {
+  width: 100%;
+  text-align: center;
+  font-size: 28px; /* Iets verfijnder dan de 34px */
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .log-detail-hero-customer,
@@ -1569,95 +1539,43 @@ body:not([data-view="meer"]) #moreActionBar{
   opacity:.7;
 }
 
-.log-detail-hero-center{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  text-align:center;
-  justify-content:center;
-  width:100%;
-  gap:0;
+.log-detail-hero-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
 }
+
+/* Verwijder de glanseffecten (before/after) volledig */
 .log-detail-header::before,
-.log-detail-header::after{
-  content:"";
-  position:absolute;
-  pointer-events:none;
+.log-detail-header::after {
+  content: none !important;
+  display: none !important;
 }
 
-.log-detail-header::before{
-  inset:.5px;
-  border-radius:inherit;
-  background:linear-gradient(180deg, rgba(248,253,255,.15) 0%, rgba(248,253,255,.06) 24%, rgba(248,253,255,.01) 44%, rgba(248,253,255,0) 62%);
-  opacity:.42;
+.log-detail-hero-weekday {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.log-detail-header::after{
-  top:-30%;
-  left:50%;
-  width:132%;
-  height:86%;
-  transform:translateX(-50%);
-  border-radius:0 0 54% 54%;
-  background:radial-gradient(ellipse at center, rgba(244,250,255,.15) 0%, rgba(244,250,255,.06) 35%, rgba(244,250,255,0) 76%);
-  opacity:.2;
+.log-detail-hero-date {
+  margin-top: 4px;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
 }
 
-body[data-theme="day"] .log-detail-header{
-  border-color:rgba(126,146,173,.18);
-  background:linear-gradient(178deg,
-    color-mix(in srgb, var(--hero-accent) 32%, #f6f9fd 68%) 0%,
-    color-mix(in srgb, var(--hero-accent-deep) 20%, #eef3f9 80%) 52%,
-    #e7edf5 100%);
-  box-shadow:
-    0 8px 18px rgba(23,40,72,.07),
-    0 1px 3px rgba(23,40,72,.05),
-    inset 0 1px 0 rgba(255,255,255,.85),
-    inset 0 -10px 15px rgba(157,174,200,.11);
-}
-
-body[data-theme="day"] .log-detail-header::before{
-  background:linear-gradient(180deg, rgba(255,255,255,.92) 0%, rgba(255,255,255,.58) 26%, rgba(255,255,255,.1) 48%, rgba(255,255,255,0) 66%);
-  opacity:.62;
-}
-
-body[data-theme="day"] .log-detail-header::after{
-  background:radial-gradient(ellipse at center, rgba(255,255,255,.7) 0%, rgba(255,255,255,.28) 32%, rgba(255,255,255,0) 74%);
-  opacity:.28;
-}
-
-.log-detail-header > *{
-  position:relative;
-  z-index:1;
-}
-
-.log-detail-hero-weekday{
-  margin-top:6px;
-  font-size:17px;
-  color:color-mix(in srgb, var(--muted) 92%, #bfcce0 8%);
-  font-weight:500;
-  letter-spacing:.12em;
-  line-height:1.15;
-  opacity:.75;
-  text-transform:uppercase;
-}
-
-.log-detail-hero-date{
-  margin-top:6px;
-  font-size:34px;
-  font-weight:700;
-  line-height:1.03;
-  letter-spacing:-0.018em;
-}
-
-.log-detail-hero-time{
-  margin-top:10px;
-  font-size:17px;
-  color:color-mix(in srgb, var(--muted) 94%, #d2deeb 6%);
-  font-weight:500;
-  letter-spacing:.01em;
-  line-height:1.18;
-  opacity:.75;
+.log-detail-hero-time {
+  margin-top: 8px;
+  font-size: 15px;
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .hero-time-wrapper{
@@ -1718,16 +1636,10 @@ body[data-theme="day"] .log-detail-header::after{
   cursor:pointer;
 }
 
-body[data-theme="day"] .log-detail-hero-weekday{
-  color:color-mix(in srgb, var(--muted) 90%, #516582 10%);
-}
-
-body[data-theme="day"] .log-detail-hero-date{
-  color:color-mix(in srgb, var(--text) 96%, #2d3f59 4%);
-}
-
-body[data-theme="day"] .log-detail-hero-time{
-  color:color-mix(in srgb, var(--muted) 92%, #667a96 8%);
+/* Day-mode specifieke aanpassingen voor de vlakke look */
+body[data-theme="day"] .log-detail-header {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  background: var(--surface);
 }
 
 
