@@ -5823,29 +5823,50 @@ function renderLogSheet(id){
     const visual = getLogVisualState(currentLog);
     const prettyDate = formatDateDayMonthShortYear(currentLog.date || "");
     const weekday = formatDateWeekdayLong(currentLog.date || "");
-    const { firstSegment, lastSegment } = getLogBoundarySegments(currentLog);
-    const globalRange = firstSegment && lastSegment
-      ? `
-        <span class="hero-time-wrapper">
-          <span aria-hidden="true">${esc(formatClockDot(firstSegment.start))}</span>
-          <input type="time" class="hero-time-hidden-input" value="${esc(fmtTimeInput(firstSegment.start))}" data-quick-edit-segment="${esc(firstSegment.id)}" data-field="start" />
-        </span>
-        <span> - </span>
-        <span class="hero-time-wrapper">
-          <span aria-hidden="true">${esc(formatClockDot(lastSegment.end))}</span>
-          <input type="time" class="hero-time-hidden-input" value="${esc(fmtTimeInput(lastSegment.end))}" data-quick-edit-segment="${esc(lastSegment.id)}" data-field="end" />
-        </span>
-      `
-      : "—";
+    const globalRange = formatLogGlobalTimeRange(currentLog);
     const totalMinutes = Math.floor(sumWorkMs(currentLog) / 60000);
     const customerName = cname(currentLog.customerId) || "—";
     const dateInputValue = formatLocalYMD(new Date(currentLog.date));
-    const dateHeader = `
-      <div class="log-detail-hero-date">
-        <span class="hero-date-wrapper">
-          <span aria-hidden="true">${esc(prettyDate || currentLog.date || "—")}</span>
-          <input type="date" class="hero-date-hidden-input" data-quick-edit-date="true" value="${esc(dateInputValue)}" max="${formatLocalYMD(new Date())}" />
-        </span>
+    const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
+    const dateHeader = editing
+      ? `
+        <div class="log-detail-date-edit" role="group" aria-label="Datum bewerken">
+          <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(draftDate)}" max="${formatLocalYMD(new Date())}" />
+          <button class="iconbtn iconbtn-sm" id="btnCommitLogDate" type="button" aria-label="Bevestig datum" title="Bevestig datum"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+        </div>
+      `
+      : `<div class="log-detail-hero-date">${esc(prettyDate || currentLog.date || "—")}</div>`;
+
+    const { greenItemQty } = splitLogItems(currentLog);
+    const breakSegments = (currentLog.segments || []).filter(s => s.type === "break");
+    let pauzeRows = "";
+    if (breakSegments.length > 0) {
+      pauzeRows = breakSegments.map(s => {
+        const start = s.start ? fmtClock(s.start) : "…";
+        const end = s.end ? fmtClock(s.end) : "…";
+        const segmentDuration = calculateDuration(start, end);
+        return `
+          <div class="segment-row-main" style="width:100%; font-size:13px; margin-top:8px; display:flex; justify-content:space-between;">
+            <span style="opacity:0.8;">Pauze ${start}–${end}</span>
+            <span class="segment-duration mono" style="opacity:0.8;">${segmentDuration}</span>
+          </div>
+        `;
+      }).join("");
+    }
+
+    const extraSection = `
+      <div style="width:100%; margin-top:16px; border-top:1px solid var(--border); padding-top:12px; display:flex; flex-direction:column; gap:8px;">
+        <div class="log-green-row green-row no-select" style="width:100%; display:flex; align-items:center;">
+          <span class="log-green-icon" aria-hidden="true" style="opacity:0.8;">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M5 15c2.2-6.2 8.4-8.7 14-9-1.1 5.7-3 11.8-9 14-4 1.4-7-1.3-5-5Z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 14.5c2 .2 4.6-.4 7.5-2.4" stroke-linecap="round"/></svg>
+          </span>
+          <div class="log-green-qty mono tabular" style="margin-left:8px; font-size:16px;">${esc(String(greenItemQty))}</div>
+          <div class="log-green-controls" style="margin-left:auto; display:flex; gap:6px;">
+            <button class="iconbtn iconbtn-sm" type="button" data-green-qty-step="-1" aria-label="Groen min" style="border-color:var(--border);">−</button>
+            <button class="iconbtn iconbtn-sm" type="button" data-green-qty-step="1" aria-label="Groen plus" style="border-color:var(--border);">+</button>
+          </div>
+        </div>
+        ${pauzeRows ? `<div style="display:flex; flex-direction:column; gap:4px;">${pauzeRows}</div>` : ""}
       </div>
     `;
 
@@ -5853,17 +5874,15 @@ function renderLogSheet(id){
       <section class="compact-section log-detail-header log-detail-header--${esc(visual.state)}">
         <div class="log-detail-hero-context">
           <span class="log-detail-hero-customer">${esc(customerName)}</span>
+          <span class="log-detail-hero-context-separator" aria-hidden="true"> · </span>
           <span class="log-detail-hero-total">${esc(formatDurationCompact(totalMinutes))}</span>
         </div>
         <div class="log-detail-hero-center">
           <div class="log-detail-hero-weekday">${esc(weekday || "—")}</div>
           ${dateHeader}
-          <div class="log-detail-hero-time">${globalRange}</div>
+          <div class="log-detail-hero-time">${esc(globalRange)}</div>
         </div>
-        <div style="width: 100%; border-top: 1px solid rgba(255,255,255,0.15); margin-top: 18px; padding-top: 10px;">
-          ${renderSegments(currentLog, editing)}
-          ${renderGreenRow(currentLog)}
-        </div>
+        ${extraSection}
       </section>
     `;
   }
