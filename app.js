@@ -2074,23 +2074,52 @@ const actions = {
   deleteProduct(productId){ state.products = state.products.filter(x => x.id !== productId); commit(); }
 };
 
+function applySegmentUpdate(segments, segmentId, nextStart, nextEnd) {
+  let target = segments.find(x => x.id === segmentId);
+  if (!target) return segments;
+  target.start = nextStart;
+  target.end = nextEnd;
+
+  let newSegments = [];
+  for (const s of segments) {
+    if (s.id === target.id) continue;
+    if (s.start < target.end && s.end > target.start) {
+      if (s.start >= target.start && s.end <= target.end) {
+        s._delete = true;
+      } else if (s.start < target.start && s.end <= target.end) {
+        s.end = target.start;
+      } else if (s.start >= target.start && s.end > target.end) {
+        s.start = target.end;
+      } else if (s.start < target.start && s.end > target.end) {
+        const newSegment = cloneSegment(s, { id: uid(), start: target.end });
+        s.end = target.start;
+        newSegments.push(newSegment);
+      }
+    }
+  }
+  return normalizeSegments(segments.filter(s => !s._delete).concat(newSegments));
+}
+
 function toggleEditLog(logId){
   const isLeavingEdit = state.ui.editLogId === logId;
   if (isLeavingEdit){
     const log = state.logs.find(item => item.id === logId);
     // Auto-commit pending segment drafts (als gebruiker tijden aanpaste maar vinkje niet klikte)
     if (log) {
+      let updatedSegments = [...(log.segments || [])];
+      let changed = false;
       (log.segments || []).forEach(s => {
         const draft = ui.segmentDrafts[s.id];
         if (!draft) return;
         const nextStart = parseLogTimeToMs(log.date, draft.start);
         const nextEnd = parseLogTimeToMs(log.date, draft.end);
         if (nextStart != null && nextEnd != null && nextEnd > nextStart) {
-          s.start = nextStart;
-          s.end = nextEnd;
+          updatedSegments = applySegmentUpdate(updatedSegments, s.id, nextStart, nextEnd);
+          changed = true;
         }
         delete ui.segmentDrafts[s.id];
       });
+      if (changed) log.segments = updatedSegments;
     }
   }
   ui.logDetailPauseDraft = null;
@@ -5900,6 +5929,7 @@ function renderLogSheet(id){
           const target = (draft.segments||[]).find(x => x.id === segmentId);
           if (!target) return;
           target.type = inp.value;
+          draft.segments = normalizeSegments(draft.segments);
         });
         renderSheet();
       }
@@ -5920,40 +5950,7 @@ function renderLogSheet(id){
         return;
       }
       actions.editLog(log.id, (appDraft)=>{
-        const target = (appDraft.segments||[]).find(x => x.id === segmentId);
-        if (!target) return;
-        target.start = nextStart;
-        target.end = nextEnd;
-
-        // Trim of splits overlappende segmenten rond het handmatig aangepaste segment
-        let newSegments = [];
-        for (const s of appDraft.segments) {
-          if (s.id === target.id) continue;
-
-          // Check op overlap met het aangepaste target-segment
-          if (s.start < target.end && s.end > target.start) {
-            if (s.start >= target.start && s.end <= target.end) {
-              // Volledig opgeslokt door target
-              s._delete = true;
-            } else if (s.start < target.start && s.end <= target.end) {
-              // Begint voor target, eindigt erin (overlap aan de rechterkant)
-              s.end = target.start;
-            } else if (s.start >= target.start && s.end > target.end) {
-              // Begint in target, eindigt erna (overlap aan de linkerkant)
-              s.start = target.end;
-            } else if (s.start < target.start && s.end > target.end) {
-              // Omvat de target volledig: splitsen in twee segmenten rondom de target
-              const newSegment = cloneSegment(s, { id: uid(), start: target.end });
-              s.end = target.start;
-              newSegments.push(newSegment);
-            }
-          }
-        }
-
-        // Pas aan, sorteer en voeg identieke aangrenzende segmenten samen
-        appDraft.segments = appDraft.segments.filter(s => !s._delete).concat(newSegments);
-        appDraft.segments.sort((a, b) => a.start - b.start);
-        appDraft.segments = mergeAdjacentSegments(appDraft.segments);
+        appDraft.segments = applySegmentUpdate(appDraft.segments || [], segmentId, nextStart, nextEnd);
       });
       delete ui.segmentDrafts[segmentId];
       ui.logDetailSegmentEditId = null;
