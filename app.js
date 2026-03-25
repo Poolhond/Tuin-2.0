@@ -5924,6 +5924,36 @@ function renderLogSheet(id){
         if (!target) return;
         target.start = nextStart;
         target.end = nextEnd;
+
+        // Trim of splits overlappende segmenten rond het handmatig aangepaste segment
+        let newSegments = [];
+        for (const s of appDraft.segments) {
+          if (s.id === target.id) continue;
+
+          // Check op overlap met het aangepaste target-segment
+          if (s.start < target.end && s.end > target.start) {
+            if (s.start >= target.start && s.end <= target.end) {
+              // Volledig opgeslokt door target
+              s._delete = true;
+            } else if (s.start < target.start && s.end <= target.end) {
+              // Begint voor target, eindigt erin (overlap aan de rechterkant)
+              s.end = target.start;
+            } else if (s.start >= target.start && s.end > target.end) {
+              // Begint in target, eindigt erna (overlap aan de linkerkant)
+              s.start = target.end;
+            } else if (s.start < target.start && s.end > target.end) {
+              // Omvat de target volledig: splitsen in twee segmenten rondom de target
+              const newSegment = cloneSegment(s, { id: uid(), start: target.end });
+              s.end = target.start;
+              newSegments.push(newSegment);
+            }
+          }
+        }
+
+        // Pas aan, sorteer en voeg identieke aangrenzende segmenten samen
+        appDraft.segments = appDraft.segments.filter(s => !s._delete).concat(newSegments);
+        appDraft.segments.sort((a, b) => a.start - b.start);
+        appDraft.segments = mergeAdjacentSegments(appDraft.segments);
       });
       delete ui.segmentDrafts[segmentId];
       ui.logDetailSegmentEditId = null;
