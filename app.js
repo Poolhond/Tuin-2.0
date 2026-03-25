@@ -5748,7 +5748,7 @@ function renderLogSheet(id){
     const pauseDraft = ui.logDetailPauseDraft;
 
     return `
-      <section class="compact-section stack">
+      <section class="stack">
         ${pauseDraft ? `
           <div class="pause-editor" role="group" aria-label="Pauze invoeren" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border-top:1px dashed var(--border); padding:12px 0 8px;">
             <div style="display:flex; align-items:center; gap:8px;">
@@ -5860,10 +5860,6 @@ function renderLogSheet(id){
           ${dateHeader}
           <div class="log-detail-hero-time">${globalRange}</div>
         </div>
-        <div style="width: 100%; border-top: 1px solid rgba(255,255,255,0.15); margin-top: 18px; padding-top: 10px;">
-          ${renderSegments(currentLog, editing)}
-          ${renderGreenRow(currentLog)}
-        </div>
       </section>
     `;
   }
@@ -5881,11 +5877,19 @@ function renderLogSheet(id){
         ${renderLogHeader(log, isEditing)}
       </div>
 
-      <section class="compact-section stack log-detail-flow">
+      <section class="stack log-detail-flow">
+        <div class="row space">
+          <div class="item-title">Producten</div>
+        </div>
+        ${renderGreenRow(log)}
         <div class="log-lines-wrap">
           ${renderProducts(log, { context: "log", isEditing })}
         </div>
       </section>
+
+      <div class="log-detail-flow">
+        ${renderSegments(log, isEditing)}
+      </div>
 
       <section class="compact-section log-detail-footer-actions">
         <span class="pill ${statusPillClass}">${statusLabel}</span>
