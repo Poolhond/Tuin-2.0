@@ -1478,7 +1478,7 @@ body:not([data-view="meer"]) #moreActionBar{
 
 .log-detail-compact .compact-section{
   border-bottom:1px solid var(--border);
-  padding:8px 0;
+  padding:12px 36px;
 }
 
 .log-detail-view .log-detail-flow.compact-section,
@@ -1656,6 +1656,11 @@ body:not([data-view="meer"]) #moreActionBar{
   border-bottom:0;
 }
 
+.log-detail-note-section{
+  border-bottom:0;
+  padding:2px 36px 6px;
+}
+
 .log-detail-footer-actions{
   display:flex;
   align-items:center;
@@ -1724,7 +1729,7 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-ghost-note-container {
-  padding: 0 20px;
+  padding: 0 36px;
   margin-bottom: -5px;
   display: flex;
   justify-content: center;
