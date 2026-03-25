@@ -1560,6 +1560,13 @@ body:not([data-view="meer"]) #moreActionBar{
   z-index:1;
 }
 
+.log-detail-header-sections{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
 .log-detail-hero-weekday {
   font-size:17px;
   font-weight:500;
