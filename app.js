@@ -5853,7 +5853,6 @@ function renderLogSheet(id){
       <section class="compact-section log-detail-header log-detail-header--${esc(visual.state)}">
         <div class="log-detail-hero-context">
           <span class="log-detail-hero-customer">${esc(customerName)}</span>
-          <span class="log-detail-hero-context-separator" aria-hidden="true"> · </span>
           <span class="log-detail-hero-total">${esc(formatDurationCompact(totalMinutes))}</span>
         </div>
         <div class="log-detail-hero-center">
