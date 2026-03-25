@@ -5692,9 +5692,6 @@ function renderLogSheet(id){
       </div>
 
       <section class="compact-section stack log-detail-flow">
-        <div class="row space">
-          <div class="item-title">Producten</div>
-        </div>
         <div class="log-lines-wrap">
           ${renderProducts(log, { context: "log", isEditing })}
         </div>
