@@ -1500,19 +1500,19 @@ body:not([data-view="meer"]) #moreActionBar{
   margin:0 0 10px;
   padding:20px 24px 26px;
   border-radius:20px;
-  border:1px solid color-mix(in srgb, var(--hero-base-color, var(--muted)) 30%, transparent);
-  background: color-mix(in srgb, var(--hero-base-color, var(--muted)) 16%, var(--surface));
+  border:none;
+  background: var(--surface2);
   display:flex;
   flex-direction:column;
   align-items:center;
   gap:6px;
 }
 
-.log-detail-header--free{ --hero-base-color: var(--blue-muted); }
-.log-detail-header--linked{ --hero-base-color: #ffcc00; }
-.log-detail-header--calculated{ --hero-base-color: #ff8c00; }
-.log-detail-header--paid{ --hero-base-color: #00a05a; }
-.log-detail-header--fixed{ --hero-base-color: #9358dc; }
+.log-detail-header--free{ background: var(--surface2); }
+.log-detail-header--linked{ background: var(--status-linked-bg); }
+.log-detail-header--calculated{ background: var(--status-calculated-bg); }
+.log-detail-header--paid{ background: var(--status-paid-bg); }
+.log-detail-header--fixed{ background: var(--status-fixed-bg); }
 
 .log-detail-hero-context{
   width:100%;
