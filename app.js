@@ -5757,7 +5757,7 @@ function renderLogSheet(id){
   });
 
   $("#sheetBody").querySelectorAll("[data-quick-edit-date]").forEach(inp=>{
-    inp.addEventListener("change", (event)=>{
+    inp.addEventListener("blur", (event)=>{
       const nextDate = event.target?.value;
       if (!nextDate) return;
       if (nextDate > formatLocalYMD(new Date())) return;
@@ -5769,7 +5769,7 @@ function renderLogSheet(id){
   });
 
   $("#sheetBody").querySelectorAll(".hero-time-hidden-input").forEach(inp=>{
-    inp.addEventListener("change", (event)=>{
+    inp.addEventListener("blur", (event)=>{
       const target = event.target;
       const nextTime = target?.value;
       const segmentId = target?.dataset?.quickEditSegment;
