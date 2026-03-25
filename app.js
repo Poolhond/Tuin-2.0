@@ -1783,8 +1783,6 @@ const ui = {
   transition: null,
   logDetailSegmentEditId: null,
   logDetailPauseDraft: null,
-  logDateEditSnapshot: {},
-  logDateDraft: {},
   segmentDrafts: {},
   settlementDateDraft: {},
   customerDetailEditingId: null,
@@ -1884,7 +1882,6 @@ const actions = {
   },
   deleteLog(logId){
     state.logs = state.logs.filter(x => x.id !== logId);
-    delete ui.logDateEditSnapshot[logId];
     if (state.activeLogId === logId) state.activeLogId = null;
     for (const s of state.settlements){
       s.logIds = (s.logIds || []).filter(id => id !== logId);
@@ -2079,23 +2076,8 @@ const actions = {
 
 function toggleEditLog(logId){
   const isLeavingEdit = state.ui.editLogId === logId;
-  if (!isLeavingEdit){
+  if (isLeavingEdit){
     const log = state.logs.find(item => item.id === logId);
-    if (log) {
-      ui.logDateEditSnapshot[logId] = log.date || "";
-      ui.logDateDraft[logId] = log.date || "";
-    }
-  } else {
-    const log = state.logs.find(item => item.id === logId);
-
-    // Auto-commit pending date draft (als gebruiker datum aanpaste maar vinkje niet klikte)
-    const pendingDate = ui.logDateDraft[logId];
-    if (log && pendingDate && pendingDate !== ui.logDateEditSnapshot[logId]) {
-      if (pendingDate <= formatLocalYMD(new Date())) {
-        setLogDay(log, pendingDate);
-      }
-    }
-
     // Auto-commit pending segment drafts (als gebruiker tijden aanpaste maar vinkje niet klikte)
     if (log) {
       (log.segments || []).forEach(s => {
@@ -2110,9 +2092,6 @@ function toggleEditLog(logId){
         delete ui.segmentDrafts[s.id];
       });
     }
-
-    delete ui.logDateEditSnapshot[logId];
-    delete ui.logDateDraft[logId];
   }
   ui.logDetailPauseDraft = null;
   actions.setEditLog(logId);
@@ -2123,19 +2102,9 @@ function cancelLogDateEditIfNeeded(){
   if (active.view !== "logDetail") return;
   const logId = active.id;
   if (state.ui.editLogId !== logId) return;
-  const originalDate = ui.logDateEditSnapshot[logId];
-  if (originalDate == null) return;
-
   const log = state.logs.find(item => item.id === logId);
-  if (log && log.date !== originalDate){
-    log.date = originalDate;
-    saveState(state);
-  }
-
   state.ui.editLogId = null;
   ui.logDetailSegmentEditId = null;
-  delete ui.logDateEditSnapshot[logId];
-  delete ui.logDateDraft[logId];
   if (log) (log.segments || []).forEach(s => delete ui.segmentDrafts[s.id]);
 }
 
@@ -5666,15 +5635,14 @@ function renderLogSheet(id){
     const totalMinutes = Math.floor(sumWorkMs(currentLog) / 60000);
     const customerName = cname(currentLog.customerId) || "—";
     const dateInputValue = formatLocalYMD(new Date(currentLog.date));
-    const draftDate = ui.logDateDraft[currentLog.id] != null ? ui.logDateDraft[currentLog.id] : dateInputValue;
-    const dateHeader = editing
-      ? `
-        <div class="log-detail-date-edit" role="group" aria-label="Datum bewerken">
-          <input id="logDateInput" class="log-detail-date-input" type="date" value="${esc(draftDate)}" max="${formatLocalYMD(new Date())}" />
-          <button class="iconbtn iconbtn-sm" id="btnCommitLogDate" type="button" aria-label="Bevestig datum" title="Bevestig datum"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L19 7" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
-        </div>
-      `
-      : `<div class="log-detail-hero-date">${esc(prettyDate || currentLog.date || "—")}</div>`;
+    const dateHeader = `
+      <div class="log-detail-hero-date">
+        <span class="hero-date-wrapper">
+          <span aria-hidden="true">${esc(prettyDate || currentLog.date || "—")}</span>
+          <input type="date" class="hero-date-hidden-input" data-quick-edit-date="true" value="${esc(dateInputValue)}" max="${formatLocalYMD(new Date())}" />
+        </span>
+      </div>
+    `;
 
     return `
       <section class="compact-section log-detail-header log-detail-header--${esc(visual.state)}">
@@ -5788,21 +5756,16 @@ function renderLogSheet(id){
     });
   });
 
-  $("#logDateInput")?.addEventListener("change", (event)=>{
-    const nextDate = event.target?.value;
-    if (!nextDate) return;
-    if (nextDate > formatLocalYMD(new Date())) return;
-    ui.logDateDraft[log.id] = nextDate;
-  });
-
-  $("#btnCommitLogDate")?.addEventListener("click", ()=>{
-    const nextDate = ui.logDateDraft[log.id];
-    if (!nextDate) return;
-    if (nextDate > formatLocalYMD(new Date())) return;
-    actions.editLog(log.id, (draft)=>{
-      setLogDay(draft, nextDate);
+  $("#sheetBody").querySelectorAll("[data-quick-edit-date]").forEach(inp=>{
+    inp.addEventListener("change", (event)=>{
+      const nextDate = event.target?.value;
+      if (!nextDate) return;
+      if (nextDate > formatLocalYMD(new Date())) return;
+      actions.editLog(log.id, (draft)=>{
+        setLogDay(draft, nextDate);
+      });
+      renderSheet();
     });
-    delete ui.logDateDraft[log.id];
   });
 
   $("#sheetBody").querySelectorAll(".hero-time-hidden-input").forEach(inp=>{
