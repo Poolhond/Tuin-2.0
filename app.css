@@ -415,23 +415,7 @@ label{ display:block; font-size:12px; color:var(--muted); margin: 0 0 6px 0; }
 }
 
 
-.status-tabbar-host.hidden,
-#statusTabbarHost.hidden{
-  display:none !important;
-  height:0 !important;
-  padding:0 !important;
-  margin:0 !important;
-  border:0 !important;
-}
-
-.detail-actionbar-host.hidden,
-#detailActionbarHost.hidden{
-  display:none !important;
-  height:0 !important;
-  padding:0 !important;
-  margin:0 !important;
-  border:0 !important;
-}
+/* Redundante .hidden declaraties verwijderd ter optimalisatie */
 
 .tabs,
 .status-tabbar{
@@ -627,7 +611,6 @@ label{ display:block; font-size:12px; color:var(--muted); margin: 0 0 6px 0; }
 }
 
 
-#moreActionBar.hidden,
 body:not([data-view="meer"]) #moreActionBar{
   display:none !important;
   height:0 !important;
