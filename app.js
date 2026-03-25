@@ -5557,7 +5557,7 @@ function renderLogSheet(id){
           </div>
         ` : ""}
         <div class="compact-lines">
-          ${segments.map(s=>{
+          ${segments.filter(s => s.type === "break").map(s=>{
             const start = s.start ? fmtClock(s.start) : "…";
             const end = s.end ? fmtClock(s.end) : "…";
             const segmentDuration = calculateDuration(start, end);
@@ -5592,7 +5592,7 @@ function renderLogSheet(id){
                 ` : ""}
               </div>
             `;
-          }).join("") || `<div class="small">Geen segmenten.</div>`}
+          }).join("") || `<div class="small">Geen pauzes geregistreerd.</div>`}
         </div>
       </section>
     `;
