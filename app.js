@@ -110,7 +110,7 @@ function formatDurationCompact(totalMinutes){
   const minutes = Math.max(0, Math.floor(Number(totalMinutes) || 0));
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return `${h}u${String(m).padStart(2, "0")}m`;
+  return `${h}u ${String(m).padStart(2, "0")}m`;
 }
 function round2(n){ return Math.round((Number(n||0))*100)/100; }
 
@@ -4228,7 +4228,7 @@ function fmtDurationShort(ms) {
   const m = Math.round((ms % 3600000) / 60000);
   if (h === 0) return `${m}m`;
   if (m === 0) return `${h}u`;
-  return `${h}u${m}m`;
+  return `${h}u ${m}m`;
 }
 
 function renderCustomerInsightsPreview(customers, mode) {
