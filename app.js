@@ -2949,6 +2949,11 @@ function renderLogs(){
     timerBlock = `
       <div class="timer-widget-card">
         <div class="timer-idle timer-idle--compact">
+          <div style="display:flex;justify-content:center;margin-bottom:12px;">
+            <button class="timer-action-btn green-btn" id="btnIdleStart" title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
           ${cloud
             ? `<div class="start-cloud recent-customers recent-customers--compact">${cloud}</div>`
             : `<div class="timer-idle-sub">Geen recente klanten</div>`}
@@ -3023,6 +3028,14 @@ function renderLogs(){
       openSheet("log", active.id);
     });
   } else {
+    const idleStartBtn = $("#btnIdleStart");
+    if (idleStartBtn){
+      idleStartBtn.style.webkitTapHighlightColor = "transparent";
+      idleStartBtn.addEventListener("click", (e)=>{
+        if (e) e.preventDefault();
+        pushView({ view: "newLog" });
+      });
+    }
     // Recent customer chips: start work directly
     el.querySelectorAll("[data-start-customer]").forEach(chip=>{
       chip.addEventListener("click", ()=>{
