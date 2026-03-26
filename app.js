@@ -2900,23 +2900,25 @@ function renderLogs(){
     const isPaused = currentOpenSegment(active)?.type === "break";
     const greenCount = countGreenItems(active);
     timerBlock = `
-      <div class="timer-active">
-        <div class="timer-active-customer">${esc(cname(active.customerId))}</div>
-        <div class="timer-active-elapsed">${durMsToHM(sumWorkMs(active))}</div>
-        <div class="timer-active-meta"><span class="timer-state-dot ${isPaused ? "is-paused" : "is-running"}"></span>${isPaused ? "Pauze actief" : "Timer loopt"} · gestart ${fmtClock(active.createdAt)}</div>
-        <div class="timer-green-feedback ${greenCount > 0 ? "has-items" : ""}">${greenCount > 0 ? `🌿 Groen toegevoegd: ${greenCount}x` : "Nog geen groen toegevoegd"}</div>
-        <div class="timer-active-actions">
-          <button class="timer-action-btn pause-btn ${isPaused ? "is-paused" : "is-running"}" id="btnPause" title="${isPaused ? "Hervat werk" : "Pauze"}" aria-label="${isPaused ? "Hervat werk" : "Pauze"}">
-            ${isPaused
-              ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>`
-              : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5v14M16 5v14" stroke-linecap="round"/></svg>`}
-          </button>
-          <button class="timer-action-btn green-btn" id="btnAddGreen" title="Voeg 1x groen toe" aria-label="Voeg 1x groen (snoeiafval) toe">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19c-3.5 0-6-2.6-6-6.2 0-3.8 2.8-6.6 6.9-7.8.8 4.7 3.8 6.7 5.1 8.8 1.3 2.2-.5 5.2-6 5.2z" stroke-linejoin="round"/><path d="M12 19v-6" stroke-linecap="round"/></svg>
-          </button>
-          <button class="timer-action-btn stop-btn" id="btnStop" title="Stop" aria-label="Stop werklog">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
-          </button>
+      <div class="timer-widget-card">
+        <div class="timer-active">
+          <div class="timer-active-customer">${esc(cname(active.customerId))}</div>
+          <div class="timer-active-elapsed">${durMsToHM(sumWorkMs(active))}</div>
+          <div class="timer-active-meta"><span class="timer-state-dot ${isPaused ? "is-paused" : "is-running"}"></span>${isPaused ? "Pauze actief" : "Timer loopt"} · gestart ${fmtClock(active.createdAt)}</div>
+          <div class="timer-green-feedback ${greenCount > 0 ? "has-items" : ""}">${greenCount > 0 ? `🌿 Groen toegevoegd: ${greenCount}x` : "Nog geen groen toegevoegd"}</div>
+          <div class="timer-active-actions">
+            <button class="timer-action-btn pause-btn ${isPaused ? "is-paused" : "is-running"}" id="btnPause" title="${isPaused ? "Hervat werk" : "Pauze"}" aria-label="${isPaused ? "Hervat werk" : "Pauze"}">
+              ${isPaused
+                ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>`
+                : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5v14M16 5v14" stroke-linecap="round"/></svg>`}
+            </button>
+            <button class="timer-action-btn green-btn" id="btnAddGreen" title="Voeg 1x groen toe" aria-label="Voeg 1x groen (snoeiafval) toe">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19c-3.5 0-6-2.6-6-6.2 0-3.8 2.8-6.6 6.9-7.8.8 4.7 3.8 6.7 5.1 8.8 1.3 2.2-.5 5.2-6 5.2z" stroke-linejoin="round"/><path d="M12 19v-6" stroke-linecap="round"/></svg>
+            </button>
+            <button class="timer-action-btn stop-btn" id="btnStop" title="Stop" aria-label="Stop werklog">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -2945,9 +2947,11 @@ function renderLogs(){
     `).join("");
 
     timerBlock = `
-      <div class="start-block">
+      <div class="timer-widget-card">
         <div class="timer-idle timer-idle--compact">
-          ${cloud ? `<div class="start-cloud recent-customers recent-customers--compact">${cloud}</div>` : `<div class="timer-idle-sub">Maak eerst een klant aan via Meer</div>`}
+          ${cloud
+            ? `<div class="start-cloud recent-customers recent-customers--compact">${cloud}</div>`
+            : `<div class="timer-idle-sub">Geen recente klanten</div>`}
         </div>
       </div>
     `;
