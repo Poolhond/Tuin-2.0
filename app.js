@@ -31,6 +31,12 @@ const esc = (s) => String(s ?? "")
   .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
   .replaceAll('"',"&quot;").replaceAll("'","&#039;");
 
+function autoResizeTextarea(el){
+  if (!(el instanceof HTMLTextAreaElement)) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
+}
+
 function fmtMoney(n){
   const v = Number(n||0);
   return "€" + v.toFixed(2).replace(".", ",");
@@ -5943,10 +5949,18 @@ function renderLogSheet(id){
     openSheet("settlement", linkedAfrekeningId);
   });
 
+  const logNoteEl = $("#logNote");
+  if (logNoteEl){
+    autoResizeTextarea(logNoteEl);
+    logNoteEl.addEventListener("input", ()=>{
+      autoResizeTextarea(logNoteEl);
+    });
+  }
+
   // wire (autosave)
-  $("#logNote")?.addEventListener("change", ()=>{
+  logNoteEl?.addEventListener("change", ()=>{
     actions.editLog(log.id, (draft)=>{
-      draft.note = ($("#logNote").value||"").trim();
+      draft.note = (logNoteEl.value||"").trim();
     });
   });
 

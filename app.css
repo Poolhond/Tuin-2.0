@@ -1736,10 +1736,11 @@ body:not([data-view="meer"]) #moreActionBar{
   background: transparent !important;
   border: none !important;
   color: var(--muted) !important;
-  font-size: 13px;
+  font-size: 16px;
+  line-height: 1.45;
   text-align: center;
   resize: none;
-  overflow: hidden;
+  overflow-y: hidden;
   padding: 8px;
   min-height: 34px;
   border-radius: 0;
