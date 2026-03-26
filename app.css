@@ -1492,25 +1492,27 @@ body:not([data-view="meer"]) #moreActionBar{
 }
 
 .log-detail-header .segment-row-main,
-.log-detail-header .segment-duration,
-.log-detail-header .log-green-icon,
 .log-detail-header .log-green-qty {
-  color: rgba(255, 255, 255, 0.95) !important;
+  color: var(--text);
+}
+.log-detail-header .segment-duration,
+.log-detail-header .log-green-icon {
+  color: var(--muted);
 }
 .log-detail-header .iconbtn-sm {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
 }
 .log-detail-header .iconbtn-sm:active {
-  background: rgba(255, 255, 255, 0.25);
+  background: transparent;
 }
 .log-detail-header .compact-section {
   border-bottom: none;
   width: 100%;
 }
 .log-detail-header .segment-row-btn {
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--text);
 }
 
 .log-detail-header--free{ background: var(--surface2); }
