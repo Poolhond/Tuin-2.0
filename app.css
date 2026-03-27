@@ -2669,22 +2669,20 @@ h2{
 .cloud-chip{
   appearance:none;
   -webkit-appearance:none;
-  border:1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
-  background:color-mix(in srgb, var(--accent) 14%, var(--surface));
-  color:var(--text);
-  padding:7px 12px;
-  border-radius:999px;
-  font-size:13px;
-  font-weight:650;
+  border:1px solid transparent;
+  background:transparent;
+  color:var(--blue-muted);
+  padding:12px 12px;
+  border-radius:12px;
+  font-size:16px;
+  font-weight:700;
   line-height:1;
   cursor:pointer;
   -webkit-tap-highlight-color:transparent;
-  transition:transform .12s ease, border-color .12s ease, background .12s ease;
+  transition:opacity .12s ease;
 }
 .cloud-chip:active{
-  transform:translateY(1px) scale(.985);
-  background:color-mix(in srgb, var(--accent) 24%, var(--surface));
-  border-color:color-mix(in srgb, var(--accent) 46%, var(--border));
+  opacity:.72;
 }
 
 .recent-customers--compact{
@@ -2692,8 +2690,8 @@ h2{
 }
 
 .recent-customers--compact .cloud-chip{
-  padding:7px 12px;
-  font-size:13px;
+  padding:12px 12px;
+  font-size:17px;
 }
 
 .timer-active{
