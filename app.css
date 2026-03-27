@@ -2609,8 +2609,8 @@ h2{
   padding:20px 0 16px;
 }
 .timer-idle--compact{
-  gap:10px;
-  padding:12px 0 10px;
+  gap:6px;
+  padding:4px 0 2px;
 }
 .timer-idle-cta{
   display:flex;
@@ -2660,9 +2660,9 @@ h2{
 .start-cloud{
   display:flex;
   flex-wrap:wrap;
-  gap:8px;
-  align-items:flex-start;
-  justify-content:center;
+  gap:8px 12px;
+  align-items:center;
+  justify-content:flex-start;
   align-content:flex-start;
   width:100%;
 }
@@ -2672,11 +2672,11 @@ h2{
   border:1px solid transparent;
   background:transparent;
   color:var(--blue-muted);
-  padding:12px 12px;
-  border-radius:12px;
+  padding:2px 0;
+  border-radius:8px;
   font-size:16px;
   font-weight:700;
-  line-height:1;
+  line-height:1.15;
   cursor:pointer;
   -webkit-tap-highlight-color:transparent;
   transition:opacity .12s ease;
@@ -2686,11 +2686,11 @@ h2{
 }
 
 .recent-customers--compact{
-  gap:6px;
+  gap:8px 12px;
 }
 
 .recent-customers--compact .cloud-chip{
-  padding:12px 12px;
+  padding:1px 0;
   font-size:17px;
 }
 
@@ -2792,6 +2792,16 @@ h2{
 .timer-action-btn.stop-btn{
   border-color:rgba(255,107,107,.45);
   color:#ff6b6b;
+}
+
+.timer-idle--compact .idle-start-btn{
+  width:44px;
+  height:44px;
+  flex:0 0 44px;
+}
+.timer-idle--compact .idle-start-btn .icon{
+  width:20px;
+  height:20px;
 }
 
 .logs-section-header{

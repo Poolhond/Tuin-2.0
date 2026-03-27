@@ -2949,14 +2949,16 @@ function renderLogs(){
     timerBlock = `
       <div class="timer-widget-card">
         <div class="timer-idle timer-idle--compact">
-          <div style="display:flex;justify-content:center;margin-bottom:12px;">
-            <button class="timer-action-btn green-btn" id="btnIdleStart" title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>
-            </button>
-          </div>
           ${cloud
-            ? `<div class="start-cloud recent-customers recent-customers--compact">${cloud}</div>`
-            : `<div class="timer-idle-sub">Geen recente klanten</div>`}
+            ? `<div class="start-cloud recent-customers recent-customers--compact">
+                <button class="timer-action-btn green-btn idle-start-btn" id="btnIdleStart" title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>
+                </button>
+                ${cloud}
+              </div>`
+            : `<button class="timer-action-btn green-btn idle-start-btn" id="btnIdleStart" title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>
+              </button>`}
         </div>
       </div>
     `;
