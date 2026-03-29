@@ -2951,8 +2951,8 @@ function renderLogs(){
         <div class="timer-idle timer-idle--compact">
           ${cloud
             ? `<div class="start-cloud recent-customers recent-customers--compact">
-                <button class="timer-action-btn green-btn idle-start-btn" id="btnIdleStart" title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
-                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>
+                <button class="cloud-play-btn" id="btnIdleStart" title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
+                  <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 6l10 6-10 6z"/></svg>
                 </button>
                 ${cloud}
               </div>`
