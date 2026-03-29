@@ -1194,7 +1194,8 @@ function statusClassFromStatus(s){
   if (s === "calculated") return "status-calculated";
   if (s === "paid") return "status-paid";
   if (s === "fixed") return "status-fixed";
-  return "";
+  if (s === "free") return "status-free";
+  return "status-free";
 }
 function getLogVisualState(log){
   const state = logStatus(log.id);

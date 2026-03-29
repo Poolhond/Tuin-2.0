@@ -33,6 +33,8 @@
   --status-paid-border: rgba(0, 160, 90, 0.9);
   --status-fixed-bg: rgba(147, 88, 220, 0.12);
   --status-fixed-border: rgba(147, 88, 220, 0.88);
+  --status-free-bg: color-mix(in srgb, var(--blue-muted) 14%, transparent);
+  --status-free-border: var(--blue-muted);
 }
 
 body[data-theme="day"]{
@@ -2183,6 +2185,7 @@ body:not([data-view="meer"]) #moreActionBar{
 .status-calculated{ background: var(--status-calculated-bg); border-left:4px solid var(--status-calculated-border); }
 .status-paid{ background: var(--status-paid-bg); border-left:4px solid var(--status-paid-border); }
 .status-fixed{ background: var(--status-fixed-bg); border-left:4px solid var(--status-fixed-border); }
+.status-free{ background: var(--status-free-bg); border-left:4px solid var(--status-free-border); }
 
 .sheet-actions{ display:flex; gap:8px; }
 
@@ -2555,6 +2558,11 @@ h2{
   pointer-events:none;
 }
 /* Preserve status color accents in flat lists */
+.flat-list .item.status-free{
+  background: var(--status-free-bg);
+  border-left:4px solid var(--status-free-border);
+  padding-left:10px;
+}
 .flat-list .item.status-linked{
   background: var(--status-linked-bg);
   border-left:4px solid var(--status-linked-border);
@@ -2575,6 +2583,7 @@ h2{
   border-left:4px solid var(--status-fixed-border);
   padding-left:10px;
 }
+.flat-list--logbook .item.status-free,
 .flat-list--logbook .item.status-linked,
 .flat-list--logbook .item.status-calculated,
 .flat-list--logbook .item.status-paid,
