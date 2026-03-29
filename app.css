@@ -2693,6 +2693,32 @@ h2{
   padding:1px 0;
   font-size:17px;
 }
+.cloud-play-btn{
+  appearance:none;
+  -webkit-appearance:none;
+  border:none;
+  background:transparent;
+  color:var(--text);
+  padding:1px 0;
+  margin:0;
+  border-radius:0;
+  font-size:17px;
+  line-height:1.15;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  transition:opacity .12s ease;
+}
+.cloud-play-btn .icon{
+  width:1em;
+  height:1em;
+  display:block;
+}
+.cloud-play-btn:active{
+  opacity:.6;
+}
 
 .timer-active{
   display:flex;
