@@ -13,24 +13,27 @@
 <body>
   <div class="viewport">
     <header class="topbar">
-      <div class="topbar-left">
-        <button class="iconbtn ghost" id="btnBack" aria-label="Terug" title="Terug">
-          <svg class="icon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <div class="titlewrap">
-          <div class="topbar-headline">
-            <div class="apptitle" id="topbarTitle">Logboek</div>
-            <div class="topbar-metric mono hidden" id="topbarMetric"></div>
+      <div id="topbar-widget-container" class="topbar-widget-container hidden" aria-hidden="true"></div>
+      <div class="topbar-main-row">
+        <div class="topbar-left">
+          <button class="iconbtn ghost" id="btnBack" aria-label="Terug" title="Terug">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="titlewrap">
+            <div class="topbar-headline">
+              <div class="apptitle" id="topbarTitle">Logboek</div>
+              <div class="topbar-metric mono hidden" id="topbarMetric"></div>
+            </div>
+            <div class="topsubtitle hidden" id="topbarSubtitle"></div>
           </div>
-          <div class="topsubtitle hidden" id="topbarSubtitle"></div>
         </div>
-      </div>
-      <div class="topbar-period-host hidden" id="topbarPeriodHost"></div>
-      <div class="topbar-right">
-        <div id="topbarRightInfo" class="topbar-right-info mono hidden"></div>
-        <button class="iconbtn ghost" id="btnNewLog" aria-label="Nieuwe werklog" title="Nieuwe werklog">
-          <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        </button>
+        <div class="topbar-period-host hidden" id="topbarPeriodHost"></div>
+        <div class="topbar-right">
+          <div id="topbarRightInfo" class="topbar-right-info mono hidden"></div>
+          <button class="iconbtn ghost" id="btnNewLog" aria-label="Nieuwe werklog" title="Nieuwe werklog">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
       </div>
     </header>
 

@@ -13,6 +13,8 @@ if ("serviceWorker" in navigator) {
 
 const STORAGE_KEY = "tuinlog_mvp_v1";
 const START_TOP_LIMIT = 8;
+const TOPBAR_COLLAPSE_SCROLL_DELTA = 6;
+const TOPBAR_COLLAPSE_MIN_TOP = 48;
 const $ = (s) => document.querySelector(s);
 const NAV_TRANSITION_MS = 240;
 const NAV_TRANSITION_EASING = "cubic-bezier(0.22, 0.61, 0.36, 1)";
@@ -2310,6 +2312,77 @@ function renderInsightsTopbarPeriodSelector(active){
   });
 }
 
+const topbarScrollState = {
+  scroller: null,
+  handler: null,
+  lastTop: 0
+};
+
+function setTopbarWidgetContent(html){
+  const host = $("#topbar-widget-container");
+  if (!host) return;
+  const content = String(html || "").trim();
+  host.innerHTML = content;
+  host.classList.toggle("hidden", !content);
+  host.setAttribute("aria-hidden", content ? "false" : "true");
+
+  if (!content){
+    host.style.height = "";
+    host.style.opacity = "";
+    return;
+  }
+  host.style.height = "auto";
+  host.style.height = `${host.scrollHeight}px`;
+  host.style.opacity = "1";
+}
+
+function updateTopbarHeightVar(){
+  const topbar = document.querySelector(".topbar");
+  const height = topbar && !topbar.classList.contains("hidden")
+    ? Math.ceil(topbar.getBoundingClientRect().height)
+    : 0;
+  document.documentElement.style.setProperty("--topbar-height", `${height}px`);
+}
+
+function syncTopbarCollapseBinding(){
+  const topbar = document.querySelector(".topbar");
+  const active = currentView();
+  const isLogsRoot = ui.navStack.length === 1 && active.view === "logs";
+  const nextScroller = isLogsRoot
+    ? document.querySelector("#rootPage.active .page-inner") || document.querySelector("#rootPage .page-inner")
+    : null;
+
+  if (topbarScrollState.scroller && topbarScrollState.handler){
+    topbarScrollState.scroller.removeEventListener("scroll", topbarScrollState.handler);
+    topbarScrollState.scroller = null;
+    topbarScrollState.handler = null;
+  }
+
+  topbar?.classList.remove("topbar--collapsed");
+  if (!isLogsRoot || !nextScroller || !topbar){
+    updateTopbarHeightVar();
+    return;
+  }
+
+  topbarScrollState.lastTop = nextScroller.scrollTop || 0;
+  const onScroll = ()=>{
+    const top = nextScroller.scrollTop || 0;
+    const delta = top - topbarScrollState.lastTop;
+    if (delta > TOPBAR_COLLAPSE_SCROLL_DELTA && top > TOPBAR_COLLAPSE_MIN_TOP){
+      topbar.classList.add("topbar--collapsed");
+    } else if (delta < -TOPBAR_COLLAPSE_SCROLL_DELTA || top <= 0){
+      topbar.classList.remove("topbar--collapsed");
+    }
+    topbarScrollState.lastTop = top;
+    updateTopbarHeightVar();
+  };
+
+  topbarScrollState.scroller = nextScroller;
+  topbarScrollState.handler = onScroll;
+  nextScroller.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+}
+
 function renderTopbar(){
   const active = currentView();
   const topbar = document.querySelector(".topbar");
@@ -2319,10 +2392,15 @@ function renderTopbar(){
   const rightInfoEl = $("#topbarRightInfo");
   const topbarLeft = topbar.querySelector(".topbar-left");
   const topbarRight = topbar.querySelector(".topbar-right");
+  const widgetHost = $("#topbar-widget-container");
+  const showWidget = ui.navStack.length === 1 && active.view === "logs";
   let linkedCustomerId = "";
   topbar.classList.remove("nav--free", "nav--linked", "nav--calculated", "nav--paid", "nav--fixed", "topbar--period-only");
   topbar.classList.remove("topbar--log-detail");
+  if (!showWidget) topbar.classList.remove("topbar--collapsed");
   topbar.classList.remove("hidden");
+  widgetHost?.classList.toggle("hidden", !showWidget || !(widgetHost?.innerHTML || "").trim());
+  widgetHost?.setAttribute("aria-hidden", showWidget && (widgetHost?.innerHTML || "").trim() ? "false" : "true");
   subtitleEl.classList.add("hidden");
   subtitleEl.textContent = "";
   metricEl.classList.add("hidden");
@@ -2788,6 +2866,8 @@ function render(){
   if (root === "meer") renderMeer();
 
   renderTopbar();
+  syncTopbarCollapseBinding();
+  requestAnimationFrame(updateTopbarHeightVar);
 
   const detailPage = $("#detailPage");
   const rootPage = $("#rootPage");
@@ -2825,6 +2905,11 @@ function render(){
   }
   ui.transition = null;
 }
+
+window.addEventListener("resize", ()=>{
+  syncTopbarCollapseBinding();
+  requestAnimationFrame(updateTopbarHeightVar);
+});
 
 function getLogTimestamp(log){
   const createdAt = Number(log?.createdAt);
@@ -2890,6 +2975,7 @@ function applyFiltersAndSort(logs){
 
 function renderLogs(){
   const el = $("#tab-logs");
+  const widgetHost = $("#topbar-widget-container");
   const active = state.activeLogId ? state.logs.find(l => l.id === state.activeLogId) : null;
   const logbook = state.logbook || {};
   const period = logbook.period || "all";
@@ -3000,15 +3086,16 @@ function renderLogs(){
         ${showRestore ? `<button class="btn ghost" id="btnRestoreLogFilters">Herstel</button>` : ""}
       </div>
     </div>
-    <div class="stack stack-tight stack-logs">${timerBlock}<div class="flat-list flat-list--logbook">${list}</div></div>
+    <div class="stack stack-tight stack-logs"><div class="flat-list flat-list--logbook">${list}</div></div>
   `;
+  setTopbarWidgetContent(timerBlock);
 
   // Timer-first actions
   if (active){
-    $("#btnPause")?.addEventListener("click", ()=>{
+    widgetHost?.querySelector("#btnPause")?.addEventListener("click", ()=>{
       actions.pauseLog(active.id);
     });
-    const greenBtn = $("#btnAddGreen");
+    const greenBtn = widgetHost?.querySelector("#btnAddGreen");
     if (greenBtn){
       // Hard prevent accidental selection/open
       greenBtn.addEventListener("contextmenu", (e)=> e.preventDefault());
@@ -3022,16 +3109,16 @@ function renderLogs(){
         (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +0.5); }
       );
     }
-    $("#btnStop")?.addEventListener("click", ()=>{
+    widgetHost?.querySelector("#btnStop")?.addEventListener("click", ()=>{
       actions.stopLog(active.id);
     });
     // Tap timer block to open active log detail
-    $(".timer-active")?.addEventListener("click", (e)=>{
+    widgetHost?.querySelector(".timer-active")?.addEventListener("click", (e)=>{
       if (e.target.closest("button")) return;
       openSheet("log", active.id);
     });
   } else {
-    const idleStartBtn = $("#btnIdleStart");
+    const idleStartBtn = widgetHost?.querySelector("#btnIdleStart");
     if (idleStartBtn){
       idleStartBtn.style.webkitTapHighlightColor = "transparent";
       idleStartBtn.addEventListener("click", (e)=>{
@@ -3040,7 +3127,7 @@ function renderLogs(){
       });
     }
     // Recent customer chips: start work directly
-    el.querySelectorAll("[data-start-customer]").forEach(chip=>{
+    widgetHost?.querySelectorAll("[data-start-customer]").forEach(chip=>{
       chip.addEventListener("click", ()=>{
         const cid = chip.getAttribute("data-start-customer");
         if (cid) startWorkLog(cid);
