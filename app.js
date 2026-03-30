@@ -13,8 +13,7 @@ if ("serviceWorker" in navigator) {
 
 const STORAGE_KEY = "tuinlog_mvp_v1";
 const START_TOP_LIMIT = 8;
-const TOPBAR_COLLAPSE_SCROLL_DELTA = 6;
-const TOPBAR_COLLAPSE_MIN_TOP = 48;
+const TOPBAR_COLLAPSE_TOP_THRESHOLD = 20;
 const $ = (s) => document.querySelector(s);
 const NAV_TRANSITION_MS = 240;
 const NAV_TRANSITION_EASING = "cubic-bezier(0.22, 0.61, 0.36, 1)";
@@ -2315,7 +2314,7 @@ function renderInsightsTopbarPeriodSelector(active){
 const topbarScrollState = {
   scroller: null,
   handler: null,
-  lastTop: 0
+  rafPending: false
 };
 
 function setTopbarWidgetContent(html){
@@ -2356,6 +2355,7 @@ function syncTopbarCollapseBinding(){
     topbarScrollState.scroller.removeEventListener("scroll", topbarScrollState.handler);
     topbarScrollState.scroller = null;
     topbarScrollState.handler = null;
+    topbarScrollState.rafPending = false;
   }
 
   topbar?.classList.remove("topbar--collapsed");
@@ -2364,23 +2364,24 @@ function syncTopbarCollapseBinding(){
     return;
   }
 
-  topbarScrollState.lastTop = nextScroller.scrollTop || 0;
-  const onScroll = ()=>{
+  const updateCollapsedState = ()=>{
     const top = nextScroller.scrollTop || 0;
-    const delta = top - topbarScrollState.lastTop;
-    if (delta > TOPBAR_COLLAPSE_SCROLL_DELTA && top > TOPBAR_COLLAPSE_MIN_TOP){
-      topbar.classList.add("topbar--collapsed");
-    } else if (delta < -TOPBAR_COLLAPSE_SCROLL_DELTA || top <= 0){
-      topbar.classList.remove("topbar--collapsed");
-    }
-    topbarScrollState.lastTop = top;
+    topbar.classList.toggle("topbar--collapsed", top > TOPBAR_COLLAPSE_TOP_THRESHOLD);
     updateTopbarHeightVar();
+  };
+  const onScroll = ()=>{
+    if (topbarScrollState.rafPending) return;
+    topbarScrollState.rafPending = true;
+    requestAnimationFrame(() => {
+      topbarScrollState.rafPending = false;
+      updateCollapsedState();
+    });
   };
 
   topbarScrollState.scroller = nextScroller;
   topbarScrollState.handler = onScroll;
   nextScroller.addEventListener("scroll", onScroll, { passive: true });
-  onScroll();
+  updateCollapsedState();
 }
 
 function renderTopbar(){
