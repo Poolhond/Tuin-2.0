@@ -3037,9 +3037,30 @@ h2{
 }
 .insights-section-header{
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
+}
+.insights-section-header.clickable{
+  min-height: 44px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.12s ease;
+}
+.insights-section-header.clickable:active{
+  opacity: 0.72;
+}
+.insights-section-icon{
+  width: 20px;
+  height: 20px;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.insights-section-icon .icon{
+  width: 20px;
+  height: 20px;
 }
 .insights-section-title{
   font-size: 11px;

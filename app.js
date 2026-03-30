@@ -4827,8 +4827,13 @@ function renderMeer(){
       <div class="rhythm-detail-container">${detailBlockHTML}</div>
 
       <div class="insights-section ins-cust-section">
-        <div class="insights-section-header">
-          <div class="insights-section-title">Klanten</div>
+        <div class="insights-section-header clickable" data-insights-target="customers" role="button" tabindex="0" aria-label="Open klantenlijst">
+          <div class="insights-section-icon" aria-hidden="true">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke-linecap="round"/>
+              <path d="M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/>
+            </svg>
+          </div>
         </div>
         <div class="ins-bars-list">
           ${renderCustomerInsightsPreview(customers, mode)}
@@ -4836,8 +4841,14 @@ function renderMeer(){
       </div>
 
       <div class="insights-section ins-cust-section">
-        <div class="insights-section-header">
-          <div class="insights-section-title">Producten</div>
+        <div class="insights-section-header clickable" data-insights-target="products" role="button" tabindex="0" aria-label="Open productlijst">
+          <div class="insights-section-icon" aria-hidden="true">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 8l-8-4-8 4 8 4 8-4Z" stroke-linejoin="round"/>
+              <path d="M4 8v8l8 4 8-4V8" stroke-linejoin="round"/>
+              <path d="M12 12v8" stroke-linecap="round"/>
+            </svg>
+          </div>
         </div>
         <div class="ins-bars-list">
           ${renderProductInsightsPreview(products, mode)}
@@ -4896,6 +4907,18 @@ function renderMeer(){
       state.ui.insightsDashboardMode = ui.insightsDashboardMode;
       saveState(state);
       renderMeer();
+    });
+  });
+
+  el.querySelectorAll(".insights-section-header.clickable[data-insights-target]").forEach(header => {
+    const target = header.dataset.insightsTarget;
+    if (!target) return;
+    const openTarget = () => pushView({ view: target });
+    header.addEventListener("click", openTarget);
+    header.addEventListener("keydown", e => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      openTarget();
     });
   });
 
