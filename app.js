@@ -2974,6 +2974,68 @@ function applyFiltersAndSort(logs){
   return [{ header: "", logs: filtered }];
 }
 
+function createQuickStartWidgetElement(){
+  if (state.activeLogId) return null;
+
+  const totals = customerMinutesLastYear();
+  const favorites = state.customers.filter(c => c.favorite);
+  const autoSorted = [...state.customers].sort((a, b) => (totals.get(b.id) || 0) - (totals.get(a.id) || 0));
+
+  let selected;
+  if (favorites.length > 0){
+    selected = [...favorites];
+    for (const customer of autoSorted){
+      if (selected.some(item => item.id === customer.id)) continue;
+      selected.push(customer);
+      if (selected.length >= START_TOP_LIMIT) break;
+    }
+  } else {
+    selected = autoSorted.slice(0, START_TOP_LIMIT);
+  }
+
+  selected.sort((a, b) => (totals.get(b.id) || 0) - (totals.get(a.id) || 0));
+  const cloud = selected.slice(0, START_TOP_LIMIT).map(c => `
+    <button class="cloud-chip" data-start-customer="${esc(c.id)}">
+      ${esc(c.nickname || c.name || "Klant")}
+    </button>
+  `).join("");
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "timer-widget-card";
+  wrapper.innerHTML = `
+    <div class="timer-idle timer-idle--compact">
+      ${cloud
+        ? `<div class="start-cloud recent-customers recent-customers--compact">
+            <button class="cloud-play-btn" data-idle-start title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
+              <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 6l10 6-10 6z"/></svg>
+            </button>
+            ${cloud}
+          </div>`
+        : `<button class="timer-action-btn green-btn idle-start-btn" data-idle-start title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>
+          </button>`}
+    </div>
+  `;
+
+  const idleStartBtn = wrapper.querySelector("[data-idle-start]");
+  if (idleStartBtn){
+    idleStartBtn.style.webkitTapHighlightColor = "transparent";
+    idleStartBtn.addEventListener("click", (e)=>{
+      if (e) e.preventDefault();
+      pushView({ view: "newLog" });
+    });
+  }
+
+  wrapper.querySelectorAll("[data-start-customer]").forEach(chip=>{
+    chip.addEventListener("click", ()=>{
+      const cid = chip.getAttribute("data-start-customer");
+      if (cid) startWorkLog(cid);
+    });
+  });
+
+  return wrapper;
+}
+
 function renderLogs(){
   const el = $("#tab-logs");
   const widgetHost = $("#topbar-widget-container");
@@ -3007,46 +3069,6 @@ function renderLogs(){
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
             </button>
           </div>
-        </div>
-      </div>
-    `;
-  } else {
-    const totals = customerMinutesLastYear();
-    const favorites = state.customers.filter(c => c.favorite);
-    const autoSorted = [...state.customers].sort((a, b) => (totals.get(b.id) || 0) - (totals.get(a.id) || 0));
-
-    let selected;
-    if (favorites.length > 0){
-      selected = [...favorites];
-      for (const customer of autoSorted){
-        if (selected.some(item => item.id === customer.id)) continue;
-        selected.push(customer);
-        if (selected.length >= START_TOP_LIMIT) break;
-      }
-    } else {
-      selected = autoSorted.slice(0, START_TOP_LIMIT);
-    }
-
-    selected.sort((a, b) => (totals.get(b.id) || 0) - (totals.get(a.id) || 0));
-    const cloud = selected.slice(0, START_TOP_LIMIT).map(c => `
-      <button class="cloud-chip" data-start-customer="${esc(c.id)}">
-        ${esc(c.nickname || c.name || "Klant")}
-      </button>
-    `).join("");
-
-    timerBlock = `
-      <div class="timer-widget-card">
-        <div class="timer-idle timer-idle--compact">
-          ${cloud
-            ? `<div class="start-cloud recent-customers recent-customers--compact">
-                <button class="cloud-play-btn" id="btnIdleStart" title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
-                  <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 6l10 6-10 6z"/></svg>
-                </button>
-                ${cloud}
-              </div>`
-            : `<button class="timer-action-btn green-btn idle-start-btn" id="btnIdleStart" title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>
-              </button>`}
         </div>
       </div>
     `;
@@ -3090,6 +3112,10 @@ function renderLogs(){
     <div class="stack stack-tight stack-logs"><div class="flat-list flat-list--logbook">${list}</div></div>
   `;
   setTopbarWidgetContent(timerBlock);
+  if (!active && widgetHost){
+    const quickStartWidget = createQuickStartWidgetElement();
+    if (quickStartWidget) widgetHost.appendChild(quickStartWidget);
+  }
 
   // Timer-first actions
   if (active){
@@ -3117,22 +3143,6 @@ function renderLogs(){
     widgetHost?.querySelector(".timer-active")?.addEventListener("click", (e)=>{
       if (e.target.closest("button")) return;
       openSheet("log", active.id);
-    });
-  } else {
-    const idleStartBtn = widgetHost?.querySelector("#btnIdleStart");
-    if (idleStartBtn){
-      idleStartBtn.style.webkitTapHighlightColor = "transparent";
-      idleStartBtn.addEventListener("click", (e)=>{
-        if (e) e.preventDefault();
-        pushView({ view: "newLog" });
-      });
-    }
-    // Recent customer chips: start work directly
-    widgetHost?.querySelectorAll("[data-start-customer]").forEach(chip=>{
-      chip.addEventListener("click", ()=>{
-        const cid = chip.getAttribute("data-start-customer");
-        if (cid) startWorkLog(cid);
-      });
     });
   }
 
@@ -3330,6 +3340,7 @@ function renderSettlements(){
   el.innerHTML = `
     <div class="stack">
       <div class="geld-header"><span class="geld-header-title">Afrekeningen</span></div>
+      <div id="settlementsQuickStartMount"></div>
       <div class="settlement-header-row mono tabular">
         <div class="settlement-header-totals">
           ${headerTotals.map((total)=>`
@@ -3342,6 +3353,12 @@ function renderSettlements(){
       <div class="flat-list settlement-list">${list || `<div class="meta-text" style="padding:8px 4px;">Nog geen afrekeningen.</div>`}</div>
     </div>
   `;
+
+  const settlementsQuickStartMount = el.querySelector("#settlementsQuickStartMount");
+  if (settlementsQuickStartMount){
+    const quickStartWidget = createQuickStartWidgetElement();
+    if (quickStartWidget) settlementsQuickStartMount.appendChild(quickStartWidget);
+  }
 
   el.querySelectorAll("[data-open-settlement]").forEach(x=>{
     x.addEventListener("click", ()=> openSheet("settlement", x.getAttribute("data-open-settlement")));
