@@ -3493,6 +3493,82 @@ function getCustomerRevenueShare(range) {
   }));
 }
 
+function getProductShare(range, mode = "logs") {
+  const productMap = new Map();
+  let totalValue = 0;
+
+  function upsertProduct(productId, fallbackName = "Product", addValue = 0) {
+    const product = productId ? getProduct(productId) : null;
+    if (isWorkProduct(product || { id: productId, name: fallbackName })) return;
+    const key = product?.id || productId || `name:${String(fallbackName || "Product").trim().toLowerCase()}`;
+    const existing = productMap.get(key) || {
+      productId: product?.id || productId || null,
+      name: product?.name || fallbackName || "Product",
+      value: 0
+    };
+    existing.value = round2(existing.value + (Number(addValue) || 0));
+    if (!existing.productId && product?.id) existing.productId = product.id;
+    if ((!existing.name || existing.name === "Product") && product?.name) existing.name = product.name;
+    productMap.set(key, existing);
+  }
+
+  if (mode === "settlements") {
+    const settlements = getSettlementsForInsights(range);
+    for (const settlement of settlements) {
+      if (settlement?.allocations && typeof settlement.allocations === "object") {
+        for (const alloc of Object.values(settlement.allocations)) {
+          if (!alloc) continue;
+          if (isWorkProduct(alloc) || isWorkProductId(alloc.productId)) continue;
+          const invoiceQty = Number(alloc.invoiceQty) || 0;
+          const cashQty = Number(alloc.cashQty) || 0;
+          const unitPrice = Number(alloc.unitPrice) || 0;
+          const vatRate = Number(alloc.vatRate ?? 0.21);
+          const amount = round2((invoiceQty * unitPrice * (1 + vatRate)) + (cashQty * unitPrice));
+          if (amount <= 0) continue;
+          upsertProduct(alloc.productId, alloc.name || "Product", amount);
+          totalValue = round2(totalValue + amount);
+        }
+        continue;
+      }
+
+      const legacyLines = settlement?.lines || [];
+      for (const line of legacyLines) {
+        if (!line) continue;
+        if (isWorkProduct(line) || isWorkProductId(line.productId)) continue;
+        const qty = Number(line.qty) || 0;
+        const unitPrice = Number(line.unitPrice) || 0;
+        const vatRate = Number(line.vatRate ?? 0.21);
+        const bucket = (line.bucket || "invoice");
+        const amountExVat = qty * unitPrice;
+        const amount = round2(bucket === "invoice" ? (amountExVat * (1 + vatRate)) : amountExVat);
+        if (amount <= 0) continue;
+        upsertProduct(line.productId, line.name || line.description || "Product", amount);
+        totalValue = round2(totalValue + amount);
+      }
+    }
+  } else {
+    const logs = getLogsForInsights(range);
+    for (const log of logs) {
+      for (const item of (log.items || [])) {
+        if (!item) continue;
+        if (isWorkProduct(item) || isWorkProductId(item.productId)) continue;
+        const qty = Number(item.qty) || 0;
+        if (qty <= 0) continue;
+        upsertProduct(item.productId, item.name || item.description || "Product", qty);
+        totalValue = round2(totalValue + qty);
+      }
+    }
+  }
+
+  return [...productMap.values()]
+    .filter(p => p.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .map(p => ({
+      ...p,
+      pct: totalValue > 0 ? round2((p.value / totalValue) * 100) : 0
+    }));
+}
+
 // ---- Customer-detail insights: data helpers ----
 
 function getLogsForCustomerPeriod(customerId, range) {
@@ -4360,6 +4436,25 @@ function renderCustomerInsightsPreview(customers, mode) {
   }).join("");
 }
 
+function renderProductInsightsPreview(products, mode) {
+  if (!products.length) {
+    const msg = mode === "logs" ? "Geen producten in deze periode" : "Geen productomzet in deze periode";
+    return `<p class="insights-empty">${msg}</p>`;
+  }
+  return products.map(p => {
+    const barWidth = Math.max(3, p.pct);
+    const valueLabel = mode === "logs" ? `${formatQuickQty(p.value)}x` : fmtMoney0(p.value);
+    const pctLabel = `${Math.round(p.pct)}%`;
+    const idAttr = p.productId ? ` data-product-id="${esc(p.productId)}"` : "";
+    return `<div class="ins-bar-row"${idAttr}>
+  <span class="ins-bar-name">${esc(p.name || "Product")}</span>
+  <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%"></span></span>
+  <span class="ins-bar-amount">${esc(valueLabel)}</span>
+  <span class="ins-bar-pct">${esc(pctLabel)}</span>
+</div>`;
+  }).join("");
+}
+
 function renderCustomerDonutChart(customers, mode) {
   const CX = 70, CY = 70;
   const rMid = 42;
@@ -4668,6 +4763,7 @@ function renderMeer(){
 
   {
     const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
+    const products = getProductShare(range, mode);
     const earnings = getEarningsSummary(range);
     const logsInRange = getLogsForInsights(range);
     const totalWorkMs = logsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
@@ -4736,6 +4832,15 @@ function renderMeer(){
         </div>
         <div class="ins-bars-list">
           ${renderCustomerInsightsPreview(customers, mode)}
+        </div>
+      </div>
+
+      <div class="insights-section ins-cust-section">
+        <div class="insights-section-header">
+          <div class="insights-section-title">Producten</div>
+        </div>
+        <div class="ins-bars-list">
+          ${renderProductInsightsPreview(products, mode)}
         </div>
       </div>
     `;
@@ -4857,6 +4962,16 @@ function renderMeer(){
       if (!customerId) return;
       if (ui.navStack.some(v => v.view === "customerDetail" && v.id === customerId)) return;
       pushView({ view: "customerDetail", id: customerId });
+    });
+  });
+
+  el.querySelectorAll(".ins-bar-row[data-product-id]").forEach(row => {
+    row.addEventListener("click", () => {
+      const productId = row.dataset.productId;
+      if (!productId) return;
+      if (!state.products.some(p => p.id === productId)) return;
+      if (ui.navStack.some(v => v.view === "productDetail" && v.id === productId)) return;
+      pushView({ view: "productDetail", id: productId });
     });
   });
 
