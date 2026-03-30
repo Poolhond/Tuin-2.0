@@ -2862,6 +2862,7 @@ function render(){
   syncViewUiState();
   const root = ui.navStack[0]?.view || "logs";
   updateTabs();
+  renderGlobalWidget();
   if (root === "logs") renderLogs();
   if (root === "settlements") renderSettlements();
   if (root === "meer") renderMeer();
@@ -2974,8 +2975,73 @@ function applyFiltersAndSort(logs){
   return [{ header: "", logs: filtered }];
 }
 
-function createQuickStartWidgetElement(){
-  if (state.activeLogId) return null;
+function renderGlobalWidget(){
+  const host = $("#global-widget-host");
+  if (!host) return;
+
+  const root = ui.navStack[0]?.view || "logs";
+  const shouldShow = root === "logs" || root === "settlements";
+  host.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow){
+    host.innerHTML = "";
+    return;
+  }
+
+  const active = state.activeLogId ? state.logs.find(l => l.id === state.activeLogId) : null;
+  if (active){
+    const isPaused = currentOpenSegment(active)?.type === "break";
+    const greenCount = countGreenItems(active);
+    host.innerHTML = `
+      <div class="timer-widget-card">
+        <div class="timer-active">
+          <div class="timer-active-customer">${esc(cname(active.customerId))}</div>
+          <div class="timer-active-elapsed">${durMsToHM(sumWorkMs(active))}</div>
+          <div class="timer-active-meta"><span class="timer-state-dot ${isPaused ? "is-paused" : "is-running"}"></span>${isPaused ? "Pauze actief" : "Timer loopt"} · gestart ${fmtClock(active.createdAt)}</div>
+          <div class="timer-green-feedback ${greenCount > 0 ? "has-items" : ""}">${greenCount > 0 ? `🌿 Groen toegevoegd: ${greenCount}x` : "Nog geen groen toegevoegd"}</div>
+          <div class="timer-active-actions">
+            <button class="timer-action-btn pause-btn ${isPaused ? "is-paused" : "is-running"}" id="btnPause" title="${isPaused ? "Hervat werk" : "Pauze"}" aria-label="${isPaused ? "Hervat werk" : "Pauze"}">
+              ${isPaused
+                ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>`
+                : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5v14M16 5v14" stroke-linecap="round"/></svg>`}
+            </button>
+            <button class="timer-action-btn green-btn" id="btnAddGreen" title="Voeg 1x groen toe" aria-label="Voeg 1x groen (snoeiafval) toe">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19c-3.5 0-6-2.6-6-6.2 0-3.8 2.8-6.6 6.9-7.8.8 4.7 3.8 6.7 5.1 8.8 1.3 2.2-.5 5.2-6 5.2z" stroke-linejoin="round"/><path d="M12 19v-6" stroke-linecap="round"/></svg>
+            </button>
+            <button class="timer-action-btn stop-btn" id="btnStop" title="Stop" aria-label="Stop werklog">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    host.querySelector("#btnPause")?.addEventListener("click", ()=>{
+      actions.pauseLog(active.id);
+    });
+    const greenBtn = host.querySelector("#btnAddGreen");
+    if (greenBtn){
+      // Hard prevent accidental selection/open
+      greenBtn.addEventListener("contextmenu", (e)=> e.preventDefault());
+      greenBtn.style.webkitTouchCallout = "none";
+      greenBtn.style.webkitUserSelect = "none";
+      greenBtn.style.userSelect = "none";
+
+      bindStepButton(
+        greenBtn,
+        (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +1); },
+        (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +0.5); }
+      );
+    }
+    host.querySelector("#btnStop")?.addEventListener("click", ()=>{
+      actions.stopLog(active.id);
+    });
+    // Tap timer block to open active log detail
+    host.querySelector(".timer-active")?.addEventListener("click", (e)=>{
+      if (e.target.closest("button")) return;
+      openSheet("log", active.id);
+    });
+    return;
+  }
 
   const totals = customerMinutesLastYear();
   const favorites = state.customers.filter(c => c.favorite);
@@ -3000,24 +3066,24 @@ function createQuickStartWidgetElement(){
     </button>
   `).join("");
 
-  const wrapper = document.createElement("div");
-  wrapper.className = "timer-widget-card";
-  wrapper.innerHTML = `
-    <div class="timer-idle timer-idle--compact">
-      ${cloud
-        ? `<div class="start-cloud recent-customers recent-customers--compact">
-            <button class="cloud-play-btn" data-idle-start title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
-              <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 6l10 6-10 6z"/></svg>
-            </button>
-            ${cloud}
-          </div>`
-        : `<button class="timer-action-btn green-btn idle-start-btn" data-idle-start title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>
-          </button>`}
+  host.innerHTML = `
+    <div class="timer-widget-card">
+      <div class="timer-idle timer-idle--compact">
+        ${cloud
+          ? `<div class="start-cloud recent-customers recent-customers--compact">
+              <button class="cloud-play-btn" data-idle-start title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
+                <svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 6l10 6-10 6z"/></svg>
+              </button>
+              ${cloud}
+            </div>`
+          : `<button class="timer-action-btn green-btn idle-start-btn" data-idle-start title="Start nieuwe werklog" aria-label="Start nieuwe werklog">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>
+            </button>`}
+      </div>
     </div>
   `;
 
-  const idleStartBtn = wrapper.querySelector("[data-idle-start]");
+  const idleStartBtn = host.querySelector("[data-idle-start]");
   if (idleStartBtn){
     idleStartBtn.style.webkitTapHighlightColor = "transparent";
     idleStartBtn.addEventListener("click", (e)=>{
@@ -3026,53 +3092,19 @@ function createQuickStartWidgetElement(){
     });
   }
 
-  wrapper.querySelectorAll("[data-start-customer]").forEach(chip=>{
+  host.querySelectorAll("[data-start-customer]").forEach(chip=>{
     chip.addEventListener("click", ()=>{
       const cid = chip.getAttribute("data-start-customer");
       if (cid) startWorkLog(cid);
     });
   });
-
-  return wrapper;
 }
 
 function renderLogs(){
   const el = $("#tab-logs");
-  const widgetHost = $("#topbar-widget-container");
-  const active = state.activeLogId ? state.logs.find(l => l.id === state.activeLogId) : null;
   const logbook = state.logbook || {};
   const period = logbook.period || "all";
   const isFilterSheetOpen = Boolean(logbook.isFilterSheetOpen);
-
-  // Timer-first: idle or active state
-  let timerBlock = "";
-  if (active){
-    const isPaused = currentOpenSegment(active)?.type === "break";
-    const greenCount = countGreenItems(active);
-    timerBlock = `
-      <div class="timer-widget-card">
-        <div class="timer-active">
-          <div class="timer-active-customer">${esc(cname(active.customerId))}</div>
-          <div class="timer-active-elapsed">${durMsToHM(sumWorkMs(active))}</div>
-          <div class="timer-active-meta"><span class="timer-state-dot ${isPaused ? "is-paused" : "is-running"}"></span>${isPaused ? "Pauze actief" : "Timer loopt"} · gestart ${fmtClock(active.createdAt)}</div>
-          <div class="timer-green-feedback ${greenCount > 0 ? "has-items" : ""}">${greenCount > 0 ? `🌿 Groen toegevoegd: ${greenCount}x` : "Nog geen groen toegevoegd"}</div>
-          <div class="timer-active-actions">
-            <button class="timer-action-btn pause-btn ${isPaused ? "is-paused" : "is-running"}" id="btnPause" title="${isPaused ? "Hervat werk" : "Pauze"}" aria-label="${isPaused ? "Hervat werk" : "Pauze"}">
-              ${isPaused
-                ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6l10 6-10 6z" stroke-linejoin="round"/></svg>`
-                : `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5v14M16 5v14" stroke-linecap="round"/></svg>`}
-            </button>
-            <button class="timer-action-btn green-btn" id="btnAddGreen" title="Voeg 1x groen toe" aria-label="Voeg 1x groen (snoeiafval) toe">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19c-3.5 0-6-2.6-6-6.2 0-3.8 2.8-6.6 6.9-7.8.8 4.7 3.8 6.7 5.1 8.8 1.3 2.2-.5 5.2-6 5.2z" stroke-linejoin="round"/><path d="M12 19v-6" stroke-linecap="round"/></svg>
-            </button>
-            <button class="timer-action-btn stop-btn" id="btnStop" title="Stop" aria-label="Stop werklog">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-  }
 
   const sections = applyFiltersAndSort([...state.logs]);
   const list = sections.some(section => section.logs.length)
@@ -3111,40 +3143,6 @@ function renderLogs(){
     </div>
     <div class="stack stack-tight stack-logs"><div class="flat-list flat-list--logbook">${list}</div></div>
   `;
-  setTopbarWidgetContent(timerBlock);
-  if (!active && widgetHost){
-    const quickStartWidget = createQuickStartWidgetElement();
-    if (quickStartWidget) widgetHost.appendChild(quickStartWidget);
-  }
-
-  // Timer-first actions
-  if (active){
-    widgetHost?.querySelector("#btnPause")?.addEventListener("click", ()=>{
-      actions.pauseLog(active.id);
-    });
-    const greenBtn = widgetHost?.querySelector("#btnAddGreen");
-    if (greenBtn){
-      // Hard prevent accidental selection/open
-      greenBtn.addEventListener("contextmenu", (e)=> e.preventDefault());
-      greenBtn.style.webkitTouchCallout = "none";
-      greenBtn.style.webkitUserSelect = "none";
-      greenBtn.style.userSelect = "none";
-
-      bindStepButton(
-        greenBtn,
-        (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +1); },
-        (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +0.5); }
-      );
-    }
-    widgetHost?.querySelector("#btnStop")?.addEventListener("click", ()=>{
-      actions.stopLog(active.id);
-    });
-    // Tap timer block to open active log detail
-    widgetHost?.querySelector(".timer-active")?.addEventListener("click", (e)=>{
-      if (e.target.closest("button")) return;
-      openSheet("log", active.id);
-    });
-  }
 
   el.querySelectorAll("[data-open-log]").forEach(x=>{
     x.addEventListener("click", ()=> openSheet("log", x.getAttribute("data-open-log")));
