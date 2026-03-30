@@ -3405,6 +3405,99 @@ function getCustomerRevenueShare(range) {
   }));
 }
 
+function getProductShare(range, mode) {
+  const productMap = new Map();
+  let total = 0;
+
+  function ensureProduct(productId, fallbackName = "Product", fallbackUnit = "x") {
+    const product = productId ? getProduct(productId) : null;
+    if (!productId || isWorkProductId(productId) || isWorkProduct(product)) return null;
+    if (!productMap.has(productId)) {
+      productMap.set(productId, {
+        productId,
+        name: product?.name || fallbackName,
+        unit: product?.unit || fallbackUnit,
+        qty: 0,
+        amount: 0
+      });
+    }
+    return productMap.get(productId);
+  }
+
+  if (mode === "logs") {
+    const logs = getLogsForInsights(range);
+    for (const log of logs) {
+      for (const item of (log.items || [])) {
+        const entry = ensureProduct(item.productId, item.name || item.description || "Product");
+        if (!entry) continue;
+        const qty = Number(item.qty) || 0;
+        if (qty <= 0) continue;
+        entry.qty = round2(entry.qty + qty);
+        total += qty;
+      }
+    }
+  } else {
+    const settlements = getSettlementsForInsights(range);
+    for (const settlement of settlements) {
+      const hasAllocations = settlement?.allocations && Object.keys(settlement.allocations).length > 0;
+      if (hasAllocations) {
+        for (const alloc of Object.values(settlement.allocations || {})) {
+          const entry = ensureProduct(alloc.productId, alloc.name || "Product", alloc.unit || "x");
+          if (!entry) continue;
+          const invoiceQty = Number(alloc.invoiceQty) || 0;
+          const cashQty = Number(alloc.cashQty) || 0;
+          const unitPrice = Number(alloc.unitPrice) || 0;
+          const vatRate = Number(alloc.vatRate ?? 0.21);
+          const lineAmount = round2((invoiceQty * unitPrice * (1 + vatRate)) + (cashQty * unitPrice));
+          if (lineAmount <= 0) continue;
+          entry.amount = round2(entry.amount + lineAmount);
+          total += lineAmount;
+        }
+        continue;
+      }
+
+      for (const line of (settlement.lines || [])) {
+        const entry = ensureProduct(line.productId, line.name || line.description || "Product", line.unit || "x");
+        if (!entry) continue;
+        const amount = round2(lineAmount(line) + lineVat(line));
+        if (amount <= 0) continue;
+        entry.amount = round2(entry.amount + amount);
+        total += amount;
+      }
+    }
+  }
+
+  const totalSafe = total > 0 ? total : 0;
+  return [...productMap.values()]
+    .map(item => ({
+      ...item,
+      pct: totalSafe > 0
+        ? round2(((mode === "logs" ? item.qty : item.amount) / totalSafe) * 100)
+        : 0
+    }))
+    .filter(item => (mode === "logs" ? item.qty : item.amount) > 0)
+    .sort((a, b) => mode === "logs" ? b.qty - a.qty : b.amount - a.amount);
+}
+
+function renderProductInsightsPreview(products, mode) {
+  if (!products.length) {
+    const msg = mode === "logs" ? "Geen productdata in deze periode" : "Geen productomzet in deze periode";
+    return `<p class="insights-empty">${msg}</p>`;
+  }
+  const formatQty = (qty) => Number.isInteger(qty) ? String(qty) : String(round2(qty)).replace(/\.0+$/, "");
+  return products.map(p => {
+    const barWidth = Math.max(3, p.pct);
+    const valueLabel = mode === "logs" ? `${formatQty(p.qty)}x` : fmtMoney0(p.amount);
+    const pctLabel = `${Math.round(p.pct)}%`;
+    return `<div class="ins-bar-row" data-product-id="${esc(p.productId)}">
+  <span class="ins-bar-name">${esc(p.name)}</span>
+  <span class="ins-bar-track"><span class="ins-bar-fill" style="width:${barWidth.toFixed(1)}%"></span></span>
+  <span class="ins-bar-amount">${esc(valueLabel)}</span>
+  <span class="ins-bar-pct">${esc(pctLabel)}</span>
+</div>`;
+  }).join("");
+}
+
 // ---- Customer-detail insights: data helpers ----
 
 function getLogsForCustomerPeriod(customerId, range) {
@@ -4580,6 +4673,7 @@ function renderMeer(){
 
   {
     const customers = mode === "logs" ? getCustomerTimeShare(range) : getCustomerRevenueShare(range);
+    const products = getProductShare(range, mode);
     const earnings = getEarningsSummary(range);
     const logsInRange = getLogsForInsights(range);
     const totalWorkMs = logsInRange.reduce((sum, l) => sum + sumWorkMs(l), 0);
@@ -4648,6 +4742,15 @@ function renderMeer(){
         </div>
         <div class="ins-bars-list">
           ${renderCustomerInsightsPreview(customers, mode)}
+        </div>
+      </div>
+
+      <div class="insights-section ins-cust-section">
+        <div class="insights-section-header">
+          <div class="insights-section-title">Producten</div>
+        </div>
+        <div class="ins-bars-list">
+          ${renderProductInsightsPreview(products, mode)}
         </div>
       </div>
     `;
@@ -4769,6 +4872,16 @@ function renderMeer(){
       if (!customerId) return;
       if (ui.navStack.some(v => v.view === "customerDetail" && v.id === customerId)) return;
       pushView({ view: "customerDetail", id: customerId });
+    });
+  });
+
+  // Product-rijen in de productlijst: tik opent productdetail
+  el.querySelectorAll(".ins-bar-row[data-product-id]").forEach(row => {
+    row.addEventListener("click", () => {
+      const productId = row.dataset.productId;
+      if (!productId) return;
+      if (ui.navStack.some(v => v.view === "productDetail" && v.id === productId)) return;
+      pushView({ view: "productDetail", id: productId });
     });
   });
 
