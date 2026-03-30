@@ -2473,10 +2473,11 @@ function renderTopbar(){
   }
 
   const isSettlementsRoot = !showBack && active.view === "settlements";
+  const isLogsRoot = !showBack && active.view === "logs";
   btnNew.innerHTML = isSettlementsRoot
     ? `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h8" stroke-linecap="round"/><path d="M16 6h4" stroke-linecap="round"/><circle cx="14" cy="6" r="2"/><path d="M4 12h4" stroke-linecap="round"/><path d="M12 12h8" stroke-linecap="round"/><circle cx="10" cy="12" r="2"/><path d="M4 18h10" stroke-linecap="round"/><path d="M18 18h2" stroke-linecap="round"/><circle cx="16" cy="18" r="2"/></svg>`
     : `<svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
-  btnNew.classList.toggle("hidden", showBack);
+  btnNew.classList.toggle("hidden", showBack || isLogsRoot);
   btnNew.setAttribute("aria-label", isSettlementsRoot ? "Filter & sorteer" : "Nieuwe werklog");
   btnNew.setAttribute("title", isSettlementsRoot ? "Filter & sorteer" : "Nieuwe werklog");
 
