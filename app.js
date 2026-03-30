@@ -2236,6 +2236,10 @@ function updateTabs(){
   $("#tab-settlements").classList.toggle("hidden", key !== "settlements");
   $("#tab-meer").classList.toggle("hidden", key !== "meer");
 
+  const globalWidgetHost = $("#global-widget-host");
+  const showGlobalWidget = ui.navStack.length === 1 && (key === "logs" || key === "settlements");
+  globalWidgetHost?.classList.toggle("hidden", !showGlobalWidget);
+
   $("#nav-logs").classList.toggle("active", key === "logs");
   $("#nav-settlements").classList.toggle("active", key === "settlements");
   $("#nav-meer").classList.toggle("active", key === "meer");
@@ -2862,6 +2866,7 @@ function render(){
   syncViewUiState();
   const root = ui.navStack[0]?.view || "logs";
   updateTabs();
+  renderGlobalWidget();
   if (root === "logs") renderLogs();
   if (root === "settlements") renderSettlements();
   if (root === "meer") renderMeer();
@@ -2974,15 +2979,12 @@ function applyFiltersAndSort(logs){
   return [{ header: "", logs: filtered }];
 }
 
-function renderLogs(){
-  const el = $("#tab-logs");
-  const widgetHost = $("#topbar-widget-container");
-  const active = state.activeLogId ? state.logs.find(l => l.id === state.activeLogId) : null;
-  const logbook = state.logbook || {};
-  const period = logbook.period || "all";
-  const isFilterSheetOpen = Boolean(logbook.isFilterSheetOpen);
+function renderGlobalWidget(){
+  const widgetHost = $("#global-widget-host");
+  if (!widgetHost) return;
 
-  // Timer-first: idle or active state
+  const active = state.activeLogId ? state.logs.find(l => l.id === state.activeLogId) : null;
+
   let timerBlock = "";
   if (active){
     const isPaused = currentOpenSegment(active)?.type === "break";
@@ -3052,6 +3054,56 @@ function renderLogs(){
     `;
   }
 
+  widgetHost.innerHTML = timerBlock;
+
+  if (active){
+    widgetHost.querySelector("#btnPause")?.addEventListener("click", ()=>{
+      actions.pauseLog(active.id);
+    });
+    const greenBtn = widgetHost.querySelector("#btnAddGreen");
+    if (greenBtn){
+      greenBtn.addEventListener("contextmenu", (e)=> e.preventDefault());
+      greenBtn.style.webkitTouchCallout = "none";
+      greenBtn.style.webkitUserSelect = "none";
+      greenBtn.style.userSelect = "none";
+
+      bindStepButton(
+        greenBtn,
+        (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +1); },
+        (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +0.5); }
+      );
+    }
+    widgetHost.querySelector("#btnStop")?.addEventListener("click", ()=>{
+      actions.stopLog(active.id);
+    });
+    widgetHost.querySelector(".timer-active")?.addEventListener("click", (e)=>{
+      if (e.target.closest("button")) return;
+      openSheet("log", active.id);
+    });
+  } else {
+    const idleStartBtn = widgetHost.querySelector("#btnIdleStart");
+    if (idleStartBtn){
+      idleStartBtn.style.webkitTapHighlightColor = "transparent";
+      idleStartBtn.addEventListener("click", (e)=>{
+        if (e) e.preventDefault();
+        pushView({ view: "newLog" });
+      });
+    }
+    widgetHost.querySelectorAll("[data-start-customer]").forEach(chip=>{
+      chip.addEventListener("click", ()=>{
+        const cid = chip.getAttribute("data-start-customer");
+        if (cid) startWorkLog(cid);
+      });
+    });
+  }
+}
+
+function renderLogs(){
+  const el = $("#tab-logs");
+  const logbook = state.logbook || {};
+  const period = logbook.period || "all";
+  const isFilterSheetOpen = Boolean(logbook.isFilterSheetOpen);
+
   const sections = applyFiltersAndSort([...state.logs]);
   const list = sections.some(section => section.logs.length)
     ? sections.map(section => `
@@ -3089,52 +3141,6 @@ function renderLogs(){
     </div>
     <div class="stack stack-tight stack-logs"><div class="flat-list flat-list--logbook">${list}</div></div>
   `;
-  setTopbarWidgetContent(timerBlock);
-
-  // Timer-first actions
-  if (active){
-    widgetHost?.querySelector("#btnPause")?.addEventListener("click", ()=>{
-      actions.pauseLog(active.id);
-    });
-    const greenBtn = widgetHost?.querySelector("#btnAddGreen");
-    if (greenBtn){
-      // Hard prevent accidental selection/open
-      greenBtn.addEventListener("contextmenu", (e)=> e.preventDefault());
-      greenBtn.style.webkitTouchCallout = "none";
-      greenBtn.style.webkitUserSelect = "none";
-      greenBtn.style.userSelect = "none";
-
-      bindStepButton(
-        greenBtn,
-        (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +1); },
-        (e)=> { if(e){ e.preventDefault(); e.stopPropagation(); } adjustLogGreenQty(active.id, +0.5); }
-      );
-    }
-    widgetHost?.querySelector("#btnStop")?.addEventListener("click", ()=>{
-      actions.stopLog(active.id);
-    });
-    // Tap timer block to open active log detail
-    widgetHost?.querySelector(".timer-active")?.addEventListener("click", (e)=>{
-      if (e.target.closest("button")) return;
-      openSheet("log", active.id);
-    });
-  } else {
-    const idleStartBtn = widgetHost?.querySelector("#btnIdleStart");
-    if (idleStartBtn){
-      idleStartBtn.style.webkitTapHighlightColor = "transparent";
-      idleStartBtn.addEventListener("click", (e)=>{
-        if (e) e.preventDefault();
-        pushView({ view: "newLog" });
-      });
-    }
-    // Recent customer chips: start work directly
-    widgetHost?.querySelectorAll("[data-start-customer]").forEach(chip=>{
-      chip.addEventListener("click", ()=>{
-        const cid = chip.getAttribute("data-start-customer");
-        if (cid) startWorkLog(cid);
-      });
-    });
-  }
 
   el.querySelectorAll("[data-open-log]").forEach(x=>{
     x.addEventListener("click", ()=> openSheet("log", x.getAttribute("data-open-log")));
