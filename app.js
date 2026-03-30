@@ -1203,7 +1203,7 @@ function getLogVisualState(log){
   if (state === "calculated") return { state: "calculated", color: "#ff8c00" };
   if (state === "linked") return { state: "linked", color: "#ffcc00" };
   if (state === "fixed") return { state: "fixed", color: "#9358dc" };
-  return { state: "free", color: "#93a0b5" };
+  return { state: "free", color: "#7ba7c4" };
 }
 function getManualOverrideTotals(settlement){
   const manual = getSettlementManualOverride(settlement);
