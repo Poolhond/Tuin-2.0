@@ -2920,6 +2920,36 @@ function getLogTimestamp(log){
   return Number.isFinite(dateValue) ? dateValue : 0;
 }
 
+function getLogDateValue(log){
+  const dateValue = String(log?.date || "");
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateValue) ? dateValue : "";
+}
+
+function getLogCreatedAtValue(log){
+  const createdAt = Number(log?.createdAt);
+  return Number.isFinite(createdAt) ? createdAt : 0;
+}
+
+function getLogDateTimestamp(log){
+  const dateValue = getLogDateValue(log);
+  if (dateValue){
+    const dateTs = new Date(`${dateValue}T00:00:00`).getTime();
+    if (Number.isFinite(dateTs)) return dateTs;
+  }
+  return getLogTimestamp(log);
+}
+
+function sortLogsByDateDesc(logs){
+  return [...(logs || [])].sort(compareLogsByDateDesc);
+}
+
+function compareLogsByDateDesc(a, b){
+  const dateA = getLogDateValue(a);
+  const dateB = getLogDateValue(b);
+  if (dateA !== dateB) return dateA < dateB ? 1 : -1;
+  return getLogCreatedAtValue(b) - getLogCreatedAtValue(a);
+}
+
 function getPeriodStart(period){
   const current = new Date();
   if (period === "30d") return now() - (30 * 86400000);
@@ -2965,14 +2995,13 @@ function applyFiltersAndSort(logs){
     }
 
     if (minTimestamp != null){
-      const ts = getLogTimestamp(log);
+      const ts = getLogDateTimestamp(log);
       if (Number.isFinite(ts) && ts < minTimestamp) return false;
     }
     return true;
   });
 
-  filtered.sort((a, b) => getLogTimestamp(b) - getLogTimestamp(a));
-  return [{ header: "", logs: filtered }];
+  return [{ header: "", logs: sortLogsByDateDesc(filtered) }];
 }
 
 function renderLogs(){
@@ -5265,7 +5294,7 @@ function renderCustomerSheet(id){
 
   $("#sheetTitle").textContent = "Klant";
 
-  const logs = state.logs.filter(l => l.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const logs = sortLogsByDateDesc(state.logs.filter(l => l.customerId === c.id));
   const settlements = state.settlements.filter(s => s.customerId === c.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
 
   $("#sheetActions").innerHTML = "";
@@ -6772,7 +6801,7 @@ function renderSettlementLogOverviewSheet(settlementId){
   const linkedLogs = (settlement.logIds || [])
     .map(id => state.logs.find(l => l.id === id))
     .filter(Boolean)
-    .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    .sort(compareLogsByDateDesc);
 
   const totalWorkMinutes = linkedLogs.reduce((acc, log) => acc + Math.floor(sumWorkMs(log) / 60000), 0);
   const totalProductCost = round2(linkedLogs.reduce((acc, log) => acc + sumItemsAmount(log), 0));
@@ -6838,7 +6867,7 @@ function renderSettlementSheet(id){
       const linkedElsewhere = isLogLinkedElsewhere(log.id, s.id);
       return isInThisSettlement || !linkedElsewhere;
     })
-    .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    .sort(compareLogsByDateDesc);
 
   // Zorg dat allocations bestaan (migratie of eerste keer openen)
   if (!s.allocations){
