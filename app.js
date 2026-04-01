@@ -666,7 +666,7 @@ function loadState(){
       groenCash: Math.max(0, round2(Number(s.manualOverride?.groenCash) || 0))
     };
     syncSettlementDatesFromLogs(s, st);
-    ensureSettlementInvoiceDefaults(s);
+    ensureSettlementInvoiceDefaults(s, st);
     // Gebruik syncSettlementAmountsFromManualOverride (met lokale st) voor manual-override
     // settlements zodat de globale `state` variabele nog niet nodig is (TDZ vermijden).
     if (s.manualOverride?.enabled) {
@@ -1021,9 +1021,10 @@ function isWorkProductId(productId){
   const name = (product.name || "").trim().toLowerCase();
   return ["werk", "werk (uur)", "arbeid"].includes(name);
 }
-function findGreenProduct(){
+function findGreenProduct(sourceState = state){
   const aliases = ["groen", "snoeiafval"];
-  return state.products.find(product => aliases.includes((product.name || "").trim().toLowerCase())) || null;
+  const products = sourceState?.products || [];
+  return products.find(product => aliases.includes((product.name || "").trim().toLowerCase())) || null;
 }
 function isGreenProduct(productOrItem){
   const product = productOrItem?.productId ? getProduct(productOrItem.productId) : productOrItem;
@@ -1206,12 +1207,12 @@ function getLogVisualState(log){
   if (state === "fixed") return { state: "fixed", color: "#9358dc" };
   return { state: "free", color: "#7ba7c4" };
 }
-function getManualOverrideTotals(settlement){
+function getManualOverrideTotals(settlement, sourceState = state){
   const manual = getSettlementManualOverride(settlement);
   // try-catch vereist: state kan nog in TDZ zijn wanneer aangeroepen vanuit loadState().
   let greenProduct = null, workSnapshot = { unitPrice: 0, vatRate: 0.21 };
-  try { workSnapshot = getWorkProductSnapshot(); } catch(e) { /* TDZ */ }
-  try { greenProduct = findGreenProduct(); } catch(e) { /* TDZ */ }
+  try { workSnapshot = getWorkProductSnapshot(sourceState); } catch(e) { /* TDZ */ }
+  try { greenProduct = findGreenProduct(sourceState); } catch(e) { /* TDZ */ }
   const greenRate = Number(greenProduct?.unitPrice ?? 0);
 
   const allocations = {
@@ -1243,10 +1244,10 @@ function getManualOverrideTotals(settlement){
   return { invoiceSubtotal: invoiceExcl, invoiceVat, invoiceTotal, cashSubtotal: cashExcl, cashTotal };
 }
 
-function getSettlementTotals(settlement){
+function getSettlementTotals(settlement, sourceState = state){
   const mode = getSettlementCalcMode(settlement);
   if (mode === "manual"){
-    return getManualOverrideTotals(settlement);
+    return getManualOverrideTotals(settlement, sourceState);
   }
   // Nieuw pad: gebruik allocations als bron van waarheid
   if (settlement && settlement.allocations){
@@ -1317,10 +1318,10 @@ function syncSettlementDatesFromLogs(settlement, sourceState = state){
   settlement.invoiceDate = settlement.date || fallbackDate;
 }
 
-function ensureSettlementInvoiceDefaults(settlement){
+function ensureSettlementInvoiceDefaults(settlement, sourceState = state){
   if (!settlement) return;
 
-  const totals = getSettlementTotals(settlement);
+  const totals = getSettlementTotals(settlement, sourceState);
   const invoiceTotal = Number(totals?.invoiceTotal || 0);
   if (invoiceTotal <= 0){
     settlement.invoiceNumber = null;
